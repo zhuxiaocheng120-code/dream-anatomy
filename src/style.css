@@ -66,16 +66,7 @@ textarea {
 
 .brand {
   font-weight: 800;
-}
-
-.brand-mark {
-  display: grid;
-  width: 34px;
-  height: 34px;
-  place-items: center;
-  border-radius: 50%;
-  color: #ffffff;
-  background: var(--violet);
+  line-height: 1.2;
 }
 
 .nav-links a {
