@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="utf-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1">
+    <title>梦境之镜 - 荣格梦境解读</title>
+    <link rel="stylesheet" href="style.css">
+  </head>
+  <body>
+    <header class="site-header">
+      <a class="brand" href="#top" aria-label="梦境之镜首页">
+        <span class="brand-mark">月</span>
+        梦境之镜
+      </a>
+      <nav class="nav-links" aria-label="主要导航">
+        <a href="#features">功能</a>
+        <a href="#try">试试看</a>
+        <a href="#diary">梦日记</a>
+      </nav>
+    </header>
+
+    <main id="top">
+      <section class="hero" aria-labelledby="app-title">
+        <div class="hero-content">
+          <p class="eyebrow">Jungian Dream Guide</p>
+          <h1 id="app-title">用荣格心理学，温柔读懂你的梦。</h1>
+          <p class="summary">
+            梦境之镜帮助你记录梦中的人物、场景与象征，带你从原型、阴影和自我成长的角度，整理梦可能正在表达的讯息。
+          </p>
+          <div class="hero-actions">
+            <a class="button primary" href="#try">开始解梦</a>
+            <a class="button secondary" href="#features">了解功能</a>
+          </div>
+        </div>
+
+        <aside class="dream-card" aria-label="梦境记录示例">
+          <p class="card-label">今晚的梦</p>
+          <h2>“我在一片森林里，看见一扇发光的门。”</h2>
+          <p>可能关键词：森林、门、光、未知旅程</p>
+        </aside>
+      </section>
+
+      <section id="features" class="features" aria-labelledby="features-title">
+        <h2 id="features-title">适合新手的三个步骤</h2>
+        <div class="feature-grid">
+          <article>
+            <span>1</span>
+            <h3>写下梦境</h3>
+            <p>不用写得完美，只要记下最清楚的画面、情绪和人物。</p>
+          </article>
+          <article>
+            <span>2</span>
+            <h3>提取象征</h3>
+            <p>把梦中的物件、地点和重复出现的主题整理成关键词。</p>
+          </article>
+          <article>
+            <span>3</span>
+            <h3>连接内在</h3>
+            <p>用荣格视角探索原型、阴影和自我正在提醒你的方向。</p>
+          </article>
+        </div>
+      </section>
+
+      <section id="try" class="try-panel" aria-labelledby="try-title">
+        <div>
+          <p class="eyebrow">Mini Practice</p>
+          <h2 id="try-title">先输入一个梦中象征</h2>
+          <p class="summary">
+            例如：水、蛇、房子、考试、迷路。这里会给你一个温和的提问，帮助你继续探索。
+          </p>
+        </div>
+        <form class="symbol-form">
+          <label for="dreamSymbol">梦中最醒目的象征</label>
+          <div class="input-row">
+            <input id="dreamSymbol" name="dreamSymbol" type="text" placeholder="例如：森林" autocomplete="off">
+            <button type="submit">生成提示</button>
+          </div>
+          <p id="reflectionPrompt" class="status" aria-live="polite">输入一个象征后，看看它可能邀请你思考什么。</p>
+        </form>
+      </section>
+
+      <section id="diary" class="diary-panel" aria-labelledby="diary-title">
+        <div class="diary-copy">
+          <p class="eyebrow">Dream Diary</p>
+          <h2 id="diary-title">写下你的梦日记</h2>
+          <p class="summary">
+            把你记得的片段写下来就好，不需要完整。梦里的情绪、颜色、人物和地点，都可能是内在正在说话的方式。
+          </p>
+        </div>
+        <form class="diary-form">
+          <label for="dreamDiary">今天醒来后，你还记得什么？</label>
+          <textarea id="dreamDiary" name="dreamDiary" rows="7" placeholder="例如：我梦见自己走在一条安静的河边，远处有一座桥，但我一直没有走过去。"></textarea>
+          <button type="submit">生成温柔解读</button>
+          <div id="diaryReflection" class="reflection-box" aria-live="polite">
+            写下一段梦境后，这里会出现一段温和的荣格式反思。
+          </div>
+        </form>
+      </section>
+    </main>
+
+    <script src="app.js"></script>
+  </body>
+</html>
