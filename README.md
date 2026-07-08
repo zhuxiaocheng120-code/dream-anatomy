@@ -32,6 +32,7 @@
 │   ├── index.html
 │   └── style.css
 └── tests/
+```
 src/index.html: page content and structure.
 src/style.css: colors, layout, spacing, and responsive styles.
 src/app.js: small interactions for switching between the three MVP entry areas.
