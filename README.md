@@ -33,18 +33,18 @@
 │   └── style.css
 └── tests/
 ```
-src/index.html: page content and structure.
-src/style.css: colors, layout, spacing, and responsive styles.
-src/app.js: small interactions for switching between the three MVP entry areas.
-AGENTS.md: contributor guidelines for this repository.
-How to Open the App
-No setup is required.
-Open the project folder on your computer.
-Open the src folder.
-Double-click index.html.
-Your browser should show the 析梦 Dream Anatomy landing page.
-You can also drag src/index.html into a browser window.
-Editing the App
-To change the text on the page, edit src/index.html. To change colors or layout, edit src/style.css. To change the button behavior or reflection messages, edit src/app.js.
-Contributing
-Before making larger changes, read [AGENTS.md](AGENTS.md). Keep updates small, clear, and easy for a beginner to understand.
+- src/index.html: page content and structure.
+- src/style.css: colors, layout, spacing, and responsive styles.
+- src/app.js: small interactions for switching between the three MVP entry areas.
+- AGENTS.md: contributor guidelines for this repository.
+- How to Open the App
+- No setup is required.
+- Open the project folder on your computer.
+- Open the src folder.
+- Double-click index.html.
+- Your browser should show the 析梦 Dream Anatomy landing page.
+- You can also drag src/index.html into a browser window.
+- Editing the App
+- To change the text on the page, edit src/index.html. To change colors or layout, edit src/style.css. To change the button behavior of reflection messages, edit src/app.js.
+- Contributing
+- Before making larger changes, read [AGENTS.md](AGENTS.md). Keep updates small, clear, and easy for a beginner to understand.
