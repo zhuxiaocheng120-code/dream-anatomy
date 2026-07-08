@@ -8,92 +8,138 @@
   </head>
   <body>
     <header class="site-header">
-      <a class="brand" href="#top" aria-label="析梦 Dream Anatomy 首页">
+      <button class="brand text-button" type="button" data-view-target="home" aria-label="返回析梦 Dream Anatomy 首页">
         析梦 Dream Anatomy
-      </a>
+      </button>
       <nav class="nav-links" aria-label="主要导航">
-        <a href="#features">功能</a>
-        <a href="#try">试试看</a>
-        <a href="#diary">梦日记</a>
+        <button type="button" class="text-button" data-view-target="quick">快速解析</button>
+        <button type="button" class="text-button" data-view-target="guided">深度引导</button>
+        <button type="button" class="text-button" data-view-target="diary">梦境日记</button>
       </nav>
     </header>
 
     <main id="top">
-      <section class="hero" aria-labelledby="app-title">
-        <div class="hero-content">
-          <p class="eyebrow">你的梦境自我探索工具</p>
-          <h1 id="app-title">记录梦境，温柔探索内在自我。</h1>
-          <p class="summary">
-            析梦 Dream Anatomy 帮助你记录梦中的人物、场景与象征，并用荣格心理学的视角进行轻柔的自我探索。它不是诊断、治疗、算命或预测工具，而是陪你更好地倾听自己的梦。
-          </p>
-          <div class="hero-actions">
-            <a class="button primary" href="#try">开始探索</a>
-            <a class="button secondary" href="#features">了解功能</a>
+      <section class="view-panel home-view is-active" data-view="home" aria-labelledby="app-title">
+        <div class="hero">
+          <div class="hero-content">
+            <p class="eyebrow">你的梦境自我探索工具</p>
+            <h1 id="app-title">析梦 Dream Anatomy</h1>
+            <p class="summary">
+              记录梦境碎片，生成温和的荣格式梦境分析。它不会给出诊断、治疗或预言，只提供一种安静的自我探索视角。
+            </p>
           </div>
+
+          <aside class="dream-card" aria-label="梦境记录示例">
+            <p class="card-label">今晚的梦</p>
+            <h2>“我在一片森林里，看见一扇发光的门。”</h2>
+            <p>你可以从一个画面、一种情绪，或一个反复出现的象征开始记录。</p>
+          </aside>
         </div>
 
-        <aside class="dream-card" aria-label="梦境记录示例">
-          <p class="card-label">今晚的梦</p>
-          <h2>“我在一片森林里，看见一扇发光的门。”</h2>
-          <p>可能关键词：森林、门、光、未知旅程</p>
-        </aside>
+        <section class="entry-section" aria-labelledby="entry-title">
+          <div class="section-heading">
+            <p class="eyebrow">MVP Entrance</p>
+            <h2 id="entry-title">选择你想开始的方式</h2>
+          </div>
+
+          <div class="entry-grid">
+            <button class="entry-card" type="button" data-view-target="quick">
+              <span class="entry-number">01</span>
+              <strong>快速解析</strong>
+              <span>写下一段刚醒来还记得的梦境碎片，先获得一个简短整理入口。</span>
+            </button>
+
+            <button class="entry-card" type="button" data-view-target="guided">
+              <span class="entry-number">02</span>
+              <strong>深度引导</strong>
+              <span>通过几个温和问题，慢慢补充梦里的情绪、联想和现实连接。</span>
+            </button>
+
+            <button class="entry-card" type="button" data-view-target="diary">
+              <span class="entry-number">03</span>
+              <strong>梦境日记</strong>
+              <span>查看之后会保存的梦境记录，作为私人梦境档案的入口。</span>
+            </button>
+          </div>
+        </section>
       </section>
 
-      <section id="features" class="features" aria-labelledby="features-title">
-        <h2 id="features-title">适合新手的三个步骤</h2>
-        <div class="feature-grid">
-          <article>
-            <span>1</span>
-            <h3>写下梦境</h3>
-            <p>不用写得完美，只要记下最清楚的画面、情绪和人物。</p>
-          </article>
-          <article>
-            <span>2</span>
-            <h3>提取象征</h3>
-            <p>把梦中的物件、地点和重复出现的主题整理成关键词。</p>
-          </article>
-          <article>
-            <span>3</span>
-            <h3>连接内在</h3>
-            <p>用荣格视角探索原型、阴影和自我正在提醒你的方向。</p>
-          </article>
-        </div>
-      </section>
-
-      <section id="try" class="try-panel" aria-labelledby="try-title">
-        <div>
-          <p class="eyebrow">Mini Practice</p>
-          <h2 id="try-title">先输入一个梦中象征</h2>
+      <section class="view-panel work-panel" data-view="quick" aria-labelledby="quick-title" hidden>
+        <div class="panel-copy">
+          <p class="eyebrow">Quick Dream Decode</p>
+          <h2 id="quick-title">快速解析</h2>
           <p class="summary">
-            例如：水、蛇、房子、考试、迷路。这里会给你一个温和的提问，帮助你继续探索。
+            刚醒来的梦通常是碎片化的。你可以随便写，不需要完整句子。例如：学校、考试、找不到路、下雨、妈妈、黑狗、很着急。
           </p>
         </div>
-        <form class="symbol-form">
-          <label for="dreamSymbol">梦中最醒目的象征</label>
-          <div class="input-row">
-            <input id="dreamSymbol" name="dreamSymbol" type="text" placeholder="例如：森林" autocomplete="off">
-            <button type="submit">生成提示</button>
+
+        <form class="dream-form" data-placeholder-form>
+          <label for="quickDream">梦境碎片</label>
+          <textarea id="quickDream" rows="7" placeholder="写下你还记得的画面、情绪、人物或地点。"></textarea>
+          <div class="button-row">
+            <button type="submit">保存并解析</button>
+            <button class="secondary-button" type="reset">清空</button>
+            <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
           </div>
-          <p id="reflectionPrompt" class="status" aria-live="polite">输入一个象征后，看看它可能邀请你思考什么。</p>
+          <p class="status" aria-live="polite">
+            本轮先搭建快速解析入口和基础区域。完整解析报告会在后续迭代中补齐。
+          </p>
         </form>
       </section>
 
-      <section id="diary" class="diary-panel" aria-labelledby="diary-title">
-        <div class="diary-copy">
-          <p class="eyebrow">Dream Diary</p>
-          <h2 id="diary-title">写下你的梦日记</h2>
+      <section class="view-panel work-panel" data-view="guided" aria-labelledby="guided-title" hidden>
+        <div class="panel-copy">
+          <p class="eyebrow">Guided Dream Analysis</p>
+          <h2 id="guided-title">深度引导</h2>
           <p class="summary">
-            把你记得的片段写下来就好，不需要完整。梦里的情绪、颜色、人物和地点，都可能是内在正在说话的方式。
+            这里会先帮助你停留在梦的细节里，而不是立刻解释。你可以简单回答，不需要写得很完整；不想回答的问题可以跳过。
           </p>
         </div>
-        <form class="diary-form">
-          <label for="dreamDiary">今天醒来后，你还记得什么？</label>
-          <textarea id="dreamDiary" name="dreamDiary" rows="7" placeholder="例如：我梦见自己走在一条安静的河边，远处有一座桥，但我一直没有走过去。"></textarea>
-          <button type="submit">生成温柔解读</button>
-          <div id="diaryReflection" class="reflection-box" aria-live="polite">
-            写下一段梦境后，这里会出现一段温和的荣格式反思。
-          </div>
-        </form>
+
+        <div class="guide-list" aria-label="深度引导问题占位">
+          <article>
+            <span>情绪</span>
+            <p>梦里最强烈的感受是什么？醒来后这种感受还在吗？</p>
+          </article>
+          <article>
+            <span>联想</span>
+            <p>梦中最醒目的事物，让你想到现实里的什么人、地方或阶段？</p>
+          </article>
+          <article>
+            <span>现实连接</span>
+            <p>最近有没有一件事，让你产生过相似的紧张、好奇或犹豫？</p>
+          </article>
+          <article>
+            <span>主动性</span>
+            <p>如果重新回到梦里，你最想靠近、询问或改变哪一部分？</p>
+          </article>
+        </div>
+
+        <div class="button-row">
+          <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
+        </div>
+      </section>
+
+      <section class="view-panel work-panel" data-view="diary" aria-labelledby="diary-title" hidden>
+        <div class="panel-copy">
+          <p class="eyebrow">Dream Notation</p>
+          <h2 id="diary-title">梦境日记</h2>
+          <p class="summary">
+            这里将用于展示保存过的梦境记录。当前版本先保留日记入口和空状态，后续再加入本地保存、历史列表和详情页。
+          </p>
+        </div>
+
+        <div class="empty-state">
+          <p class="card-label">私人梦境档案</p>
+          <h3>暂时还没有梦境记录</h3>
+          <p>
+            下一轮可以先从本地保存一条梦境开始，让刷新页面后仍能看到自己的记录。
+          </p>
+        </div>
+
+        <div class="button-row">
+          <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
+        </div>
       </section>
     </main>
 
