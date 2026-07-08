@@ -1,51 +1,163 @@
-# Repository Guidelines
+# AGENTS.md
 
-## Project Structure & Module Organization
+## Project Name
 
-This repository is currently a blank starting point. As code is added, keep the layout predictable:
+析梦 Dream Anatomy
 
-- `src/` for application source code and reusable modules.
-- `tests/` for automated tests that mirror the `src/` structure.
-- `assets/` for static files such as images, icons, fixtures, or sample data.
-- `docs/` for design notes, API references, or longer contributor documentation.
+## One-sentence Description
 
-Prefer small modules. Group files by feature when a feature has related components, tests, or assets.
+析梦 Dream Anatomy 是一个中文梦境自我探索工具，帮助用户在醒来后快速记录梦境碎片，并通过 AI 生成温和、有启发的荣格式梦境分析。
 
-## Build, Test, and Development Commands
+## Product Positioning
 
-No build system or package manager configuration is present yet. When tooling is introduced, document the commands here. Common examples:
+这是一个梦境记录与自我探索小程序。
 
-- `npm install` or `pnpm install`: install project dependencies.
-- `npm run dev`: start a local development server.
-- `npm test`: run the automated test suite.
-- `npm run build`: create a production build.
-- `npm run lint`: check formatting and code quality.
+它不是：
 
-If a command requires environment variables or setup, document that before the command.
+1. 算命软件
+2. 心理诊断工具
+3. 心理治疗工具
+4. 吉凶预测工具
+5. 星座塔罗类产品
 
-## Coding Style & Naming Conventions
+## Target Users
 
-Follow the conventions of the selected language and framework. Until tooling is added, use consistent formatting, descriptive names, and small functions.
+喜欢心理学、自我探索、睡眠记录、情绪觉察的年轻中文用户。
 
-- Use `camelCase` for JavaScript/TypeScript variables and functions.
-- Use `PascalCase` for classes and UI components.
-- Use `kebab-case` for filenames unless a framework expects another pattern.
-- Keep configuration files at the repository root when possible.
+## MVP Goal
 
-Add a formatter or linter early, and avoid mixing unrelated style changes into feature commits.
+第一版先做一个可以展示、可以继续开发的小程序雏形。
 
-## Testing Guidelines
+用户可以：
 
-Place tests in `tests/` or next to source files using a suffix such as `.test.ts`, `.spec.ts`, or the equivalent for the chosen language. Tests should cover expected behavior, edge cases, and bug fixes.
+1. 输入梦境碎片
+2. 获得快速梦境解析
+3. 进入深度引导分析
+4. 保存梦境日记
+5. 查看历史梦境记录
 
-Before opening a pull request, run the full test suite plus relevant lint or build commands.
+## Core Features
 
-## Commit & Pull Request Guidelines
+### 1. 快速解析 Quick Dream Decode
 
-This workspace has no Git history yet, so no existing commit convention is available. Use concise, imperative messages such as `Add login form` or `Fix date parsing`.
+用户输入一段碎片化梦境。
 
-Pull requests should include a summary, testing notes, linked issues when relevant, and screenshots or recordings for visible UI changes. Keep each pull request focused on one logical change.
+系统需要输出：
 
-## Security & Configuration Tips
+- 梦境整理
+- 核心情绪
+- 主要象征
+- 初步荣格解读
+- 反思问题
+- 温和提醒
 
-Do not commit secrets, API keys, local credentials, or generated dependency folders. Store local configuration in ignored files such as `.env.local`, and provide `.env.example` when configuration is required.
+### 2. 深度引导 Guided Dream Analysis
+
+用户输入梦境后，AI 不要立刻解释。
+
+AI 先提出 3–5 个问题，帮助用户补充：
+
+- 情绪
+- 个人联想
+- 现实关联
+- 梦中主动性
+- 醒后感受
+
+用户回答后，再生成完整的 Dream Anatomy Report。
+
+### 3. 梦境日记 Dream Notation
+
+用户可以保存并查看以前的梦境记录。
+
+每条梦境记录至少包含：
+
+- 日期
+- 梦境摘要
+- 主要情绪
+- 主要意象
+- 睡眠质量
+- 分析内容
+
+## AI Safety Rules
+
+AI 不能：
+
+1. 预测未来
+2. 判断吉凶
+3. 说用户会发财、倒霉、遇灾、恋爱成功
+4. 做心理疾病诊断，比如“你有抑郁症 / 焦虑症 / PTSD”
+5. 给出治疗方案
+6. 替代心理咨询师或医生
+7. 用绝对语气解释梦，比如“这个梦一定代表……”
+8. 编造用户没有提供的现实背景
+9. 诱导用户透露过度隐私或创伤细节
+10. 生成恐吓、宿命论或让用户焦虑的解释
+
+AI 必须：
+
+1. 使用“可能”“也许”“可以理解为”“你可以思考”等非绝对表达
+2. 保持温和、清楚、有启发
+3. 像梦境记录助手，不像算命师，也不像医生
+4. 少用术语
+5. 如果使用“阴影”“人格面具”“个体化”等荣格概念，必须用普通话解释
+6. 每段不要太长，适合手机端阅读
+7. 最后提醒用户：这不是诊断、治疗或预言，只是一种自我探索视角
+
+## UI Style
+
+整体风格应该是：
+
+- 安静
+- 神秘
+- 高级
+- 温和
+- 情绪安全
+- 适合中文用户
+- 像一个私人梦境档案馆
+
+避免：
+
+- 低级玄学风格
+- 算命风格
+- 医院系统风格
+- 卡通风格
+- 过度星座塔罗风格
+- 随便添加幼稚图标
+
+## Current Repository Structure
+
+当前项目结构：
+
+- src/：主要代码
+- docs/：产品文档、PRD、设计说明
+- tests/：测试文件
+- README.md：项目介绍
+- AGENTS.md：给 AI 看的项目地图
+
+## Development Rules
+
+每次 AI 修改代码前，必须先阅读：
+
+1. AGENTS.md
+2. README.md
+3. docs 文件夹里的产品文档
+
+AI 不要擅自新增 MVP 之外的大功能。
+
+AI 不要改变产品定位。
+
+AI 不要把产品做成算命、诊断或治疗工具。
+
+每次修改代码前，AI 必须先说明：
+
+1. 准备修改哪些文件
+2. 为什么要修改
+3. 修改后怎么测试
+
+每次修改完成后，AI 必须说明：
+
+1. 修改了哪些文件
+2. 完成了什么功能
+3. 如何运行
+4. 如何测试
+5. 是否还有未完成内容
