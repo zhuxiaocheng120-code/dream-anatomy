@@ -149,7 +149,9 @@ h3 {
 .entry-card,
 .work-panel,
 .quick-result,
+.deep-report,
 .result-grid article,
+.report-grid article,
 .journal-card,
 .guide-list article,
 .guided-question-card,
@@ -178,7 +180,9 @@ h3 {
 .dream-card p:last-child,
 .entry-card span:last-child,
 .quick-result p,
+.deep-report p,
 .result-grid p,
+.report-grid p,
 .journal-card p,
 .guide-list p,
 .empty-state p,
@@ -267,6 +271,7 @@ textarea {
 }
 
 .button-row button,
+.guided-actions button,
 .dream-form button[type="submit"] {
   min-height: 46px;
   display: inline-flex;
@@ -281,6 +286,7 @@ textarea {
 }
 
 .button-row button:hover,
+.guided-actions button:hover,
 .dream-form button[type="submit"]:hover {
   background: var(--violet-dark);
 }
@@ -306,13 +312,15 @@ textarea:focus-visible {
   margin: 4px 0 0;
 }
 
-.quick-result {
+.quick-result,
+.deep-report {
   margin-top: 28px;
   padding: clamp(22px, 4vw, 30px);
   background: rgba(255, 255, 255, 0.58);
 }
 
-.quick-result[hidden] {
+.quick-result[hidden],
+.deep-report[hidden] {
   display: none;
 }
 
@@ -321,27 +329,35 @@ textarea:focus-visible {
   margin-bottom: 22px;
 }
 
-.result-grid {
+.result-grid,
+.report-grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: 16px;
 }
 
-.result-grid article {
+.result-grid article,
+.report-grid article {
   padding: 20px;
   background: rgba(255, 250, 241, 0.78);
   box-shadow: none;
 }
 
-.result-grid span {
+.result-grid span,
+.report-grid span {
   display: inline-flex;
   margin-bottom: 10px;
   color: var(--teal);
   font-weight: 800;
 }
 
-.result-grid p {
+.result-grid p,
+.report-grid p {
   margin-bottom: 0;
+}
+
+.wide-report-card {
+  grid-column: 1 / -1;
 }
 
 .journal-list {
@@ -363,6 +379,24 @@ textarea:focus-visible {
 
 .guided-questions[hidden] {
   display: none;
+}
+
+.guided-actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 12px 16px;
+  margin-top: 18px;
+}
+
+.guided-actions[hidden] {
+  display: none;
+}
+
+.guided-actions p {
+  margin: 0;
+  color: var(--muted);
+  line-height: 1.7;
 }
 
 .guided-question-card {
@@ -461,6 +495,7 @@ textarea:focus-visible {
   .hero,
   .entry-grid,
   .result-grid,
+  .report-grid,
   .journal-meta,
   .guide-list,
   .guided-questions {
@@ -496,6 +531,8 @@ textarea:focus-visible {
   .work-panel,
   .quick-result,
   .result-grid article,
+  .deep-report,
+  .report-grid article,
   .journal-card,
   .guide-list article,
   .guided-question-card,

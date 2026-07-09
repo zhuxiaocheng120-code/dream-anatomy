@@ -11,6 +11,10 @@ const guidedForm = document.querySelector("[data-guided-form]");
 const guidedDream = document.querySelector("#guidedDream");
 const guidedQuestionsContainer = document.querySelector("[data-guided-questions]");
 const guidedStatus = document.querySelector("[data-guided-status]");
+const guidedActions = document.querySelector("[data-guided-actions]");
+const generateDeepReportButton = document.querySelector("[data-generate-deep-report]");
+const deepReport = document.querySelector("[data-deep-report]");
+const deepReportFields = document.querySelectorAll("[data-deep-report-field]");
 const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
 const guidedDraftState = {
   rawDreamText: "",
@@ -113,10 +117,51 @@ function generateGuidedQuestions(rawDreamText) {
   ];
 }
 
+function getGuidedAnswer(questionId) {
+  return (guidedDraftState.answers[questionId] || "").trim();
+}
+
+function formatOptionalAnswer(questionId, fallback) {
+  const answer = getGuidedAnswer(questionId);
+  return answer || fallback;
+}
+
+function generateMockDeepReport(rawDreamText) {
+  // TODO: replace this mock deep report with OpenAI or DeepSeek API response through a backend proxy.
+  const shortDreamText = getShortDreamText(rawDreamText);
+  const possibleSymbols = getPossibleSymbols(rawDreamText);
+  const emotionAnswer = formatOptionalAnswer("emotion", "你还没有特别标记某一种情绪，可以先把醒来后的整体身体感受当作线索。");
+  const associationAnswer = formatOptionalAnswer("association", "暂时没有写下个人联想时，可以先停留在梦里最清晰的画面上。");
+  const lifeLinkAnswer = formatOptionalAnswer("lifeLink", "如果现实连接还不明显，也许可以先观察最近是否有轻微的变化、等待或选择。");
+  const agencyAnswer = formatOptionalAnswer("agency", "你还没有记录梦中的主动性，可以回想自己是靠近、躲开、停住，还是旁观。");
+  const wakingAnswer = formatOptionalAnswer("waking", "醒后的感受可以稍后再补充，哪怕只是一个词也足够。");
+
+  return {
+    summary: `这段梦可以先整理为：“${shortDreamText}”。它不需要被解释成单一答案，更像是一组值得慢慢靠近的画面和感受。`,
+    emotionClues: `你记录的情绪线索是：${emotionAnswer} 这可能提示你先关注梦醒后仍残留的感受，而不是急着判断梦的意义。`,
+    coreImages: `目前较突出的核心意象也许包括：${possibleSymbols}。你对它们的个人联想是：${associationAnswer} 这些意象可以理解为内在经验的入口。`,
+    jungianView: `从温和的荣格视角看，这个梦可能呈现了某个还没有被充分看见的内在部分。这里的“阴影”并不等于坏东西，而是指那些平时较少被表达、但也许正在等待被理解的感受或需求。`,
+    lifeConnection: `你写下的现实连接是：${lifeLinkAnswer} 梦中主动性的线索是：${agencyAnswer} 你可以思考它们是否和最近的节奏、关系、压力或选择有轻微呼应。`,
+    reflectionQuestions: `你可以带着这些问题再看一遍梦：哪个画面最想被你记住？如果梦里的某个意象会说话，它也许会提醒你什么？醒后感受“${wakingAnswer}”和你最近的生活状态有怎样的细小连接？`,
+    smallAction: "今天可以做一个很小的记录动作：用一句话写下梦里最清晰的画面，再写下它带给你的一个感受。这个动作只是帮助你温和地整理自己，不需要得出结论。",
+    gentleReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。你可以只保留对自己有帮助的部分；如果梦境让你持续不安，可以考虑和可信任的人或专业支持者谈谈。"
+  };
+}
+
 function updateGuidedStatus(message) {
   if (guidedStatus) {
     guidedStatus.textContent = message;
   }
+}
+
+function hideDeepReport() {
+  if (deepReport) {
+    deepReport.hidden = true;
+  }
+
+  deepReportFields.forEach((field) => {
+    field.textContent = "";
+  });
 }
 
 function renderGuidedQuestions(questions) {
@@ -147,12 +192,25 @@ function renderGuidedQuestions(questions) {
 
     answer.addEventListener("input", () => {
       guidedDraftState.answers[question.id] = answer.value;
-      updateGuidedStatus("回答已暂存 / 可继续生成深度报告。本轮先保留为占位提示，暂不生成完整报告。");
+      hideDeepReport();
+      updateGuidedStatus("回答已暂存。你可以继续回答，也可以直接生成深度报告；不想回答的问题可以跳过。");
     });
 
     card.append(label, prompt, answerLabel, answer);
     guidedQuestionsContainer.append(card);
   });
+}
+
+function renderDeepReport(report) {
+  if (!deepReport) {
+    return;
+  }
+
+  deepReportFields.forEach((field) => {
+    field.textContent = report[field.dataset.deepReportField] || "";
+  });
+
+  deepReport.hidden = false;
 }
 
 function loadDreamRecords() {
@@ -305,6 +363,10 @@ if (guidedForm) {
     guidedDraftState.answers = {};
 
     renderGuidedQuestions(guidedDraftState.questions);
+    hideDeepReport();
+    if (guidedActions) {
+      guidedActions.hidden = false;
+    }
     updateGuidedStatus("已生成 5 个温和问题。你可以简单回答，不需要写得很完整；不想回答的问题可以跳过。");
   });
 
@@ -313,7 +375,39 @@ if (guidedForm) {
     guidedDraftState.questions = [];
     guidedDraftState.answers = {};
     renderGuidedQuestions([]);
+    hideDeepReport();
+    if (guidedActions) {
+      guidedActions.hidden = true;
+    }
     updateGuidedStatus("先写下一段梦境，页面会生成几个温和问题帮助你补充细节。");
+  });
+}
+
+if (generateDeepReportButton) {
+  generateDeepReportButton.addEventListener("click", () => {
+    const rawDreamText = guidedDream.value.trim();
+
+    if (!rawDreamText) {
+      hideDeepReport();
+      updateGuidedStatus("先写下一点梦境内容，再生成深度报告。一个画面、一种情绪，或醒来后还记得的细节都可以。");
+      guidedDream.focus();
+      return;
+    }
+
+    guidedDraftState.rawDreamText = rawDreamText;
+
+    if (guidedDraftState.questions.length === 0) {
+      guidedDraftState.questions = generateGuidedQuestions(rawDreamText);
+      renderGuidedQuestions(guidedDraftState.questions);
+    }
+
+    const deepReportResult = generateMockDeepReport(rawDreamText);
+    renderDeepReport(deepReportResult);
+
+    if (guidedActions) {
+      guidedActions.hidden = false;
+    }
+    updateGuidedStatus("已生成本地 mock 深度报告。当前不会发送到服务器，也不会保存到梦境日记。");
   });
 }
 
