@@ -131,28 +131,20 @@
           </p>
         </div>
 
-        <div class="guide-list" aria-label="深度引导问题占位">
-          <article>
-            <span>情绪</span>
-            <p>梦里最强烈的感受是什么？醒来后这种感受还在吗？</p>
-          </article>
-          <article>
-            <span>联想</span>
-            <p>梦中最醒目的事物，让你想到现实里的什么人、地方或阶段？</p>
-          </article>
-          <article>
-            <span>现实连接</span>
-            <p>最近有没有一件事，让你产生过相似的紧张、好奇或犹豫？</p>
-          </article>
-          <article>
-            <span>主动性</span>
-            <p>如果重新回到梦里，你最想靠近、询问或改变哪一部分？</p>
-          </article>
-        </div>
+        <form class="dream-form guided-form" data-guided-form>
+          <label for="guidedDream">梦境内容</label>
+          <textarea id="guidedDream" rows="7" placeholder="写下你想慢慢探索的梦境。可以只是几个画面、人物、地点、颜色，或醒来后的感觉。"></textarea>
+          <div class="button-row">
+            <button type="submit">开始引导</button>
+            <button class="secondary-button" type="reset">清空</button>
+            <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
+          </div>
+          <p class="status" data-guided-status aria-live="polite">
+            先写下一段梦境，页面会生成几个温和问题帮助你补充细节。
+          </p>
+        </form>
 
-        <div class="button-row">
-          <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
-        </div>
+        <section class="guided-questions" data-guided-questions aria-label="深度引导问题" aria-live="polite" hidden></section>
       </section>
 
       <section class="view-panel work-panel" data-view="diary" aria-labelledby="diary-title" hidden>

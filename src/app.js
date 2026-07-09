@@ -7,7 +7,16 @@ const resultFields = document.querySelectorAll("[data-result-field]");
 const dreamJournalList = document.querySelector("#dreamJournalList");
 const dreamJournalEmpty = document.querySelector("#dreamJournalEmpty");
 const clearJournalButton = document.querySelector("[data-clear-journal]");
+const guidedForm = document.querySelector("[data-guided-form]");
+const guidedDream = document.querySelector("#guidedDream");
+const guidedQuestionsContainer = document.querySelector("[data-guided-questions]");
+const guidedStatus = document.querySelector("[data-guided-status]");
 const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
+const guidedDraftState = {
+  rawDreamText: "",
+  questions: [],
+  answers: {}
+};
 
 function showView(viewName) {
   viewPanels.forEach((panel) => {
@@ -65,6 +74,85 @@ function generateMockQuickDecode(rawDreamText) {
     question: "你可以思考：梦里哪个画面最吸引你，或让你最想避开？它和你最近的情绪、选择或关系有什么轻微连接吗？",
     reminder: "这不是诊断、治疗或预言，只是一种自我探索视角。如果梦境让你持续不安，可以考虑寻求可信任的人或专业支持。"
   };
+}
+
+function generateGuidedQuestions(rawDreamText) {
+  const shortDreamText = getShortDreamText(rawDreamText);
+
+  return [
+    {
+      id: "emotion",
+      label: "情绪",
+      question: `回看“${shortDreamText}”时，梦里最强烈的感受是什么？`,
+      placeholder: "例如：紧张、平静、困惑、好奇，或一时说不清。"
+    },
+    {
+      id: "association",
+      label: "个人联想",
+      question: "这个场景、人物或物体让你想到现实中的什么？",
+      placeholder: "可以写一个人、地方、颜色、关系，或任何自然冒出的联想。"
+    },
+    {
+      id: "lifeLink",
+      label: "现实连接",
+      question: "最近有没有类似的压力、关系、变化或选择？",
+      placeholder: "只写你愿意记录的部分即可，不需要解释得很完整。"
+    },
+    {
+      id: "agency",
+      label: "梦中主动性",
+      question: "你在梦里是主动行动，还是被动承受？",
+      placeholder: "也可以写：我不确定，或我只是旁观。"
+    },
+    {
+      id: "waking",
+      label: "醒后感受",
+      question: "醒来后这个梦给你留下什么感觉？",
+      placeholder: "例如：胸口紧、松了一口气、还想继续想，或已经淡了。"
+    }
+  ];
+}
+
+function updateGuidedStatus(message) {
+  if (guidedStatus) {
+    guidedStatus.textContent = message;
+  }
+}
+
+function renderGuidedQuestions(questions) {
+  if (!guidedQuestionsContainer) {
+    return;
+  }
+
+  guidedQuestionsContainer.textContent = "";
+  guidedQuestionsContainer.hidden = questions.length === 0;
+
+  questions.forEach((question, index) => {
+    const card = document.createElement("article");
+    const label = document.createElement("span");
+    const prompt = document.createElement("p");
+    const answerLabel = document.createElement("label");
+    const answer = document.createElement("textarea");
+
+    card.className = "guided-question-card";
+    label.textContent = `${index + 1}. ${question.label}`;
+    prompt.textContent = question.question;
+    answerLabel.setAttribute("for", `guidedAnswer-${question.id}`);
+    answerLabel.textContent = "你的回答";
+    answer.id = `guidedAnswer-${question.id}`;
+    answer.rows = 4;
+    answer.placeholder = question.placeholder;
+    answer.value = guidedDraftState.answers[question.id] || "";
+    answer.dataset.guidedAnswer = question.id;
+
+    answer.addEventListener("input", () => {
+      guidedDraftState.answers[question.id] = answer.value;
+      updateGuidedStatus("回答已暂存 / 可继续生成深度报告。本轮先保留为占位提示，暂不生成完整报告。");
+    });
+
+    card.append(label, prompt, answerLabel, answer);
+    guidedQuestionsContainer.append(card);
+  });
 }
 
 function loadDreamRecords() {
@@ -197,6 +285,35 @@ if (quickForm) {
     if (status) {
       status.textContent = "写下一段梦境碎片后，可以先生成一份本地 mock 的快速解析结果。";
     }
+  });
+}
+
+if (guidedForm) {
+  guidedForm.addEventListener("submit", (event) => {
+    event.preventDefault();
+
+    const rawDreamText = guidedDream.value.trim();
+
+    if (!rawDreamText) {
+      updateGuidedStatus("先写下一点梦境内容也可以：一个画面、一种情绪，或醒来后还记得的细节。");
+      guidedDream.focus();
+      return;
+    }
+
+    guidedDraftState.rawDreamText = rawDreamText;
+    guidedDraftState.questions = generateGuidedQuestions(rawDreamText);
+    guidedDraftState.answers = {};
+
+    renderGuidedQuestions(guidedDraftState.questions);
+    updateGuidedStatus("已生成 5 个温和问题。你可以简单回答，不需要写得很完整；不想回答的问题可以跳过。");
+  });
+
+  guidedForm.addEventListener("reset", () => {
+    guidedDraftState.rawDreamText = "";
+    guidedDraftState.questions = [];
+    guidedDraftState.answers = {};
+    renderGuidedQuestions([]);
+    updateGuidedStatus("先写下一段梦境，页面会生成几个温和问题帮助你补充细节。");
   });
 }
 
