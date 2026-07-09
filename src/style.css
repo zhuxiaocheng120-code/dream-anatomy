@@ -319,6 +319,15 @@ textarea:focus-visible {
   background: rgba(255, 255, 255, 0.58);
 }
 
+.report-actions {
+  align-items: center;
+  margin-top: 22px;
+}
+
+.save-status {
+  margin: 0;
+}
+
 .quick-result[hidden],
 .deep-report[hidden] {
   display: none;
