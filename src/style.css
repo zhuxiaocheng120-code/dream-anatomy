@@ -10,6 +10,7 @@
   --violet-dark: #3e337b;
   --gold: #b8792b;
   --teal: #2f7f74;
+  --blue: #355f8f;
   --ring: rgba(85, 70, 163, 0.24);
 }
 
@@ -151,6 +152,7 @@ h3 {
 .result-grid article,
 .journal-card,
 .guide-list article,
+.guided-question-card,
 .empty-state {
   border: 1px solid var(--border);
   border-radius: 8px;
@@ -348,6 +350,48 @@ textarea:focus-visible {
   margin-bottom: 22px;
 }
 
+.guided-form {
+  margin-bottom: 22px;
+}
+
+.guided-questions {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+  margin-top: 24px;
+}
+
+.guided-questions[hidden] {
+  display: none;
+}
+
+.guided-question-card {
+  display: grid;
+  gap: 12px;
+  padding: 22px;
+  background: rgba(255, 250, 241, 0.78);
+  box-shadow: none;
+}
+
+.guided-question-card span {
+  color: var(--blue);
+  font-weight: 800;
+}
+
+.guided-question-card p {
+  margin-bottom: 2px;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
+.guided-question-card label {
+  font-size: 0.95rem;
+}
+
+.guided-question-card textarea {
+  min-height: 120px;
+}
+
 .journal-card {
   padding: 22px;
   background: rgba(255, 250, 241, 0.78);
@@ -418,7 +462,8 @@ textarea:focus-visible {
   .entry-grid,
   .result-grid,
   .journal-meta,
-  .guide-list {
+  .guide-list,
+  .guided-questions {
     grid-template-columns: 1fr;
   }
 
@@ -453,6 +498,7 @@ textarea:focus-visible {
   .result-grid article,
   .journal-card,
   .guide-list article,
+  .guided-question-card,
   .empty-state {
     padding: 22px;
   }
