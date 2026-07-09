@@ -149,6 +149,7 @@ h3 {
 .work-panel,
 .quick-result,
 .result-grid article,
+.journal-card,
 .guide-list article,
 .empty-state {
   border: 1px solid var(--border);
@@ -176,6 +177,7 @@ h3 {
 .entry-card span:last-child,
 .quick-result p,
 .result-grid p,
+.journal-card p,
 .guide-list p,
 .empty-state p,
 .status {
@@ -340,6 +342,53 @@ textarea:focus-visible {
   margin-bottom: 0;
 }
 
+.journal-list {
+  display: grid;
+  gap: 16px;
+  margin-bottom: 22px;
+}
+
+.journal-card {
+  padding: 22px;
+  background: rgba(255, 250, 241, 0.78);
+  box-shadow: none;
+}
+
+.journal-card h3 {
+  margin-bottom: 12px;
+}
+
+.journal-card > p {
+  margin-bottom: 18px;
+}
+
+.journal-meta {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 12px;
+}
+
+.journal-meta div {
+  padding: 14px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.journal-meta span {
+  display: block;
+  margin-bottom: 6px;
+  color: var(--teal);
+  font-weight: 800;
+}
+
+.journal-meta strong {
+  display: block;
+  color: var(--ink);
+  font-weight: 700;
+  line-height: 1.6;
+}
+
 .guide-list {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -368,6 +417,7 @@ textarea:focus-visible {
   .hero,
   .entry-grid,
   .result-grid,
+  .journal-meta,
   .guide-list {
     grid-template-columns: 1fr;
   }
@@ -401,6 +451,7 @@ textarea:focus-visible {
   .work-panel,
   .quick-result,
   .result-grid article,
+  .journal-card,
   .guide-list article,
   .empty-state {
     padding: 22px;
