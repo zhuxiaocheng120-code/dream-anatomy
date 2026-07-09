@@ -147,6 +147,8 @@ h3 {
 .dream-card,
 .entry-card,
 .work-panel,
+.quick-result,
+.result-grid article,
 .guide-list article,
 .empty-state {
   border: 1px solid var(--border);
@@ -172,6 +174,8 @@ h3 {
 
 .dream-card p:last-child,
 .entry-card span:last-child,
+.quick-result p,
+.result-grid p,
 .guide-list p,
 .empty-state p,
 .status {
@@ -298,6 +302,44 @@ textarea:focus-visible {
   margin: 4px 0 0;
 }
 
+.quick-result {
+  margin-top: 28px;
+  padding: clamp(22px, 4vw, 30px);
+  background: rgba(255, 255, 255, 0.58);
+}
+
+.quick-result[hidden] {
+  display: none;
+}
+
+.result-heading {
+  max-width: 760px;
+  margin-bottom: 22px;
+}
+
+.result-grid {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: 16px;
+}
+
+.result-grid article {
+  padding: 20px;
+  background: rgba(255, 250, 241, 0.78);
+  box-shadow: none;
+}
+
+.result-grid span {
+  display: inline-flex;
+  margin-bottom: 10px;
+  color: var(--teal);
+  font-weight: 800;
+}
+
+.result-grid p {
+  margin-bottom: 0;
+}
+
 .guide-list {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
@@ -325,6 +367,7 @@ textarea:focus-visible {
 @media (max-width: 820px) {
   .hero,
   .entry-grid,
+  .result-grid,
   .guide-list {
     grid-template-columns: 1fr;
   }
@@ -356,6 +399,8 @@ textarea:focus-visible {
   .dream-card,
   .entry-card,
   .work-panel,
+  .quick-result,
+  .result-grid article,
   .guide-list article,
   .empty-state {
     padding: 22px;
