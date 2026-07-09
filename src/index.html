@@ -160,19 +160,22 @@
           <p class="eyebrow">Dream Notation</p>
           <h2 id="diary-title">梦境日记</h2>
           <p class="summary">
-            这里将用于展示保存过的梦境记录。当前版本先保留日记入口和空状态，后续再加入本地保存、历史列表和详情页。
+            这里会显示保存在当前浏览器里的快速解析记录。当前只做本地列表，不上传内容，也不提供复杂详情页。
           </p>
         </div>
 
-        <div class="empty-state">
+        <div id="dreamJournalEmpty" class="empty-state">
           <p class="card-label">私人梦境档案</p>
           <h3>暂时还没有梦境记录</h3>
           <p>
-            下一轮可以先从本地保存一条梦境开始，让刷新页面后仍能看到自己的记录。
+            完成一次快速解析后，记录会保存在这个浏览器里，并显示在这里。
           </p>
         </div>
 
+        <div id="dreamJournalList" class="journal-list" aria-live="polite"></div>
+
         <div class="button-row">
+          <button class="secondary-button" type="button" data-clear-journal>清空本地记录</button>
           <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
         </div>
       </section>

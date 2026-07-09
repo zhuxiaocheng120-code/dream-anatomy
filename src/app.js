@@ -4,6 +4,10 @@ const quickForm = document.querySelector("[data-quick-form]");
 const quickDream = document.querySelector("#quickDream");
 const quickResult = document.querySelector("#quickResult");
 const resultFields = document.querySelectorAll("[data-result-field]");
+const dreamJournalList = document.querySelector("#dreamJournalList");
+const dreamJournalEmpty = document.querySelector("#dreamJournalEmpty");
+const clearJournalButton = document.querySelector("[data-clear-journal]");
+const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
 
 function showView(viewName) {
   viewPanels.forEach((panel) => {
@@ -63,6 +67,93 @@ function generateMockQuickDecode(rawDreamText) {
   };
 }
 
+function loadDreamRecords() {
+  try {
+    const savedRecords = localStorage.getItem(dreamJournalStorageKey);
+    return savedRecords ? JSON.parse(savedRecords) : [];
+  } catch (error) {
+    return [];
+  }
+}
+
+function saveDreamRecord(record) {
+  const records = [record, ...loadDreamRecords()];
+  localStorage.setItem(dreamJournalStorageKey, JSON.stringify(records));
+  return records;
+}
+
+function createDreamRecord(rawDreamText, quickDecode) {
+  return {
+    id: `dream-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    rawDreamText,
+    dreamSummary: quickDecode.summary,
+    emotions: quickDecode.emotion,
+    symbols: quickDecode.symbols,
+    sleepQuality: "未记录",
+    analysisType: "快速解析",
+    reportContent: quickDecode
+  };
+}
+
+function formatRecordDate(createdAt) {
+  return new Intl.DateTimeFormat("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+    hour: "2-digit",
+    minute: "2-digit"
+  }).format(new Date(createdAt));
+}
+
+function createJournalMeta(label, value) {
+  const item = document.createElement("div");
+  const labelNode = document.createElement("span");
+  const valueNode = document.createElement("strong");
+
+  labelNode.textContent = label;
+  valueNode.textContent = value;
+  item.append(labelNode, valueNode);
+
+  return item;
+}
+
+function renderDreamJournal(records = loadDreamRecords()) {
+  if (!dreamJournalList || !dreamJournalEmpty) {
+    return;
+  }
+
+  dreamJournalList.textContent = "";
+  dreamJournalEmpty.hidden = records.length > 0;
+
+  if (clearJournalButton) {
+    clearJournalButton.hidden = records.length === 0;
+  }
+
+  records.forEach((record) => {
+    const card = document.createElement("article");
+    const title = document.createElement("h3");
+    const rawDream = document.createElement("p");
+    const meta = document.createElement("div");
+
+    card.className = "journal-card";
+    title.textContent = "快速解析记录";
+    rawDream.textContent = record.rawDreamText;
+    meta.className = "journal-meta";
+    meta.append(
+      createJournalMeta("日期", formatRecordDate(record.createdAt)),
+      createJournalMeta("梦境摘要", record.dreamSummary),
+      createJournalMeta("主要情绪", record.emotions),
+      createJournalMeta("主要意象", record.symbols),
+      createJournalMeta("睡眠质量", record.sleepQuality),
+      createJournalMeta("分析类型", record.analysisType)
+    );
+
+    card.append(title, rawDream, meta);
+    dreamJournalList.append(card);
+  });
+}
+
 if (quickForm) {
   quickForm.addEventListener("submit", (event) => {
     event.preventDefault();
@@ -78,10 +169,21 @@ if (quickForm) {
       return;
     }
 
-    fillQuickResult(generateMockQuickDecode(rawDreamText));
+    const quickDecode = generateMockQuickDecode(rawDreamText);
+    const dreamRecord = createDreamRecord(rawDreamText, quickDecode);
+
+    fillQuickResult(quickDecode);
     quickResult.hidden = false;
-    if (status) {
-      status.textContent = "已生成本地 mock 快速解析结果。当前不会保存到梦境日记，也不会发送到服务器。";
+
+    try {
+      renderDreamJournal(saveDreamRecord(dreamRecord));
+      if (status) {
+        status.textContent = "已生成本地 mock 快速解析结果，并保存到本地梦境日记。当前不会发送到服务器。";
+      }
+    } catch (error) {
+      if (status) {
+        status.textContent = "已生成快速解析结果，但浏览器暂时无法保存本地记录。";
+      }
     }
   });
 
@@ -97,3 +199,18 @@ if (quickForm) {
     }
   });
 }
+
+if (clearJournalButton) {
+  clearJournalButton.addEventListener("click", () => {
+    const shouldClear = window.confirm("确定要清空保存在这个浏览器里的梦境记录吗？");
+
+    if (!shouldClear) {
+      return;
+    }
+
+    localStorage.removeItem(dreamJournalStorageKey);
+    renderDreamJournal([]);
+  });
+}
+
+renderDreamJournal();
