@@ -145,6 +145,54 @@
         </form>
 
         <section class="guided-questions" data-guided-questions aria-label="深度引导问题" aria-live="polite" hidden></section>
+
+        <div class="guided-actions" data-guided-actions hidden>
+          <button type="button" data-generate-deep-report>生成深度报告</button>
+          <p>可以只回答一部分问题；没有回答的问题会被轻轻跳过。</p>
+        </div>
+
+        <section class="deep-report" data-deep-report aria-label="Dream Anatomy Report" aria-live="polite" hidden>
+          <div class="result-heading">
+            <p class="eyebrow">Dream Anatomy Report</p>
+            <h3>深度析梦报告</h3>
+            <p>以下内容由本地 mock 生成，用于演示深度引导后的结构化报告体验。</p>
+          </div>
+
+          <div class="report-grid">
+            <article>
+              <span>梦境整理</span>
+              <p data-deep-report-field="summary"></p>
+            </article>
+            <article>
+              <span>情绪线索</span>
+              <p data-deep-report-field="emotionClues"></p>
+            </article>
+            <article>
+              <span>核心意象</span>
+              <p data-deep-report-field="coreImages"></p>
+            </article>
+            <article>
+              <span>荣格式初步解读</span>
+              <p data-deep-report-field="jungianView"></p>
+            </article>
+            <article>
+              <span>现实连接</span>
+              <p data-deep-report-field="lifeConnection"></p>
+            </article>
+            <article>
+              <span>自我反思问题</span>
+              <p data-deep-report-field="reflectionQuestions"></p>
+            </article>
+            <article>
+              <span>今日小行动</span>
+              <p data-deep-report-field="smallAction"></p>
+            </article>
+            <article class="wide-report-card">
+              <span>温和提醒</span>
+              <p data-deep-report-field="gentleReminder"></p>
+            </article>
+          </div>
+        </section>
       </section>
 
       <section class="view-panel work-panel" data-view="diary" aria-labelledby="diary-title" hidden>
