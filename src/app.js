@@ -15,11 +15,15 @@ const guidedActions = document.querySelector("[data-guided-actions]");
 const generateDeepReportButton = document.querySelector("[data-generate-deep-report]");
 const deepReport = document.querySelector("[data-deep-report]");
 const deepReportFields = document.querySelectorAll("[data-deep-report-field]");
+const saveDeepReportButton = document.querySelector("[data-save-deep-report]");
+const deepSaveStatus = document.querySelector("[data-deep-save-status]");
 const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
 const guidedDraftState = {
   rawDreamText: "",
   questions: [],
-  answers: {}
+  answers: {},
+  currentReport: null,
+  savedReportRecordId: ""
 };
 
 function showView(viewName) {
@@ -154,6 +158,12 @@ function updateGuidedStatus(message) {
   }
 }
 
+function updateDeepSaveStatus(message) {
+  if (deepSaveStatus) {
+    deepSaveStatus.textContent = message;
+  }
+}
+
 function hideDeepReport() {
   if (deepReport) {
     deepReport.hidden = true;
@@ -162,6 +172,10 @@ function hideDeepReport() {
   deepReportFields.forEach((field) => {
     field.textContent = "";
   });
+
+  guidedDraftState.currentReport = null;
+  guidedDraftState.savedReportRecordId = "";
+  updateDeepSaveStatus("生成报告后，可以把这份深度引导记录保存到本地梦境日记。");
 }
 
 function renderGuidedQuestions(questions) {
@@ -242,6 +256,20 @@ function createDreamRecord(rawDreamText, quickDecode) {
   };
 }
 
+function createDeepDreamRecord(rawDreamText, report) {
+  return {
+    id: `deep-dream-${Date.now()}`,
+    createdAt: new Date().toISOString(),
+    rawDreamText,
+    dreamSummary: report.summary,
+    emotions: report.emotionClues,
+    symbols: report.coreImages,
+    sleepQuality: "未记录",
+    analysisType: "深度引导",
+    reportContent: report
+  };
+}
+
 function formatRecordDate(createdAt) {
   return new Intl.DateTimeFormat("zh-CN", {
     year: "numeric",
@@ -283,7 +311,7 @@ function renderDreamJournal(records = loadDreamRecords()) {
     const meta = document.createElement("div");
 
     card.className = "journal-card";
-    title.textContent = "快速解析记录";
+    title.textContent = `${record.analysisType || "梦境"}记录`;
     rawDream.textContent = record.rawDreamText;
     meta.className = "journal-meta";
     meta.append(
@@ -374,6 +402,8 @@ if (guidedForm) {
     guidedDraftState.rawDreamText = "";
     guidedDraftState.questions = [];
     guidedDraftState.answers = {};
+    guidedDraftState.currentReport = null;
+    guidedDraftState.savedReportRecordId = "";
     renderGuidedQuestions([]);
     hideDeepReport();
     if (guidedActions) {
@@ -402,12 +432,40 @@ if (generateDeepReportButton) {
     }
 
     const deepReportResult = generateMockDeepReport(rawDreamText);
+    guidedDraftState.currentReport = deepReportResult;
+    guidedDraftState.savedReportRecordId = "";
     renderDeepReport(deepReportResult);
 
     if (guidedActions) {
       guidedActions.hidden = false;
     }
-    updateGuidedStatus("已生成本地 mock 深度报告。当前不会发送到服务器，也不会保存到梦境日记。");
+    updateGuidedStatus("已生成本地 mock 深度报告。当前不会发送到服务器。");
+    updateDeepSaveStatus("可以点击“保存到梦境日记”，把这份深度引导记录保存在当前浏览器里。");
+  });
+}
+
+if (saveDeepReportButton) {
+  saveDeepReportButton.addEventListener("click", () => {
+    if (!guidedDraftState.currentReport) {
+      updateDeepSaveStatus("请先生成深度报告，再保存到梦境日记。");
+      return;
+    }
+
+    if (guidedDraftState.savedReportRecordId) {
+      updateDeepSaveStatus("已保存");
+      return;
+    }
+
+    const rawDreamText = guidedDraftState.rawDreamText || guidedDream.value.trim();
+    const deepDreamRecord = createDeepDreamRecord(rawDreamText, guidedDraftState.currentReport);
+
+    try {
+      renderDreamJournal(saveDreamRecord(deepDreamRecord));
+      guidedDraftState.savedReportRecordId = deepDreamRecord.id;
+      updateDeepSaveStatus("已保存到本地梦境日记");
+    } catch (error) {
+      updateDeepSaveStatus("这份深度报告已经生成，但浏览器暂时无法保存本地记录。");
+    }
   });
 }
 
