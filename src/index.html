@@ -73,7 +73,7 @@
           </p>
         </div>
 
-        <form class="dream-form" data-placeholder-form>
+        <form class="dream-form" data-quick-form>
           <label for="quickDream">梦境碎片</label>
           <textarea id="quickDream" rows="7" placeholder="写下你还记得的画面、情绪、人物或地点。"></textarea>
           <div class="button-row">
@@ -82,9 +82,44 @@
             <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
           </div>
           <p class="status" aria-live="polite">
-            本轮先搭建快速解析入口和基础区域。完整解析报告会在后续迭代中补齐。
+            写下一段梦境碎片后，可以先生成一份本地 mock 的快速解析结果。
           </p>
         </form>
+
+        <section id="quickResult" class="quick-result" aria-label="快速解析结果" aria-live="polite" hidden>
+          <div class="result-heading">
+            <p class="eyebrow">Mock Quick Decode</p>
+            <h3>快速解析结果</h3>
+            <p>以下内容由本地占位逻辑生成，之后可以替换为正式分析服务返回的内容。</p>
+          </div>
+
+          <div class="result-grid">
+            <article>
+              <span>梦境整理</span>
+              <p data-result-field="summary"></p>
+            </article>
+            <article>
+              <span>核心情绪</span>
+              <p data-result-field="emotion"></p>
+            </article>
+            <article>
+              <span>主要象征</span>
+              <p data-result-field="symbols"></p>
+            </article>
+            <article>
+              <span>初步荣格解读</span>
+              <p data-result-field="jungian"></p>
+            </article>
+            <article>
+              <span>反思问题</span>
+              <p data-result-field="question"></p>
+            </article>
+            <article>
+              <span>温和提醒</span>
+              <p data-result-field="reminder"></p>
+            </article>
+          </div>
+        </section>
       </section>
 
       <section class="view-panel work-panel" data-view="guided" aria-labelledby="guided-title" hidden>
