@@ -22,6 +22,7 @@ const deepReportFields = document.querySelectorAll("[data-deep-report-field]");
 const saveDeepReportButton = document.querySelector("[data-save-deep-report]");
 const deepSaveStatus = document.querySelector("[data-deep-save-status]");
 const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
+const maxDreamTextLength = 5000;
 const guidedDraftState = {
   rawDreamText: "",
   questions: [],
@@ -75,6 +76,44 @@ function fillQuickResult(result) {
   resultFields.forEach((field) => {
     field.textContent = result[field.dataset.resultField];
   });
+}
+
+function mapApiQuickDecode(apiResult) {
+  return {
+    summary: apiResult.dreamSummary,
+    emotion: apiResult.coreEmotion,
+    symbols: Array.isArray(apiResult.symbols) ? apiResult.symbols.join("、") : "",
+    jungian: apiResult.jungianInterpretation,
+    question: Array.isArray(apiResult.reflectionQuestions) ? apiResult.reflectionQuestions.join(" ") : "",
+    reminder: apiResult.gentleReminder
+  };
+}
+
+async function requestQuickDecode(rawDreamText) {
+  const response = await fetch("/api/dream-analysis", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      dreamText: rawDreamText,
+      analysisType: "quick"
+    })
+  });
+
+  if (!response.ok) {
+    const error = new Error("Dream analysis request failed.");
+    error.isValidationError = response.status === 400;
+    throw error;
+  }
+
+  const data = await response.json();
+
+  if (!data || !data.analysis) {
+    throw new Error("Dream analysis response is empty.");
+  }
+
+  return mapApiQuickDecode(data.analysis);
 }
 
 function generateMockQuickDecode(rawDreamText) {
@@ -455,11 +494,12 @@ function renderDreamJournal(records = loadDreamRecords()) {
 }
 
 if (quickForm) {
-  quickForm.addEventListener("submit", (event) => {
+  quickForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const rawDreamText = quickDream.value.trim();
     const status = quickForm.querySelector(".status");
+    const submitButton = quickForm.querySelector("button[type='submit']");
 
     if (!rawDreamText) {
       if (status) {
@@ -469,20 +509,62 @@ if (quickForm) {
       return;
     }
 
-    const quickDecode = generateMockQuickDecode(rawDreamText);
-    const dreamRecord = createDreamRecord(rawDreamText, quickDecode);
+    if (rawDreamText.length > maxDreamTextLength) {
+      if (status) {
+        status.textContent = "梦境内容暂时最多 5000 个字符，可以先保留最想解析的片段。";
+      }
+      quickDream.focus();
+      return;
+    }
 
-    fillQuickResult(quickDecode);
-    quickResult.hidden = false;
+    if (submitButton && submitButton.disabled) {
+      return;
+    }
+
+    if (submitButton) {
+      submitButton.disabled = true;
+    }
+
+    if (status) {
+      status.textContent = "正在整理梦境线索……";
+    }
+
+    let quickDecode;
+    let statusMessage = "已生成快速解析结果，并保存到本地梦境日记。";
 
     try {
+      quickDecode = await requestQuickDecode(rawDreamText);
+    } catch (error) {
+      if (error.isValidationError) {
+        if (status) {
+          status.textContent = "梦境内容暂时无法提交，可以检查文字长度后再试。";
+        }
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+        return;
+      }
+
+      quickDecode = generateMockQuickDecode(rawDreamText);
+      statusMessage = "当前无法连接 AI，已为你展示本地示例结果。结果已保存到本地梦境日记。";
+    }
+
+    try {
+      const dreamRecord = createDreamRecord(rawDreamText, quickDecode);
+
+      fillQuickResult(quickDecode);
+      quickResult.hidden = false;
       renderDreamJournal(saveDreamRecord(dreamRecord));
       if (status) {
-        status.textContent = "已生成本地 mock 快速解析结果，并保存到本地梦境日记。当前不会发送到服务器。";
+        status.textContent = statusMessage;
       }
     } catch (error) {
       if (status) {
         status.textContent = "已生成快速解析结果，但浏览器暂时无法保存本地记录。";
+      }
+    } finally {
+      if (submitButton) {
+        submitButton.disabled = false;
       }
     }
   });
