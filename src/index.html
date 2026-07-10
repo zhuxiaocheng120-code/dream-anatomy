@@ -207,24 +207,37 @@
           <p class="eyebrow">Dream Notation</p>
           <h2 id="diary-title">梦境日记</h2>
           <p class="summary">
-            这里会显示保存在当前浏览器里的快速解析和深度引导记录。当前只做本地列表，不上传内容，也不提供复杂详情页。
+            这里会显示保存在当前浏览器里的快速解析和深度引导记录。当前只做本地列表和基础详情，不上传内容。
           </p>
         </div>
 
-        <div id="dreamJournalEmpty" class="empty-state">
-          <p class="card-label">私人梦境档案</p>
-          <h3>暂时还没有梦境记录</h3>
-          <p>
-            完成一次快速解析，或保存一份深度引导报告后，记录会保存在这个浏览器里，并显示在这里。
-          </p>
+        <div data-journal-list-shell>
+          <div id="dreamJournalEmpty" class="empty-state">
+            <p class="card-label">私人梦境档案</p>
+            <h3>暂时还没有梦境记录</h3>
+            <p>
+              完成一次快速解析，或保存一份深度引导报告后，记录会保存在这个浏览器里，并显示在这里。
+            </p>
+          </div>
+
+          <div id="dreamJournalList" class="journal-list" aria-live="polite"></div>
+
+          <div class="button-row">
+            <button class="secondary-button" type="button" data-clear-journal>清空本地记录</button>
+            <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
+          </div>
         </div>
 
-        <div id="dreamJournalList" class="journal-list" aria-live="polite"></div>
-
-        <div class="button-row">
-          <button class="secondary-button" type="button" data-clear-journal>清空本地记录</button>
-          <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
-        </div>
+        <section class="dream-detail" data-dream-detail aria-label="梦境记录详情" aria-live="polite" hidden>
+          <div class="detail-heading">
+            <div>
+              <p class="eyebrow">Dream Detail</p>
+              <h3>梦境记录详情</h3>
+            </div>
+            <button class="secondary-button" type="button" data-back-to-journal>返回梦境日记</button>
+          </div>
+          <div class="dream-detail-content" data-dream-detail-content></div>
+        </section>
       </section>
     </main>
 

@@ -4,9 +4,13 @@ const quickForm = document.querySelector("[data-quick-form]");
 const quickDream = document.querySelector("#quickDream");
 const quickResult = document.querySelector("#quickResult");
 const resultFields = document.querySelectorAll("[data-result-field]");
+const journalListShell = document.querySelector("[data-journal-list-shell]");
 const dreamJournalList = document.querySelector("#dreamJournalList");
 const dreamJournalEmpty = document.querySelector("#dreamJournalEmpty");
 const clearJournalButton = document.querySelector("[data-clear-journal]");
+const dreamDetail = document.querySelector("[data-dream-detail]");
+const dreamDetailContent = document.querySelector("[data-dream-detail-content]");
+const backToJournalButton = document.querySelector("[data-back-to-journal]");
 const guidedForm = document.querySelector("[data-guided-form]");
 const guidedDream = document.querySelector("#guidedDream");
 const guidedQuestionsContainer = document.querySelector("[data-guided-questions]");
@@ -27,6 +31,10 @@ const guidedDraftState = {
 };
 
 function showView(viewName) {
+  if (viewName === "diary") {
+    showDreamJournalList();
+  }
+
   viewPanels.forEach((panel) => {
     const isCurrentView = panel.dataset.view === viewName;
     panel.hidden = !isCurrentView;
@@ -292,6 +300,115 @@ function createJournalMeta(label, value) {
   return item;
 }
 
+function showDreamJournalList() {
+  if (journalListShell) {
+    journalListShell.hidden = false;
+  }
+
+  if (dreamDetail) {
+    dreamDetail.hidden = true;
+  }
+}
+
+function getReportSections(record) {
+  const report = record.reportContent || {};
+
+  if (record.analysisType === "深度引导") {
+    return [
+      ["梦境整理", report.summary],
+      ["情绪线索", report.emotionClues],
+      ["核心意象", report.coreImages],
+      ["荣格式初步解读", report.jungianView],
+      ["现实连接", report.lifeConnection],
+      ["自我反思问题", report.reflectionQuestions],
+      ["温和提醒", report.gentleReminder]
+    ];
+  }
+
+  return [
+    ["梦境整理", report.summary],
+    ["核心情绪", report.emotion],
+    ["主要象征", report.symbols],
+    ["初步荣格解读", report.jungian],
+    ["反思问题", report.question],
+    ["温和提醒", report.reminder]
+  ];
+}
+
+function createDetailBlock(label, value) {
+  const block = document.createElement("article");
+  const title = document.createElement("span");
+  const text = document.createElement("p");
+
+  title.textContent = label;
+  text.textContent = value || "未记录";
+  block.append(title, text);
+
+  return block;
+}
+
+function renderDreamDetail(recordId) {
+  if (!dreamDetailContent) {
+    return;
+  }
+
+  const record = loadDreamRecords().find((item) => item.id === recordId);
+  dreamDetailContent.textContent = "";
+
+  if (!record) {
+    const message = document.createElement("div");
+    const title = document.createElement("h4");
+    const copy = document.createElement("p");
+
+    message.className = "detail-empty-state";
+    title.textContent = "没有找到这条梦境记录";
+    copy.textContent = "它可能已经被清空，或只保存在另一个浏览器里。你可以返回梦境日记列表继续查看其他记录。";
+    message.append(title, copy);
+    dreamDetailContent.append(message);
+    return;
+  }
+
+  const overview = document.createElement("div");
+  const reportSection = document.createElement("section");
+  const reportTitle = document.createElement("h4");
+  const reportGrid = document.createElement("div");
+
+  overview.className = "detail-overview";
+  overview.append(
+    createDetailBlock("日期", formatRecordDate(record.createdAt)),
+    createDetailBlock("分析类型", record.analysisType),
+    createDetailBlock("原始梦境文本", record.rawDreamText),
+    createDetailBlock("梦境摘要", record.dreamSummary),
+    createDetailBlock("主要情绪", record.emotions),
+    createDetailBlock("主要意象", record.symbols),
+    createDetailBlock("睡眠质量", record.sleepQuality)
+  );
+
+  reportSection.className = "detail-report";
+  reportTitle.textContent = "分析内容";
+  reportGrid.className = "detail-report-grid";
+
+  getReportSections(record).forEach(([label, value]) => {
+    reportGrid.append(createDetailBlock(label, value));
+  });
+
+  reportSection.append(reportTitle, reportGrid);
+  dreamDetailContent.append(overview, reportSection);
+}
+
+function openDreamDetail(recordId) {
+  if (journalListShell) {
+    journalListShell.hidden = true;
+  }
+
+  if (dreamDetail) {
+    dreamDetail.hidden = false;
+  }
+
+  renderDreamDetail(recordId);
+  window.scrollTo({ top: 0, behavior: "smooth" });
+}
+
 function renderDreamJournal(records = loadDreamRecords()) {
   if (!dreamJournalList || !dreamJournalEmpty) {
     return;
@@ -309,6 +426,7 @@ function renderDreamJournal(records = loadDreamRecords()) {
     const title = document.createElement("h3");
     const rawDream = document.createElement("p");
     const meta = document.createElement("div");
+    const detailButton = document.createElement("button");
 
     card.className = "journal-card";
     title.textContent = `${record.analysisType || "梦境"}记录`;
@@ -323,7 +441,15 @@ function renderDreamJournal(records = loadDreamRecords()) {
       createJournalMeta("分析类型", record.analysisType)
     );
 
-    card.append(title, rawDream, meta);
+    detailButton.className = "secondary-button journal-detail-button";
+    detailButton.type = "button";
+    detailButton.setAttribute("data-record-id", record.id);
+    detailButton.textContent = "查看详情";
+    detailButton.addEventListener("click", () => {
+      openDreamDetail(record.id);
+    });
+
+    card.append(title, rawDream, meta, detailButton);
     dreamJournalList.append(card);
   });
 }
@@ -479,6 +605,14 @@ if (clearJournalButton) {
 
     localStorage.removeItem(dreamJournalStorageKey);
     renderDreamJournal([]);
+    showDreamJournalList();
+  });
+}
+
+if (backToJournalButton) {
+  backToJournalButton.addEventListener("click", () => {
+    renderDreamJournal();
+    showDreamJournalList();
   });
 }
 
