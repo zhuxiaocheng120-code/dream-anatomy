@@ -1,0 +1,15 @@
+{
+  "name": "dream-anatomy",
+  "version": "0.1.0",
+  "private": true,
+  "description": "A Chinese dream journaling and gentle self-exploration MVP.",
+  "scripts": {
+    "start": "node server.js"
+  },
+  "dependencies": {
+    "express": "^4.18.3"
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
