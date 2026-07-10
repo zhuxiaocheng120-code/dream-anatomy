@@ -47,7 +47,7 @@
 - AGENTS.md: contributor guidelines for this repository.
 - How to Open the App
 - Install dependencies with `npm install`.
-- Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY` locally.
+- Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY` locally. The server loads this file automatically.
 - Start the app with `npm start`.
 - Open `http://localhost:3000` in your browser.
 - Without `DEEPSEEK_API_KEY`, the page can still open; quick analysis API requests will fail safely and the frontend will show the local fallback result.
