@@ -37,6 +37,15 @@
     return supabaseClient;
   }
 
+  function notifyAuthUser(session) {
+    window.dispatchEvent(new CustomEvent("dream-anatomy-auth-session", {
+      detail: {
+        user: session && session.user ? session.user : null,
+        client: getSupabaseClient()
+      }
+    }));
+  }
+
   function setStatus(message, tone) {
     if (!authStatus) {
       return;
@@ -141,6 +150,7 @@
     if (data && data.session) {
       await client.auth.signOut();
       renderSession(null);
+      notifyAuthUser(null);
     }
 
     setFormBusy(registerForm, false);
@@ -178,11 +188,13 @@
     if (data && data.user && !data.user.email_confirmed_at && !data.user.confirmed_at) {
       await client.auth.signOut();
       renderSession(null);
+      notifyAuthUser(null);
       setStatus("请先完成邮箱验证。", "error");
       return;
     }
 
     renderSession(data ? data.session : null);
+    notifyAuthUser(data ? data.session : null);
     loginForm.reset();
     setStatus("欢迎回来，继续探索你的梦境。", "success");
   }
@@ -235,6 +247,7 @@
     recoveryMode = false;
     await client.auth.signOut();
     renderSession(null);
+    notifyAuthUser(null);
     showAuthPanel("login");
     setStatus("密码已更新，请重新登录。", "success");
   }
@@ -248,6 +261,7 @@
 
     await client.auth.signOut();
     renderSession(null);
+    notifyAuthUser(null);
   }
 
   async function initAuth() {
@@ -301,6 +315,7 @@
 
     const { data } = await client.auth.getSession();
     renderSession(data ? data.session : null);
+    notifyAuthUser(data ? data.session : null);
 
     client.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
@@ -312,9 +327,14 @@
 
       if (!recoveryMode) {
         renderSession(session);
+        notifyAuthUser(session);
       }
     });
   }
+
+  window.DreamAnatomyAuth = {
+    getClient: getSupabaseClient
+  };
 
   document.addEventListener("DOMContentLoaded", initAuth);
 })();
