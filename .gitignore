@@ -17,6 +17,7 @@ dist/
 build/
 out/
 src/runtime-env.js
+src/vendor/supabase.js
 
 # Logs
 *.log
