@@ -16,6 +16,7 @@ node_modules/
 dist/
 build/
 out/
+src/runtime-env.js
 
 # Logs
 *.log

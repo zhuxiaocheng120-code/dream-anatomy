@@ -26,9 +26,11 @@
 - 梦境详情视图会展示日期、分析类型、原始梦境、梦境摘要、主要情绪、主要意象、睡眠质量和完整分析内容，并支持返回梦境日记列表。
 - 如果没有本地记录，梦境日记区域会显示空状态。
 - 项目已准备 Supabase 基础设施，包括 JavaScript SDK 依赖、`SUPABASE_URL` / `SUPABASE_ANON_KEY` 环境变量示例，以及 `dream_records` 数据表迁移和 RLS 策略。
+- 页面右上角已加入 Supabase Auth 账户入口。未登录时显示“登录 / 注册”；登录后显示当前邮箱和“退出登录”。
+- 当前账户系统支持邮箱注册、验证邮件提示、邮箱验证后登录、退出登录、忘记密码、重置密码，以及刷新页面后的登录状态保持。
 
 梦境记录只保存在当前浏览器的 localStorage 中，不适合替代专业心理支持。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API；如果 API key 未配置或调用失败，前端会显示本地示例结果。
-深度引导当前生成的是本地 mock Dream Anatomy Report；当前仍未实现登录，也尚未把梦境日记切换到 Supabase 持久化。
+深度引导当前生成的是本地 mock Dream Anatomy Report；当前仍未把梦境日记切换到 Supabase 持久化，也未实现本地记录到云端的同步。
 
 ## 当前文件
 
@@ -49,6 +51,7 @@
 ├── server.js
 ├── src/
 │   ├── app.js
+│   ├── auth.js
 │   ├── index.html
 │   └── style.css
 ├── supabase/
@@ -57,7 +60,8 @@
 ```
 src/index.html：页面结构和中文文案。
 src/style.css：页面颜色、排版、按钮和响应式布局。
-src/app.js：三个 MVP 入口和对应区域的切换逻辑。
+src/app.js：梦境解析、深度引导、本地日记和视图切换逻辑。
+src/auth.js：Supabase Auth 注册、登录、退出、忘记密码、重置密码和登录状态展示逻辑。
 server.js：Express 静态托管和快速解析后端代理。
 lib/supabaseClient.js：从环境变量创建 Supabase client 的基础设施 helper。
 supabase/migrations/：Supabase 数据表和 RLS 策略迁移。
@@ -69,6 +73,7 @@ tests/：以后可以放测试文件。
 # 下一步可以做什么
 适合初学者继续添加的功能：
 把本地 mock 深度报告替换为经过后端代理的 OpenAI 或 DeepSeek API 返回结果。
+把本地梦境日记记录写入 Supabase，并处理登录用户的跨设备同步。
 给常见梦境象征添加更丰富的中文提示。
 添加简单的深色模式切换。
 在 assets/ 中加入图片或图标，让页面更有梦境氛围。

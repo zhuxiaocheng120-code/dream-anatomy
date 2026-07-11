@@ -1,0 +1,320 @@
+(function () {
+  const env = window.DREAM_ANATOMY_ENV || {};
+  let supabaseClient = null;
+  let recoveryMode = false;
+
+  const authOpenButton = document.querySelector("[data-auth-open]");
+  const authSession = document.querySelector("[data-auth-session]");
+  const authEmail = document.querySelector("[data-auth-email]");
+  const authLogoutButton = document.querySelector("[data-auth-logout]");
+  const authModal = document.querySelector("[data-auth-modal]");
+  const authStatus = document.querySelector("[data-auth-status]");
+  const authModeButtons = Array.from(document.querySelectorAll("[data-auth-mode]"));
+  const authPanels = Array.from(document.querySelectorAll("[data-auth-panel]"));
+  const closeButtons = Array.from(document.querySelectorAll("[data-auth-close]"));
+  const loginForm = document.querySelector("[data-auth-login-form]");
+  const registerForm = document.querySelector("[data-auth-register-form]");
+  const forgotForm = document.querySelector("[data-auth-forgot-form]");
+  const resetForm = document.querySelector("[data-auth-reset-form]");
+
+  function getSupabaseClient() {
+    if (supabaseClient) {
+      return supabaseClient;
+    }
+
+    if (!window.supabase || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
+      return null;
+    }
+
+    supabaseClient = window.supabase.createClient(env.SUPABASE_URL, env.SUPABASE_ANON_KEY, {
+      auth: {
+        persistSession: true,
+        autoRefreshToken: true,
+        detectSessionInUrl: true
+      }
+    });
+
+    return supabaseClient;
+  }
+
+  function setStatus(message, tone) {
+    if (!authStatus) {
+      return;
+    }
+
+    authStatus.textContent = message || "";
+    authStatus.dataset.tone = tone || "neutral";
+  }
+
+  function setFormBusy(form, isBusy) {
+    if (!form) {
+      return;
+    }
+
+    const button = form.querySelector("button[type='submit']");
+    if (button) {
+      button.disabled = isBusy;
+    }
+  }
+
+  function showAuthPanel(mode) {
+    authPanels.forEach((panel) => {
+      const isActive = panel.dataset.authPanel === mode;
+      panel.hidden = !isActive;
+      panel.classList.toggle("is-active", isActive);
+    });
+
+    authModeButtons.forEach((button) => {
+      button.classList.toggle("is-current", button.dataset.authMode === mode);
+    });
+  }
+
+  function openAuthModal(mode) {
+    if (!authModal) {
+      return;
+    }
+
+    authModal.hidden = false;
+    showAuthPanel(mode || "login");
+  }
+
+  function closeAuthModal() {
+    if (!authModal) {
+      return;
+    }
+
+    authModal.hidden = true;
+  }
+
+  function getFormEmail(form) {
+    const emailInput = form.querySelector("input[name='email']");
+    return emailInput ? emailInput.value.trim() : "";
+  }
+
+  function getFormPassword(form) {
+    const passwordInput = form.querySelector("input[name='password']");
+    return passwordInput ? passwordInput.value : "";
+  }
+
+  function renderSession(session) {
+    const email = session && session.user ? session.user.email : "";
+
+    if (authOpenButton) {
+      authOpenButton.hidden = Boolean(email);
+    }
+
+    if (authSession) {
+      authSession.hidden = !email;
+    }
+
+    if (authEmail) {
+      authEmail.textContent = email || "";
+    }
+  }
+
+  function isUnverifiedError(error) {
+    const message = error && error.message ? error.message.toLowerCase() : "";
+    return message.includes("email not confirmed") || message.includes("not confirmed");
+  }
+
+  async function handleRegister(event) {
+    event.preventDefault();
+
+    const client = getSupabaseClient();
+    if (!client) {
+      setStatus("请先配置 Supabase 环境变量。", "error");
+      return;
+    }
+
+    setFormBusy(registerForm, true);
+    const email = getFormEmail(registerForm);
+    const password = getFormPassword(registerForm);
+
+    const { data, error } = await client.auth.signUp({
+      email,
+      password,
+      options: {
+        emailRedirectTo: window.location.origin
+      }
+    });
+
+    if (data && data.session) {
+      await client.auth.signOut();
+      renderSession(null);
+    }
+
+    setFormBusy(registerForm, false);
+
+    if (error) {
+      setStatus("注册暂时没有完成，请稍后再试。", "error");
+      return;
+    }
+
+    registerForm.reset();
+    setStatus("验证邮件已发送，请完成邮箱验证后登录。\n梦境将能够安全保存并跨设备同步。", "success");
+    showAuthPanel("login");
+  }
+
+  async function handleLogin(event) {
+    event.preventDefault();
+
+    const client = getSupabaseClient();
+    if (!client) {
+      setStatus("请先配置 Supabase 环境变量。", "error");
+      return;
+    }
+
+    setFormBusy(loginForm, true);
+    const email = getFormEmail(loginForm);
+    const password = getFormPassword(loginForm);
+    const { data, error } = await client.auth.signInWithPassword({ email, password });
+    setFormBusy(loginForm, false);
+
+    if (error) {
+      setStatus(isUnverifiedError(error) ? "请先完成邮箱验证。" : "登录失败，请检查邮箱和密码。", "error");
+      return;
+    }
+
+    if (data && data.user && !data.user.email_confirmed_at && !data.user.confirmed_at) {
+      await client.auth.signOut();
+      renderSession(null);
+      setStatus("请先完成邮箱验证。", "error");
+      return;
+    }
+
+    renderSession(data ? data.session : null);
+    loginForm.reset();
+    setStatus("欢迎回来，继续探索你的梦境。", "success");
+  }
+
+  async function handleForgotPassword(event) {
+    event.preventDefault();
+
+    const client = getSupabaseClient();
+    if (!client) {
+      setStatus("请先配置 Supabase 环境变量。", "error");
+      return;
+    }
+
+    setFormBusy(forgotForm, true);
+    const email = getFormEmail(forgotForm);
+    const { error } = await client.auth.resetPasswordForEmail(email, {
+      redirectTo: window.location.origin
+    });
+    setFormBusy(forgotForm, false);
+
+    if (error) {
+      setStatus("重置密码邮件暂时没有发送成功，请稍后再试。", "error");
+      return;
+    }
+
+    forgotForm.reset();
+    setStatus("重置密码邮件已发送，请查看邮箱。", "success");
+  }
+
+  async function handleResetPassword(event) {
+    event.preventDefault();
+
+    const client = getSupabaseClient();
+    if (!client) {
+      setStatus("请先配置 Supabase 环境变量。", "error");
+      return;
+    }
+
+    setFormBusy(resetForm, true);
+    const password = getFormPassword(resetForm);
+    const { error } = await client.auth.updateUser({ password });
+    setFormBusy(resetForm, false);
+
+    if (error) {
+      setStatus("密码暂时没有更新成功，请重新打开重置邮件再试。", "error");
+      return;
+    }
+
+    resetForm.reset();
+    recoveryMode = false;
+    await client.auth.signOut();
+    renderSession(null);
+    showAuthPanel("login");
+    setStatus("密码已更新，请重新登录。", "success");
+  }
+
+  async function handleLogout() {
+    const client = getSupabaseClient();
+    if (!client) {
+      renderSession(null);
+      return;
+    }
+
+    await client.auth.signOut();
+    renderSession(null);
+  }
+
+  async function initAuth() {
+    const client = getSupabaseClient();
+
+    renderSession(null);
+
+    authModeButtons.forEach((button) => {
+      button.addEventListener("click", () => {
+        showAuthPanel(button.dataset.authMode);
+        setStatus("");
+      });
+    });
+
+    closeButtons.forEach((button) => {
+      button.addEventListener("click", closeAuthModal);
+    });
+
+    if (authOpenButton) {
+      authOpenButton.addEventListener("click", () => {
+        openAuthModal("login");
+        if (!client) {
+          setStatus("请先配置 Supabase 环境变量。", "error");
+        }
+      });
+    }
+
+    if (authLogoutButton) {
+      authLogoutButton.addEventListener("click", handleLogout);
+    }
+
+    if (registerForm) {
+      registerForm.addEventListener("submit", handleRegister);
+    }
+
+    if (loginForm) {
+      loginForm.addEventListener("submit", handleLogin);
+    }
+
+    if (forgotForm) {
+      forgotForm.addEventListener("submit", handleForgotPassword);
+    }
+
+    if (resetForm) {
+      resetForm.addEventListener("submit", handleResetPassword);
+    }
+
+    if (!client) {
+      return;
+    }
+
+    const { data } = await client.auth.getSession();
+    renderSession(data ? data.session : null);
+
+    client.auth.onAuthStateChange((event, session) => {
+      if (event === "PASSWORD_RECOVERY") {
+        recoveryMode = true;
+        openAuthModal("reset");
+        setStatus("请输入新密码。", "neutral");
+        return;
+      }
+
+      if (!recoveryMode) {
+        renderSession(session);
+      }
+    });
+  }
+
+  document.addEventListener("DOMContentLoaded", initAuth);
+})();

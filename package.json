@@ -4,7 +4,7 @@
   "private": true,
   "description": "A Chinese dream journaling and gentle self-exploration MVP.",
   "scripts": {
-    "start": "node server.js"
+    "start": "node scripts/writeRuntimeEnv.js && node server.js"
   },
   "dependencies": {
     "@supabase/supabase-js": "^2.45.4",
