@@ -25,9 +25,10 @@
 - 梦境日记列表里的记录可以点击“查看详情”，进入本地详情视图。
 - 梦境详情视图会展示日期、分析类型、原始梦境、梦境摘要、主要情绪、主要意象、睡眠质量和完整分析内容，并支持返回梦境日记列表。
 - 如果没有本地记录，梦境日记区域会显示空状态。
+- 项目已准备 Supabase 基础设施，包括 JavaScript SDK 依赖、`SUPABASE_URL` / `SUPABASE_ANON_KEY` 环境变量示例，以及 `dream_records` 数据表迁移和 RLS 策略。
 
 梦境记录只保存在当前浏览器的 localStorage 中，不适合替代专业心理支持。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API；如果 API key 未配置或调用失败，前端会显示本地示例结果。
-深度引导当前生成的是本地 mock Dream Anatomy Report，不接 API、数据库、登录、支付或会员系统。
+深度引导当前生成的是本地 mock Dream Anatomy Report；当前仍未实现登录，也尚未把梦境日记切换到 Supabase 持久化。
 
 ## 当前文件
 
@@ -42,18 +43,24 @@
 │   ├── MVP_SPEC.md
 │   ├── PRD_ALIGNMENT.md
 │   └── PROJECT_STATUS.md
+├── lib/
+│   └── supabaseClient.js
 ├── package.json
 ├── server.js
 ├── src/
 │   ├── app.js
 │   ├── index.html
 │   └── style.css
+├── supabase/
+│   └── migrations/
 └── tests/
 ```
 src/index.html：页面结构和中文文案。
 src/style.css：页面颜色、排版、按钮和响应式布局。
 src/app.js：三个 MVP 入口和对应区域的切换逻辑。
 server.js：Express 静态托管和快速解析后端代理。
+lib/supabaseClient.js：从环境变量创建 Supabase client 的基础设施 helper。
+supabase/migrations/：Supabase 数据表和 RLS 策略迁移。
 .env.example：本地后端环境变量示例，不包含真实 API key。
 README.md：项目简介和如何打开页面。
 AGENTS.md：贡献者和编码助手的工作指南。
