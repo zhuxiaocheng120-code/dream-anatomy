@@ -12,3 +12,10 @@ const outputPath = path.join(__dirname, "..", "src", "runtime-env.js");
 const content = `window.DREAM_ANATOMY_ENV = ${JSON.stringify(runtimeConfig, null, 2)};\n`;
 
 fs.writeFileSync(outputPath, content, "utf8");
+
+const vendorDir = path.join(__dirname, "..", "src", "vendor");
+const supabaseSourcePath = require.resolve("@supabase/supabase-js/dist/umd/supabase.js");
+const supabaseOutputPath = path.join(vendorDir, "supabase.js");
+
+fs.mkdirSync(vendorDir, { recursive: true });
+fs.copyFileSync(supabaseSourcePath, supabaseOutputPath);

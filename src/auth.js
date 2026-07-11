@@ -1,5 +1,44 @@
 (function () {
-  const env = window.DREAM_ANATOMY_ENV || {};
+  function getRuntimeEnv() {
+    return window.DREAM_ANATOMY_ENV || {};
+  }
+
+  function getDiagnostics() {
+    const runtimeEnv = getRuntimeEnv();
+
+    return {
+      runtimeConfigExists: Boolean(window.DREAM_ANATOMY_ENV),
+      supabaseUrlSet: Boolean(runtimeEnv.SUPABASE_URL),
+      supabaseAnonKeySet: Boolean(runtimeEnv.SUPABASE_ANON_KEY),
+      windowSupabaseExists: Boolean(window.supabase)
+    };
+  }
+
+  function getUnavailableMessage() {
+    const diagnostics = getDiagnostics();
+
+    if (!diagnostics.supabaseUrlSet || !diagnostics.supabaseAnonKeySet) {
+      return "请先配置 Supabase 环境变量。";
+    }
+
+    if (!diagnostics.windowSupabaseExists) {
+      return "Supabase SDK 暂时没有加载成功，请刷新页面后再试。";
+    }
+
+    return "Supabase 暂时无法初始化，请稍后再试。";
+  }
+
+  function formatDiagnostics() {
+    const diagnostics = getDiagnostics();
+
+    return [
+      `runtime config 是否存在：${diagnostics.runtimeConfigExists ? "是" : "否"}`,
+      `SUPABASE_URL 是否已设置：${diagnostics.supabaseUrlSet ? "是" : "否"}`,
+      `SUPABASE_ANON_KEY 是否已设置：${diagnostics.supabaseAnonKeySet ? "是" : "否"}`,
+      `window.supabase 是否存在：${diagnostics.windowSupabaseExists ? "是" : "否"}`
+    ].join("\n");
+  }
+
   let supabaseClient = null;
   let recoveryMode = false;
 
@@ -21,6 +60,8 @@
     if (supabaseClient) {
       return supabaseClient;
     }
+
+    const env = getRuntimeEnv();
 
     if (!window.supabase || !env.SUPABASE_URL || !env.SUPABASE_ANON_KEY) {
       return null;
@@ -131,7 +172,7 @@
 
     const client = getSupabaseClient();
     if (!client) {
-      setStatus("请先配置 Supabase 环境变量。", "error");
+      setStatus(`${getUnavailableMessage()}\n${formatDiagnostics()}`, "error");
       return;
     }
 
@@ -170,7 +211,7 @@
 
     const client = getSupabaseClient();
     if (!client) {
-      setStatus("请先配置 Supabase 环境变量。", "error");
+      setStatus(`${getUnavailableMessage()}\n${formatDiagnostics()}`, "error");
       return;
     }
 
@@ -204,7 +245,7 @@
 
     const client = getSupabaseClient();
     if (!client) {
-      setStatus("请先配置 Supabase 环境变量。", "error");
+      setStatus(`${getUnavailableMessage()}\n${formatDiagnostics()}`, "error");
       return;
     }
 
@@ -229,7 +270,7 @@
 
     const client = getSupabaseClient();
     if (!client) {
-      setStatus("请先配置 Supabase 环境变量。", "error");
+      setStatus(`${getUnavailableMessage()}\n${formatDiagnostics()}`, "error");
       return;
     }
 
@@ -284,7 +325,7 @@
       authOpenButton.addEventListener("click", () => {
         openAuthModal("login");
         if (!client) {
-          setStatus("请先配置 Supabase 环境变量。", "error");
+          setStatus(`${getUnavailableMessage()}\n${formatDiagnostics()}`, "error");
         }
       });
     }
@@ -333,7 +374,8 @@
   }
 
   window.DreamAnatomyAuth = {
-    getClient: getSupabaseClient
+    getClient: getSupabaseClient,
+    getDiagnostics
   };
 
   document.addEventListener("DOMContentLoaded", initAuth);
