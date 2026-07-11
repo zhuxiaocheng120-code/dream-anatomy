@@ -596,7 +596,7 @@ Dispatch a specification reviewer to compare the branch against the design and a
 
 ```bash
 git add README.md docs/PROJECT_STATUS.md
-git commit -m "Document the Dream Home experience"
+git commit -m "Build Dream Home experience"
 ```
 
 - [ ] **Step 9: Final verification before publishing**
@@ -605,4 +605,4 @@ Run `npm test`, all syntax checks, server smoke checks, `git diff --check main..
 
 - [ ] **Step 10: Publish the requested branch and PR**
 
-Ensure the branch is `codex/dream-home`. If task commits exist, create the requested final commit only when needed so the branch contains a commit whose message is exactly `Build Dream Home experience`; do not rewrite or squash existing history without approval. Push the branch and create a ready PR titled `Build Dream Home` with scope, test evidence, external manual-test limits, and explicit statements that DeepSeek, Auth rules, dream sync, and schema were unchanged.
+Ensure the branch is `codex/dream-home` and contains the Task 5 commit whose message is exactly `Build Dream Home experience`; do not rewrite or squash existing history without approval. Push the branch and create a ready PR titled `Build Dream Home` with scope, test evidence, external manual-test limits, and explicit statements that DeepSeek, Auth rules, dream sync, and schema were unchanged.
