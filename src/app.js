@@ -11,6 +11,7 @@ const clearJournalButton = document.querySelector("[data-clear-journal]");
 const dreamDetail = document.querySelector("[data-dream-detail]");
 const dreamDetailContent = document.querySelector("[data-dream-detail-content]");
 const backToJournalButton = document.querySelector("[data-back-to-journal]");
+const journalSyncStatus = document.querySelector("[data-journal-sync-status]");
 const guidedForm = document.querySelector("[data-guided-form]");
 const guidedDream = document.querySelector("#guidedDream");
 const guidedQuestionsContainer = document.querySelector("[data-guided-questions]");
@@ -23,6 +24,15 @@ const saveDeepReportButton = document.querySelector("[data-save-deep-report]");
 const deepSaveStatus = document.querySelector("[data-deep-save-status]");
 const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
 const maxDreamTextLength = 5000;
+const dreamSyncController = window.DreamSync
+  ? window.DreamSync.createDreamSyncController({
+      client: window.DreamAnatomyAuth ? window.DreamAnatomyAuth.getClient() : null,
+      storage: localStorage,
+      storageKey: dreamJournalStorageKey,
+      onRecordsChange: renderDreamJournal,
+      onStatusChange: updateJournalSyncStatus
+    })
+  : null;
 const guidedDraftState = {
   rawDreamText: "",
   questions: [],
@@ -30,6 +40,28 @@ const guidedDraftState = {
   currentReport: null,
   savedReportRecordId: ""
 };
+
+function updateJournalSyncStatus(message) {
+  if (journalSyncStatus) {
+    journalSyncStatus.textContent = message || "";
+  }
+}
+
+if (dreamSyncController) {
+  window.addEventListener("dream-anatomy-auth-session", (event) => {
+    const detail = event.detail || {};
+    const userSession = detail.user ? { user: detail.user } : null;
+    dreamSyncController.setSession(userSession, detail.client || null);
+  });
+
+  window.addEventListener("online", async () => {
+    const result = await dreamSyncController.retryPendingRecords();
+
+    if (result.syncedCount > 0) {
+      updateJournalSyncStatus(`已同步 ${result.syncedCount} 条本地梦境。`);
+    }
+  });
+}
 
 function showView(viewName) {
   if (viewName === "diary") {
@@ -274,7 +306,7 @@ function renderDeepReport(report) {
   deepReport.hidden = false;
 }
 
-function loadDreamRecords() {
+function loadLocalDreamRecords() {
   try {
     const savedRecords = localStorage.getItem(dreamJournalStorageKey);
     return savedRecords ? JSON.parse(savedRecords) : [];
@@ -283,10 +315,41 @@ function loadDreamRecords() {
   }
 }
 
-function saveDreamRecord(record) {
-  const records = [record, ...loadDreamRecords()];
+function loadDreamRecords() {
+  if (dreamSyncController) {
+    return dreamSyncController.getVisibleRecords();
+  }
+
+  return loadLocalDreamRecords();
+}
+
+function saveDreamRecordLocally(record) {
+  const records = [record, ...loadLocalDreamRecords()];
   localStorage.setItem(dreamJournalStorageKey, JSON.stringify(records));
   return records;
+}
+
+async function saveDreamRecord(record) {
+  if (dreamSyncController) {
+    return dreamSyncController.saveRecord(record);
+  }
+
+  return {
+    records: saveDreamRecordLocally(record),
+    syncStatus: "local"
+  };
+}
+
+function getSaveStatusMessage(syncStatus, prefix) {
+  if (syncStatus === "synced") {
+    return `${prefix}，并同步到云端梦境日记。`;
+  }
+
+  if (syncStatus === "pending_sync") {
+    return `${prefix}，已保存在此浏览器；云端同步稍后重试。`;
+  }
+
+  return `${prefix}，已保存到本地梦境日记。`;
 }
 
 function createDreamRecord(rawDreamText, quickDecode) {
@@ -530,7 +593,7 @@ if (quickForm) {
     }
 
     let quickDecode;
-    let statusMessage = "已生成快速解析结果，并保存到本地梦境日记。";
+    let statusPrefix = "已生成快速解析结果";
 
     try {
       quickDecode = await requestQuickDecode(rawDreamText);
@@ -546,17 +609,18 @@ if (quickForm) {
       }
 
       quickDecode = generateMockQuickDecode(rawDreamText);
-      statusMessage = "当前无法连接 AI，已为你展示本地示例结果。结果已保存到本地梦境日记。";
+      statusPrefix = "当前无法连接 AI，已为你展示本地示例结果";
     }
 
     try {
       const dreamRecord = createDreamRecord(rawDreamText, quickDecode);
+      const saveResult = await saveDreamRecord(dreamRecord);
 
       fillQuickResult(quickDecode);
       quickResult.hidden = false;
-      renderDreamJournal(saveDreamRecord(dreamRecord));
+      renderDreamJournal(saveResult.records);
       if (status) {
-        status.textContent = statusMessage;
+        status.textContent = getSaveStatusMessage(saveResult.syncStatus, statusPrefix);
       }
     } catch (error) {
       if (status) {
@@ -653,7 +717,7 @@ if (generateDeepReportButton) {
 }
 
 if (saveDeepReportButton) {
-  saveDeepReportButton.addEventListener("click", () => {
+  saveDeepReportButton.addEventListener("click", async () => {
     if (!guidedDraftState.currentReport) {
       updateDeepSaveStatus("请先生成深度报告，再保存到梦境日记。");
       return;
@@ -668,9 +732,10 @@ if (saveDeepReportButton) {
     const deepDreamRecord = createDeepDreamRecord(rawDreamText, guidedDraftState.currentReport);
 
     try {
-      renderDreamJournal(saveDreamRecord(deepDreamRecord));
+      const saveResult = await saveDreamRecord(deepDreamRecord);
+      renderDreamJournal(saveResult.records);
       guidedDraftState.savedReportRecordId = deepDreamRecord.id;
-      updateDeepSaveStatus("已保存到本地梦境日记");
+      updateDeepSaveStatus(getSaveStatusMessage(saveResult.syncStatus, "深度报告已保存"));
     } catch (error) {
       updateDeepSaveStatus("这份深度报告已经生成，但浏览器暂时无法保存本地记录。");
     }

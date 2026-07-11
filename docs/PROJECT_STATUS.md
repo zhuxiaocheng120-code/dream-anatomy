@@ -28,9 +28,12 @@
 - 项目已准备 Supabase 基础设施，包括 JavaScript SDK 依赖、`SUPABASE_URL` / `SUPABASE_ANON_KEY` 环境变量示例，以及 `dream_records` 数据表迁移和 RLS 策略。
 - 页面右上角已加入 Supabase Auth 账户入口。未登录时显示“登录 / 注册”；登录后显示当前邮箱和“退出登录”。
 - 当前账户系统支持邮箱注册、验证邮件提示、邮箱验证后登录、退出登录、忘记密码、重置密码，以及刷新页面后的登录状态保持。
+- 登录后会自动尝试把当前浏览器里的本地梦境记录迁移到 Supabase，并通过 `local_record_id + user_id` 去重，避免重复同步。
+- 登录用户的新快速解析和深度引导记录会优先保存到 Supabase；保存成功后再更新 localStorage 缓存，保存失败时会保留本地记录并标记为 `pending_sync`。
+- 梦境日记在登录后以 Supabase 云端记录为主，退出登录后不会继续显示上一位用户的云端梦境。
 
-梦境记录只保存在当前浏览器的 localStorage 中，不适合替代专业心理支持。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API；如果 API key 未配置或调用失败，前端会显示本地示例结果。
-深度引导当前生成的是本地 mock Dream Anatomy Report；当前仍未把梦境日记切换到 Supabase 持久化，也未实现本地记录到云端的同步。
+未登录时梦境记录仍只保存在当前浏览器的 localStorage 中；登录后，梦境日记会优先使用 Supabase 云端记录，并保留 localStorage 作为缓存和失败兜底。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API；如果 API key 未配置或调用失败，前端会显示本地示例结果。
+深度引导当前生成的是本地 mock Dream Anatomy Report；真实 Supabase 云同步仍需要使用实际 Supabase 项目完成注册、邮箱验证、跨浏览器、双账号隔离和断网恢复验收。
 
 ## 当前文件
 
@@ -52,6 +55,7 @@
 ├── src/
 │   ├── app.js
 │   ├── auth.js
+│   ├── dreamSync.js
 │   ├── index.html
 │   └── style.css
 ├── supabase/
@@ -62,6 +66,7 @@ src/index.html：页面结构和中文文案。
 src/style.css：页面颜色、排版、按钮和响应式布局。
 src/app.js：梦境解析、深度引导、本地日记和视图切换逻辑。
 src/auth.js：Supabase Auth 注册、登录、退出、忘记密码、重置密码和登录状态展示逻辑。
+src/dreamSync.js：梦境记录 localStorage 与 Supabase 的映射、迁移、云端加载、待同步重试逻辑。
 server.js：Express 静态托管和快速解析后端代理。
 lib/supabaseClient.js：从环境变量创建 Supabase client 的基础设施 helper。
 supabase/migrations/：Supabase 数据表和 RLS 策略迁移。
@@ -73,7 +78,7 @@ tests/：以后可以放测试文件。
 # 下一步可以做什么
 适合初学者继续添加的功能：
 把本地 mock 深度报告替换为经过后端代理的 OpenAI 或 DeepSeek API 返回结果。
-把本地梦境日记记录写入 Supabase，并处理登录用户的跨设备同步。
+继续扩展云端梦境详情、编辑或删除能力。
 给常见梦境象征添加更丰富的中文提示。
 添加简单的深色模式切换。
 在 assets/ 中加入图片或图标，让页面更有梦境氛围。

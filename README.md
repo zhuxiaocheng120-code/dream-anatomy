@@ -21,9 +21,10 @@
 - 梦境日记区域会在同一个列表中显示快速解析和深度引导记录，并可以点击查看单条记录详情。
 - 梦境详情会展示日期、分析类型、原始梦境、摘要、情绪、意象、睡眠质量和完整分析内容。
 - 项目包含 Supabase 基础设施准备：JavaScript SDK 依赖、环境变量示例，以及 `dream_records` 表迁移和 RLS 策略。
-- 右上角提供 Supabase Auth 账户入口，支持邮箱注册、邮箱验证后登录、退出登录、忘记密码和重置密码。当前尚未把梦境记录写入 Supabase，也尚未实现本地记录到云端的同步。
+- 右上角提供 Supabase Auth 账户入口，支持邮箱注册、邮箱验证后登录、退出登录、忘记密码和重置密码。
+- 登录后会自动把当前浏览器里的本地梦境迁移到 Supabase，并以云端梦境日记为主；未登录或云端暂时不可用时，仍保留 localStorage 本地保存和待同步兜底。
 
-这个应用不是诊断工具、治疗服务、算命工具，也不会预测未来。它只用于梦境记录和温和的自我探索。梦境记录只保存在当前浏览器里；快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API，连接失败时会显示本地示例结果。
+这个应用不是诊断工具、治疗服务、算命工具，也不会预测未来。它只用于梦境记录和温和的自我探索。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API，连接失败时会显示本地示例结果。
 
 ## Project Structure
 
@@ -38,6 +39,7 @@
 ├── src/
 │   ├── app.js
 │   ├── auth.js
+│   ├── dreamSync.js
 │   ├── index.html
 │   └── style.css
 └── tests/
@@ -46,6 +48,7 @@
 - src/style.css: colors, layout, spacing, and responsive styles.
 - src/app.js: interactions for the dream analysis, local journal, and view switching flows.
 - src/auth.js: Supabase Auth interactions for account registration, login, logout, password reset, and persistent session display.
+- src/dreamSync.js: localStorage to Supabase dream record sync, cloud loading, pending retry, and record mapping.
 - server.js: Express server that serves src and proxies quick dream analysis requests.
 - lib/supabaseClient.js: helper for creating a Supabase client from environment variables.
 - supabase/migrations/: database migrations for future cloud dream record storage.
@@ -59,6 +62,7 @@
 - Open `http://localhost:3000` in your browser.
 - Without `DEEPSEEK_API_KEY`, the page can still open; quick analysis API requests will fail safely and the frontend will show the local fallback result.
 - Without Supabase values, the page can still open; account actions will show a configuration prompt.
+- Run unit tests with `npm test`.
 - Editing the App
 - To change the text on the page, edit src/index.html. To change colors or layout, edit src/style.css. To change the button behavior of reflection messages, edit src/app.js.
 - Contributing

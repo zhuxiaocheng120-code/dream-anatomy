@@ -217,8 +217,9 @@
           <p class="eyebrow">Dream Notation</p>
           <h2 id="diary-title">梦境日记</h2>
           <p class="summary">
-            这里会显示保存在当前浏览器里的快速解析和深度引导记录。当前只做本地列表和基础详情，不上传内容。
+            未登录时，记录会保存在当前浏览器里；登录后，会优先显示并同步你的云端梦境档案。
           </p>
+          <p class="status journal-sync-status" data-journal-sync-status aria-live="polite"></p>
         </div>
 
         <div data-journal-list-shell>
@@ -302,6 +303,7 @@
 
     <script src="https://cdn.jsdelivr.net/npm/@supabase/supabase-js@2"></script>
     <script src="runtime-env.js"></script>
+    <script src="dreamSync.js"></script>
     <script src="auth.js"></script>
     <script src="app.js"></script>
   </body>
