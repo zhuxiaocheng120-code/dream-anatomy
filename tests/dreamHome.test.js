@@ -584,6 +584,42 @@ test("opens a recent Dream Home record through the existing diary detail flow", 
   ]);
 });
 
+test("opens recent cloud records with their local diary identifiers", async () => {
+  const elements = createDreamHomeElements();
+  const app = createFakeApp();
+  const controller = DreamHome.createDreamHomeController({
+    app,
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: async () => [
+      {
+        id: "cloud-one",
+        local_record_id: "local-one",
+        created_at: "2026-07-12T08:00:00"
+      },
+      {
+        id: "cloud-two",
+        localRecordId: "local-two",
+        created_at: "2026-07-11T08:00:00"
+      }
+    ],
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  await controller.handleSession({ client: {}, user: { id: "one", email: "one@example.com" } });
+  app.calls.length = 0;
+  elements.recent.children[0].trigger("click");
+  elements.recent.children[1].trigger("click");
+
+  assert.deepEqual(app.calls, [
+    ["showView", "diary"],
+    ["openDreamDetail", "local-one"],
+    ["showView", "diary"],
+    ["openDreamDetail", "local-two"]
+  ]);
+});
+
 test("initializes the browser controller on DOMContentLoaded and maps auth event detail", async () => {
   const elements = createDreamHomeElements();
   const selectors = [
@@ -690,8 +726,6 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   assert.match(html, /data-public-home/);
   assert.match(html, /data-dream-home/);
   assert.match(html, /data-dream-home-recent/);
-  assert.match(html, /AI 洞察/);
-  assert.match(html, /标签 \/ 分类/);
   assert.match(html, /class="dream-home-layout" data-dream-home hidden/);
   assert.match(html, /<blockquote[^>]*>[\s\S]*data-dream-home-quote-text[\s\S]*<cite data-dream-home-quote-author>/);
   [
@@ -700,8 +734,20 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
     "data-dream-home-status",
     "data-dream-home-retry"
   ].forEach((hook) => assert.match(html, new RegExp(hook)));
-  assert.equal((html.match(/data-dream-home-stat=/g) || []).length, 4);
-  assert.equal((html.match(/data-dream-home-action=/g) || []).length, 3);
+  assert.deepEqual(
+    [...html.matchAll(/data-dream-home-stat="([^"]+)"/g)].map((match) => match[1]),
+    ["total", "important", "streak", "ai-organized"]
+  );
+  assert.deepEqual(
+    [...html.matchAll(/data-dream-home-action="([^"]+)"/g)].map((match) => match[1]),
+    ["quick", "guided", "diary"]
+  );
+  const expansion = html.match(/<section class="dream-home-expansion"[\s\S]*?<\/section>/)[0];
+  assert.equal((expansion.match(/<article>/g) || []).length, 2);
+  assert.equal((expansion.match(/>Coming Soon</g) || []).length, 2);
+  assert.match(expansion, /<h2>AI 洞察<\/h2>/);
+  assert.match(expansion, /<h2>标签 \/ 分类<\/h2>/);
+  assert.doesNotMatch(expansion, /<(?:a|button|input|select|textarea)\b|data-dream-home-action=/);
   const scripts = [
     "vendor/supabase.js",
     "runtime-env.js",
@@ -716,8 +762,42 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
     assert.ok(currentIndex > previousIndex, `${script} must load in dependency order`);
     return currentIndex;
   }, -1);
-  assert.match(appCode, /window\.DreamAnatomyApp/);
-  assert.match(css, /\.dream-home-layout/);
-  assert.match(css, /@media \(max-width: 820px\)/);
-  assert.match(css, /@media \(max-width: 560px\)/);
+  assert.match(
+    appCode,
+    /window\.DreamAnatomyApp\s*=\s*\{\s*openDreamDetail,\s*showView\s*\};/
+  );
+  assert.match(css, /\.dream-home-layout\[hidden\]\s*\{\s*display:\s*none;\s*\}/);
+  assert.match(
+    css,
+    /\.dream-home-stats\s*\{[^}]*grid-template-columns:\s*repeat\(4, minmax\(0, 1fr\)\);/
+  );
+  assert.match(
+    css,
+    /\.dream-home-main\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.65fr\) minmax\(260px, 0\.75fr\);/
+  );
+  assert.match(
+    css,
+    /\.dream-home-expansion\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/
+  );
+  assert.match(css, /\.dream-home-email\s*\{[^}]*overflow-wrap:\s*anywhere;/);
+
+  const tabletCss = css.match(/@media \(max-width: 820px\)\s*\{([\s\S]*?)\n\}/)[1];
+  assert.match(
+    tabletCss,
+    /\.dream-home-stats\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/
+  );
+  assert.match(
+    tabletCss,
+    /\.dream-home-main,\s*\.dream-home-expansion\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/
+  );
+
+  const mobileCss = css.match(/@media \(max-width: 560px\)\s*\{([\s\S]*)\n\}/)[1];
+  assert.match(
+    mobileCss,
+    /\.dream-home-stats,\s*\.dream-home-main,\s*\.dream-home-expansion,\s*\.dream-home-action-list\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1fr\);/
+  );
+  assert.match(
+    mobileCss,
+    /\.dream-home-email\s*\{[^}]*width:\s*100%;[^}]*max-width:\s*100%;[^}]*text-align:\s*left;/
+  );
 });

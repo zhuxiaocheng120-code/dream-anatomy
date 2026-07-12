@@ -232,7 +232,9 @@
         const row = documentRef.createElement("button");
         row.type = "button";
         row.textContent = getDisplayTitle(record);
-        row.addEventListener("click", () => openRecentDream(record.id));
+        row.addEventListener("click", () => openRecentDream(
+          record.local_record_id || record.localRecordId || record.id
+        ));
         return row;
       });
 
