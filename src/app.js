@@ -449,12 +449,19 @@ function createDetailBlock(label, value) {
   return block;
 }
 
-function renderDreamDetail(recordId) {
+function renderDreamDetail(recordId, fallbackRow) {
   if (!dreamDetailContent) {
     return;
   }
 
-  const record = loadDreamRecords().find((item) => item.id === recordId);
+  let record = loadDreamRecords().find((item) => item.id === recordId);
+
+  if (!record && fallbackRow) {
+    record = window.DreamSync
+      && typeof window.DreamSync.mapSupabaseRowToLocalRecord === "function"
+      ? window.DreamSync.mapSupabaseRowToLocalRecord(fallbackRow)
+      : fallbackRow;
+  }
   dreamDetailContent.textContent = "";
 
   if (!record) {
@@ -498,7 +505,7 @@ function renderDreamDetail(recordId) {
   dreamDetailContent.append(overview, reportSection);
 }
 
-function openDreamDetail(recordId) {
+function openDreamDetail(recordId, fallbackRow) {
   if (journalListShell) {
     journalListShell.hidden = true;
   }
@@ -507,9 +514,14 @@ function openDreamDetail(recordId) {
     dreamDetail.hidden = false;
   }
 
-  renderDreamDetail(recordId);
+  renderDreamDetail(recordId, fallbackRow);
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
+
+window.DreamAnatomyApp = {
+  openDreamDetail,
+  showView
+};
 
 function renderDreamJournal(records = loadDreamRecords()) {
   if (!dreamJournalList || !dreamJournalEmpty) {

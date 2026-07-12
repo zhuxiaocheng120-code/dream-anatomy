@@ -30,7 +30,8 @@
 
     <main id="top">
       <section class="view-panel home-view is-active" data-view="home" aria-labelledby="app-title">
-        <div class="hero">
+        <div data-public-home>
+          <div class="hero">
           <div class="hero-content">
             <p class="eyebrow">你的梦境自我探索工具</p>
             <h1 id="app-title">析梦 Dream Anatomy</h1>
@@ -46,7 +47,7 @@
           </aside>
         </div>
 
-        <section class="entry-section" aria-labelledby="entry-title">
+          <section class="entry-section" aria-labelledby="entry-title">
           <div class="section-heading">
             <p class="eyebrow">MVP Entrance</p>
             <h2 id="entry-title">选择你想开始的方式</h2>
@@ -71,7 +72,88 @@
               <span>查看之后会保存的梦境记录，作为私人梦境档案的入口。</span>
             </button>
           </div>
-        </section>
+          </section>
+        </div>
+
+        <div class="dream-home-layout" data-dream-home hidden>
+          <header class="dream-home-welcome">
+            <div>
+              <p class="eyebrow">Dream Home</p>
+              <h1><span data-dream-home-greeting></span>，欢迎回到 Dream Home</h1>
+              <p class="dream-home-intro">这里收藏着你曾经记住的梦。</p>
+            </div>
+            <p class="dream-home-email" data-dream-home-email></p>
+          </header>
+
+          <blockquote class="dream-home-quote">
+            <p data-dream-home-quote-text></p>
+            <cite data-dream-home-quote-author></cite>
+          </blockquote>
+
+          <section aria-labelledby="dream-home-stats-title">
+            <div class="dream-home-section-heading">
+              <p class="eyebrow">Dream Archive</p>
+              <h2 id="dream-home-stats-title">你的梦境档案</h2>
+            </div>
+            <div class="dream-home-stats">
+              <article>
+                <strong data-dream-home-stat="total">0</strong>
+                <span>全部梦境</span>
+              </article>
+              <article>
+                <strong data-dream-home-stat="important">0</strong>
+                <span>重要梦境</span>
+                <small>目前还没有标记为重要的梦。</small>
+              </article>
+              <article>
+                <strong data-dream-home-stat="streak">0 Nights</strong>
+                <span>连续记录</span>
+                <small>连续记录的夜晚</small>
+              </article>
+              <article>
+                <strong data-dream-home-stat="ai-organized">0</strong>
+                <span>AI 已整理</span>
+              </article>
+            </div>
+          </section>
+
+          <div class="dream-home-main">
+            <section class="dream-home-actions" aria-labelledby="dream-home-actions-title">
+              <div class="dream-home-section-heading">
+                <p class="eyebrow">Quick Actions</p>
+                <h2 id="dream-home-actions-title">继续探索</h2>
+              </div>
+              <div class="dream-home-action-list">
+                <button type="button" data-dream-home-action="quick">快速解析</button>
+                <button type="button" data-dream-home-action="guided">深度引导</button>
+                <button type="button" data-dream-home-action="diary">梦境日记</button>
+              </div>
+            </section>
+
+            <section class="dream-home-recent" aria-labelledby="dream-home-recent-title">
+              <div class="dream-home-section-heading">
+                <p class="eyebrow">Recent Dreams</p>
+                <h2 id="dream-home-recent-title">最近的梦</h2>
+              </div>
+              <div class="dream-home-recent-list" data-dream-home-recent aria-live="polite"></div>
+              <p class="dream-home-status" data-dream-home-status aria-live="polite"></p>
+              <button class="secondary-button" type="button" data-dream-home-retry hidden>重新加载</button>
+            </section>
+          </div>
+
+          <section class="dream-home-expansion" aria-label="即将推出">
+            <article>
+              <p class="eyebrow">Coming Soon</p>
+              <h2>AI 洞察</h2>
+              <p>在积累更多记录后，帮助你温和地回看梦境中的重复线索。</p>
+            </article>
+            <article>
+              <p class="eyebrow">Coming Soon</p>
+              <h2>标签 / 分类</h2>
+              <p>为私人梦境档案提供更清楚的整理方式。</p>
+            </article>
+          </section>
+        </div>
       </section>
 
       <section class="view-panel work-panel" data-view="quick" aria-labelledby="quick-title" hidden>
@@ -305,6 +387,8 @@
     <script src="runtime-env.js"></script>
     <script src="dreamSync.js"></script>
     <script src="auth.js"></script>
+    <script src="dreamQuotes.js"></script>
+    <script src="dreamHome.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

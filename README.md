@@ -23,6 +23,11 @@
 - 项目包含 Supabase 基础设施准备：JavaScript SDK 依赖、环境变量示例，以及 `dream_records` 表迁移和 RLS 策略。
 - 右上角提供 Supabase Auth 账户入口，支持邮箱注册、邮箱验证后登录、退出登录、忘记密码和重置密码。
 - 登录后会自动把当前浏览器里的本地梦境迁移到 Supabase，并以云端梦境日记为主；未登录或云端暂时不可用时，仍保留 localStorage 本地保存和待同步兜底。
+- 已认证用户会自动进入 **Dream Home**；退出登录后会立即回到原有公开首页。
+- Dream Home 只读取当前登录用户的 Supabase `dream_records`，用这些记录计算梦境总数、连续记录夜晚、AI 整理次数，并显示最近五条梦境。它不会读取其他账户的记录。
+- 每日引语来自已核验的公版中文经典文本，并按浏览器本地日期稳定选择；同一日期刷新页面会显示同一句引语。
+- Dream Home 的“重要梦境”当前固定显示为 `0`，因为现有记录和数据库 schema 没有收藏或重要标记字段。
+- “AI 洞察”和“标签 / 分类”目前只是标有 `Coming Soon` 的非交互视觉区域，不包含模拟数据或可用功能。
 
 这个应用不是诊断工具、治疗服务、算命工具，也不会预测未来。它只用于梦境记录和温和的自我探索。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API，连接失败时会显示本地示例结果。
 
@@ -39,6 +44,8 @@
 ├── src/
 │   ├── app.js
 │   ├── auth.js
+│   ├── dreamHome.js
+│   ├── dreamQuotes.js
 │   ├── dreamSync.js
 │   ├── index.html
 │   └── style.css
@@ -48,6 +55,8 @@
 - src/style.css: colors, layout, spacing, and responsive styles.
 - src/app.js: interactions for the dream analysis, local journal, and view switching flows.
 - src/auth.js: Supabase Auth interactions for account registration, login, logout, password reset, and persistent session display.
+- src/dreamHome.js: authenticated Dream Home session handling, current-user cloud-record loading, statistics, recent dreams, and reuse of existing navigation/detail flows.
+- src/dreamQuotes.js: verified public-domain daily quote records and browser-local, date-stable quote selection.
 - src/dreamSync.js: localStorage to Supabase dream record sync, cloud loading, pending retry, and record mapping.
 - server.js: Express server that serves src and proxies quick dream analysis requests.
 - lib/supabaseClient.js: helper for creating a Supabase client from environment variables.
@@ -67,3 +76,9 @@
 - To change the text on the page, edit src/index.html. To change colors or layout, edit src/style.css. To change the button behavior of reflection messages, edit src/app.js.
 - Contributing
 - Before making larger changes, read [AGENTS.md](AGENTS.md). Keep updates small, clear, and easy for a beginner to understand.
+
+## Dream Home Boundaries
+
+Dream Home is a read-only authenticated home experience. It does not change the existing DeepSeek integration or prompts, Supabase Auth rules, `dreamSync.js` synchronization behavior, or the Supabase schema.
+
+The following are intentionally not implemented yet: search, favorites, a dream timeline, trash or deletion, title/content editing, and analytics. The fixed-zero “重要梦境” value is a visible reminder of that current schema boundary, rather than a hidden or invented data field.

@@ -295,14 +295,29 @@
 
   async function handleLogout() {
     const client = getSupabaseClient();
+    renderSession(null);
+    notifyAuthUser(null);
+
     if (!client) {
-      renderSession(null);
       return;
     }
 
-    await client.auth.signOut();
-    renderSession(null);
-    notifyAuthUser(null);
+    try {
+      const { error } = await client.auth.signOut();
+
+      if (error) {
+        throw new Error("Logout failed");
+      }
+    } catch (error) {
+      try {
+        const { data } = await client.auth.getSession();
+        const authoritativeSession = data ? data.session : null;
+        renderSession(authoritativeSession);
+        notifyAuthUser(authoritativeSession);
+      } catch (sessionError) {
+        return;
+      }
+    }
   }
 
   async function initAuth() {
