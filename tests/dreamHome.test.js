@@ -681,3 +681,43 @@ test("initializes the browser controller on DOMContentLoaded and maps auth event
   assert.equal(elements.publicHome.hidden, false);
   assert.equal(elements.dreamHome.hidden, true);
 });
+
+test("integrates Dream Home markup, browser scripts, app bridge, and responsive layout", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../src/index.html"), "utf8");
+  const appCode = fs.readFileSync(path.join(__dirname, "../src/app.js"), "utf8");
+  const css = fs.readFileSync(path.join(__dirname, "../src/style.css"), "utf8");
+
+  assert.match(html, /data-public-home/);
+  assert.match(html, /data-dream-home/);
+  assert.match(html, /data-dream-home-recent/);
+  assert.match(html, /AI 洞察/);
+  assert.match(html, /标签 \/ 分类/);
+  assert.match(html, /class="dream-home-layout" data-dream-home hidden/);
+  assert.match(html, /<blockquote[^>]*>[\s\S]*data-dream-home-quote-text[\s\S]*<cite data-dream-home-quote-author>/);
+  [
+    "data-dream-home-greeting",
+    "data-dream-home-email",
+    "data-dream-home-status",
+    "data-dream-home-retry"
+  ].forEach((hook) => assert.match(html, new RegExp(hook)));
+  assert.equal((html.match(/data-dream-home-stat=/g) || []).length, 4);
+  assert.equal((html.match(/data-dream-home-action=/g) || []).length, 3);
+  const scripts = [
+    "vendor/supabase.js",
+    "runtime-env.js",
+    "dreamSync.js",
+    "auth.js",
+    "dreamQuotes.js",
+    "dreamHome.js",
+    "app.js"
+  ];
+  scripts.reduce((previousIndex, script) => {
+    const currentIndex = html.indexOf(`src="${script}"`);
+    assert.ok(currentIndex > previousIndex, `${script} must load in dependency order`);
+    return currentIndex;
+  }, -1);
+  assert.match(appCode, /window\.DreamAnatomyApp/);
+  assert.match(css, /\.dream-home-layout/);
+  assert.match(css, /@media \(max-width: 820px\)/);
+  assert.match(css, /@media \(max-width: 560px\)/);
+});

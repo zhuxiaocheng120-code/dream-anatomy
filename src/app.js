@@ -511,6 +511,11 @@ function openDreamDetail(recordId) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+window.DreamAnatomyApp = {
+  openDreamDetail,
+  showView
+};
+
 function renderDreamJournal(records = loadDreamRecords()) {
   if (!dreamJournalList || !dreamJournalEmpty) {
     return;
