@@ -153,6 +153,11 @@ test("queries and returns only the requested user's records", async () => {
   const firstUserRecords = await DreamHome.fetchDreamRecords(fake.client, { id: "user-one" });
 
   assert.deepEqual(fake.state.eqCalls, [["user_id", "user-one"]]);
+  assert.deepEqual(fake.state.orderCalls, [["created_at", { ascending: false }]]);
+  assert.deepEqual(
+    firstUserRecords.map((row) => row.id),
+    ["three", "one"]
+  );
   assert.deepEqual(
     firstUserRecords.map((row) => row.user_id),
     ["user-one", "user-one"]
