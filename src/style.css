@@ -294,6 +294,12 @@ h3 {
   line-height: 1.2;
 }
 
+.dream-home-intro {
+  margin: 14px 0 0;
+  color: var(--muted);
+  line-height: 1.7;
+}
+
 .dream-home-email {
   max-width: 32ch;
   margin: 0;
@@ -357,8 +363,14 @@ h3 {
   line-height: 1.5;
 }
 
+.dream-home-stats small {
+  color: var(--muted);
+  line-height: 1.5;
+}
+
 .dream-home-main {
   display: grid;
+  grid-template-areas: "recent actions";
   grid-template-columns: minmax(0, 1.65fr) minmax(260px, 0.75fr);
   gap: 40px;
   align-items: start;
@@ -366,6 +378,14 @@ h3 {
 
 .dream-home-main > * {
   min-width: 0;
+}
+
+.dream-home-recent {
+  grid-area: recent;
+}
+
+.dream-home-actions {
+  grid-area: actions;
 }
 
 .dream-home-recent-list,
@@ -922,6 +942,12 @@ input:focus-visible {
   .dream-home-main,
   .dream-home-expansion {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .dream-home-main {
+    grid-template-areas:
+      "actions"
+      "recent";
   }
 }
 

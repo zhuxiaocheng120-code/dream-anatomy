@@ -112,6 +112,10 @@
     };
   }
 
+  function formatDreamStreak(streak) {
+    return `${streak} ${streak === 1 ? "Night" : "Nights"}`;
+  }
+
   function getRecentDreams(records, limit = 5) {
     const safeLimit = Number.isFinite(limit) ? Math.max(0, Math.floor(limit)) : 5;
 
@@ -213,13 +217,16 @@
       setText(elements.quoteAuthor, quote && quote.author);
     }
 
-    function openRecentDream(recordId) {
+    function openRecentDream(record) {
       if (typeof app.showView === "function") {
         app.showView("diary");
       }
 
       if (typeof app.openDreamDetail === "function") {
-        app.openDreamDetail(recordId);
+        app.openDreamDetail(
+          record.local_record_id || record.localRecordId || record.id,
+          record
+        );
       }
     }
 
@@ -232,9 +239,7 @@
         const row = documentRef.createElement("button");
         row.type = "button";
         row.textContent = getDisplayTitle(record);
-        row.addEventListener("click", () => openRecentDream(
-          record.local_record_id || record.localRecordId || record.id
-        ));
+        row.addEventListener("click", () => openRecentDream(record));
         return row;
       });
 
@@ -245,7 +250,7 @@
       const stats = calculateDreamStats(records, now());
       setText(getElement(elements, "total"), stats.total);
       setText(getElement(elements, "important"), stats.important);
-      setText(getElement(elements, "streak"), stats.streak);
+      setText(getElement(elements, "streak"), formatDreamStreak(stats.streak));
       setText(getElement(elements, "aiOrganized"), stats.aiOrganized);
       renderRecentDreams();
       setText(elements.status, records.length === 0 ? "第一条被保存的梦会在这里出现。" : "");
@@ -385,6 +390,7 @@
     calculateDreamStreak,
     createDreamHomeController,
     fetchDreamRecords,
+    formatDreamStreak,
     getDisplayTitle,
     getGreeting,
     getRecentDreams

@@ -84,13 +84,107 @@ function createFakeApp() {
 
   return {
     calls,
-    openDreamDetail(recordId) {
-      calls.push(["openDreamDetail", recordId]);
+    openDreamDetail(recordId, fallbackRecord) {
+      calls.push(["openDreamDetail", recordId, fallbackRecord]);
     },
     showView(viewName) {
       calls.push(["showView", viewName]);
     }
   };
+}
+
+function createAppBridgeHarness() {
+  function createDomNode() {
+    const node = {
+      children: [],
+      className: "",
+      dataset: {},
+      hidden: false,
+      _textContent: "",
+      addEventListener() {},
+      append(...children) {
+        this.children.push(...children);
+      },
+      setAttribute() {},
+      classList: { toggle() {} }
+    };
+
+    Object.defineProperty(node, "textContent", {
+      get() {
+        return this._textContent;
+      },
+      set(value) {
+        this._textContent = String(value);
+        this.children = [];
+      }
+    });
+
+    return node;
+  }
+
+  const journalListShell = createDomNode();
+  const dreamDetail = createDomNode();
+  const dreamDetailContent = createDomNode();
+  const mappedRows = [];
+  const documentRef = {
+    createElement: createDomNode,
+    querySelector(selector) {
+      return new Map([
+        ["[data-journal-list-shell]", journalListShell],
+        ["[data-dream-detail]", dreamDetail],
+        ["[data-dream-detail-content]", dreamDetailContent]
+      ]).get(selector) || null;
+    },
+    querySelectorAll() {
+      return [];
+    }
+  };
+  const windowRef = {
+    DreamSync: {
+      createDreamSyncController() {
+        return {
+          getVisibleRecords: () => [],
+          retryPendingRecords: async () => ({ syncedCount: 0 }),
+          setSession() {}
+        };
+      },
+      mapSupabaseRowToLocalRecord(row) {
+        mappedRows.push(row);
+        return {
+          id: row.local_record_id,
+          createdAt: row.created_at,
+          rawDreamText: row.raw_dream_text,
+          dreamSummary: row.dream_summary,
+          emotions: row.emotions,
+          symbols: row.symbols,
+          sleepQuality: row.sleep_quality,
+          analysisType: row.analysis_type,
+          reportContent: row.report_content
+        };
+      }
+    },
+    addEventListener() {},
+    confirm: () => false,
+    scrollTo() {}
+  };
+  const context = {
+    document: documentRef,
+    localStorage: {
+      getItem: () => null,
+      removeItem() {},
+      setItem() {}
+    },
+    window: windowRef
+  };
+  windowRef.document = documentRef;
+  windowRef.localStorage = context.localStorage;
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/app.js"), "utf8"), context);
+
+  return { app: windowRef.DreamAnatomyApp, dreamDetailContent, mappedRows };
+}
+
+function collectText(node) {
+  return [node.textContent, ...node.children.flatMap(collectText)].filter(Boolean);
 }
 
 const testQuotes = {
@@ -223,6 +317,10 @@ test("calculates all four statistics", () => {
   );
 });
 
+test("formats a one-night streak with the singular English label", () => {
+  assert.equal(DreamHome.formatDreamStreak(1), "1 Night");
+});
+
 test("sorts recent records by either date field and limits them to five", () => {
   const records = [
     { id: "one", createdAt: "2026-07-08T09:00:00" },
@@ -341,7 +439,7 @@ test("renders the active user's Dream Home after loading their records", async (
   assert.equal(elements.quoteAuthor.textContent, "测试");
   assert.equal(elements.total.textContent, "2");
   assert.equal(elements.important.textContent, "0");
-  assert.equal(elements.streak.textContent, "2");
+  assert.equal(elements.streak.textContent, "2 Nights");
   assert.equal(elements.aiOrganized.textContent, "2");
   assert.equal(elements.recent.children.length, 2);
   assert.equal(elements.recent.children[0].textContent, "<script>alert('title')</script>");
@@ -468,6 +566,65 @@ test("discards a stale rejection after another user succeeds", async () => {
   assert.equal(elements.recent.children[0].textContent, "第二位用户的梦");
 });
 
+test("discards a stale success after logout while a request is pending", async () => {
+  const loading = deferred();
+  const elements = createDreamHomeElements();
+  const controller = DreamHome.createDreamHomeController({
+    app: createFakeApp(),
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: () => loading.promise,
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  const pendingRun = controller.handleSession({
+    user: { id: "one", email: "one@example.com" },
+    client: {}
+  });
+  await controller.handleSession({ user: null, client: null });
+  loading.resolve([{
+    id: "stale-record",
+    created_at: "2026-07-12T08:00:00",
+    dream_summary: "不应重新出现"
+  }]);
+  await pendingRun;
+
+  assert.equal(elements.publicHome.hidden, false);
+  assert.equal(elements.dreamHome.hidden, true);
+  assert.equal(elements.email.textContent, "");
+  assert.equal(elements.status.textContent, "");
+  assert.equal(elements.recent.children.length, 0);
+});
+
+test("discards a stale error after logout while a request is pending", async () => {
+  const loading = deferred();
+  const elements = createDreamHomeElements();
+  const controller = DreamHome.createDreamHomeController({
+    app: createFakeApp(),
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: () => loading.promise,
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  const pendingRun = controller.handleSession({
+    user: { id: "one", email: "one@example.com" },
+    client: {}
+  });
+  await controller.handleSession({ user: null, client: null });
+  loading.reject(new Error("private stale logout failure"));
+  await pendingRun;
+
+  assert.equal(elements.publicHome.hidden, false);
+  assert.equal(elements.dreamHome.hidden, true);
+  assert.equal(elements.email.textContent, "");
+  assert.equal(elements.status.textContent, "");
+  assert.equal(elements.retry.hidden, true);
+  assert.equal(elements.recent.children.length, 0);
+});
+
 test("shows a safe active-session failure and successfully retries that session", async () => {
   const elements = createDreamHomeElements();
   const fetchedUsers = [];
@@ -580,7 +737,11 @@ test("opens a recent Dream Home record through the existing diary detail flow", 
 
   assert.deepEqual(app.calls, [
     ["showView", "diary"],
-    ["openDreamDetail", "record-one"]
+    ["openDreamDetail", "record-one", {
+      id: "record-one",
+      created_at: "2026-07-12T08:00:00",
+      dream_summary: "通向花园的门"
+    }]
   ]);
 });
 
@@ -614,10 +775,50 @@ test("opens recent cloud records with their local diary identifiers", async () =
 
   assert.deepEqual(app.calls, [
     ["showView", "diary"],
-    ["openDreamDetail", "local-one"],
+    ["openDreamDetail", "local-one", {
+      id: "cloud-one",
+      local_record_id: "local-one",
+      created_at: "2026-07-12T08:00:00"
+    }],
     ["showView", "diary"],
-    ["openDreamDetail", "local-two"]
+    ["openDreamDetail", "local-two", {
+      id: "cloud-two",
+      localRecordId: "local-two",
+      created_at: "2026-07-11T08:00:00"
+    }]
   ]);
+});
+
+test("renders a cloud-only raw row through the actual app detail bridge", async () => {
+  const rawRow = {
+    id: "cloud-record-id",
+    local_record_id: "local-record-id",
+    created_at: "2026-07-12T08:00:00",
+    raw_dream_text: "只在云端可见的长廊",
+    dream_summary: "云端长廊",
+    emotions: "好奇",
+    symbols: "长廊",
+    sleep_quality: "一般",
+    analysis_type: "快速解析",
+    report_content: { summary: "云端长廊" }
+  };
+  const bridge = createAppBridgeHarness();
+  const elements = createDreamHomeElements();
+  const controller = DreamHome.createDreamHomeController({
+    app: bridge.app,
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: async () => [rawRow],
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  await controller.handleSession({ client: {}, user: { id: "one", email: "one@example.com" } });
+  elements.recent.children[0].trigger("click");
+
+  assert.deepEqual(bridge.mappedRows, [rawRow]);
+  assert.match(collectText(bridge.dreamDetailContent).join(" "), /只在云端可见的长廊/);
+  assert.doesNotMatch(collectText(bridge.dreamDetailContent).join(" "), /没有找到这条梦境记录/);
 });
 
 test("initializes the browser controller on DOMContentLoaded and maps auth event detail", async () => {
@@ -727,6 +928,9 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   assert.match(html, /data-dream-home/);
   assert.match(html, /data-dream-home-recent/);
   assert.match(html, /class="dream-home-layout" data-dream-home hidden/);
+  assert.match(html, /这里收藏着你曾经记住的梦。/);
+  assert.match(html, /目前还没有标记为重要的梦。/);
+  assert.match(html, /连续记录的夜晚/);
   assert.match(html, /<blockquote[^>]*>[\s\S]*data-dream-home-quote-text[\s\S]*<cite data-dream-home-quote-author>/);
   [
     "data-dream-home-greeting",
@@ -741,6 +945,10 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   assert.deepEqual(
     [...html.matchAll(/data-dream-home-action="([^"]+)"/g)].map((match) => match[1]),
     ["quick", "guided", "diary"]
+  );
+  assert.ok(
+    html.indexOf('class="dream-home-actions"') < html.indexOf('class="dream-home-recent"'),
+    "quick actions must precede recent dreams in semantic mobile order"
   );
   const expansion = html.match(/<section class="dream-home-expansion"[\s\S]*?<\/section>/)[0];
   assert.equal((expansion.match(/<article>/g) || []).length, 2);
@@ -773,8 +981,10 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   );
   assert.match(
     css,
-    /\.dream-home-main\s*\{[^}]*grid-template-columns:\s*minmax\(0, 1\.65fr\) minmax\(260px, 0\.75fr\);/
+    /\.dream-home-main\s*\{[^}]*grid-template-areas:\s*"recent actions";[^}]*grid-template-columns:\s*minmax\(0, 1\.65fr\) minmax\(260px, 0\.75fr\);/
   );
+  assert.match(css, /\.dream-home-recent\s*\{[^}]*grid-area:\s*recent;/);
+  assert.match(css, /\.dream-home-actions\s*\{[^}]*grid-area:\s*actions;/);
   assert.match(
     css,
     /\.dream-home-expansion\s*\{[^}]*grid-template-columns:\s*repeat\(2, minmax\(0, 1fr\)\);/

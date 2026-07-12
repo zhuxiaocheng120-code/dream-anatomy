@@ -33,6 +33,8 @@ function createNode() {
 
 function createAuthHarness({ env, supabase }) {
   const nodes = new Map();
+  const dispatchedEvents = [];
+  let initPromise = Promise.resolve();
 
   function getNode(selector) {
     if (!nodes.has(selector)) {
@@ -49,7 +51,7 @@ function createAuthHarness({ env, supabase }) {
     document: {
       addEventListener(event, callback) {
         if (event === "DOMContentLoaded") {
-          callback();
+          initPromise = Promise.resolve(callback());
         }
       },
       querySelector: getNode,
@@ -59,7 +61,9 @@ function createAuthHarness({ env, supabase }) {
     },
     window: {
       DREAM_ANATOMY_ENV: env,
-      dispatchEvent() {},
+      dispatchEvent(event) {
+        dispatchedEvents.push(event);
+      },
       location: { origin: "https://dream-anatomy.onrender.com" },
       supabase
     }
@@ -71,8 +75,21 @@ function createAuthHarness({ env, supabase }) {
 
   return {
     auth: context.window.DreamAnatomyAuth,
-    nodes
+    dispatchedEvents,
+    nodes,
+    ready: initPromise
   };
+}
+
+function deferred() {
+  let reject;
+  let resolve;
+  const promise = new Promise((nextResolve, nextReject) => {
+    reject = nextReject;
+    resolve = nextResolve;
+  });
+
+  return { promise, reject, resolve };
 }
 
 async function submitRegisterForm(harness) {
@@ -153,4 +170,72 @@ test("register submit still shows the environment variable prompt when config is
   assert.match(statusText, /请先配置 Supabase 环境变量。/);
   assert.match(statusText, /SUPABASE_URL 是否已设置：否/);
   assert.match(statusText, /SUPABASE_ANON_KEY 是否已设置：否/);
+});
+
+test("logout publishes an immediate null session before signOut settles", async () => {
+  const pendingSignOut = deferred();
+  const activeSession = { user: { id: "active-user", email: "active@example.com" } };
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: activeSession } }),
+      onAuthStateChange() {},
+      signOut: () => pendingSignOut.promise
+    }
+  };
+  const harness = createAuthHarness({
+    env: {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_ANON_KEY: "anon-test-value"
+    },
+    supabase: { createClient: () => client }
+  });
+  await harness.ready;
+  harness.dispatchedEvents.length = 0;
+
+  const logoutRun = harness.nodes.get("[data-auth-logout]").listeners.click();
+
+  assert.equal(harness.nodes.get("[data-auth-session]").hidden, true);
+  assert.equal(harness.nodes.get("[data-auth-email]").textContent, "");
+  assert.equal(harness.dispatchedEvents.length, 1);
+  assert.equal(harness.dispatchedEvents[0].detail.user, null);
+
+  pendingSignOut.resolve({ error: null });
+  await logoutRun;
+});
+
+test("failed logout restores only the authoritative session from getSession", async () => {
+  const activeSession = { user: { id: "active-user", email: "active@example.com" } };
+  let getSessionCalls = 0;
+  const client = {
+    auth: {
+      async getSession() {
+        getSessionCalls += 1;
+        return { data: { session: activeSession } };
+      },
+      onAuthStateChange() {},
+      signOut: async () => {
+        throw new Error("private token-shaped signOut failure");
+      }
+    }
+  };
+  const harness = createAuthHarness({
+    env: {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_ANON_KEY: "anon-test-value"
+    },
+    supabase: { createClient: () => client }
+  });
+  await harness.ready;
+  harness.dispatchedEvents.length = 0;
+
+  const logoutRun = harness.nodes.get("[data-auth-logout]").listeners.click();
+  logoutRun.catch(() => {});
+
+  assert.equal(harness.dispatchedEvents.length, 1);
+  assert.equal(harness.dispatchedEvents[0].detail.user, null);
+  await assert.doesNotReject(logoutRun);
+  assert.equal(getSessionCalls, 2);
+  assert.equal(harness.nodes.get("[data-auth-session]").hidden, false);
+  assert.equal(harness.nodes.get("[data-auth-email]").textContent, "active@example.com");
+  assert.equal(harness.dispatchedEvents.at(-1).detail.user.email, "active@example.com");
 });

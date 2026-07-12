@@ -80,6 +80,7 @@
             <div>
               <p class="eyebrow">Dream Home</p>
               <h1><span data-dream-home-greeting></span>，欢迎回到 Dream Home</h1>
+              <p class="dream-home-intro">这里收藏着你曾经记住的梦。</p>
             </div>
             <p class="dream-home-email" data-dream-home-email></p>
           </header>
@@ -102,10 +103,12 @@
               <article>
                 <strong data-dream-home-stat="important">0</strong>
                 <span>重要梦境</span>
+                <small>目前还没有标记为重要的梦。</small>
               </article>
               <article>
-                <strong data-dream-home-stat="streak">0</strong>
+                <strong data-dream-home-stat="streak">0 Nights</strong>
                 <span>连续记录</span>
+                <small>连续记录的夜晚</small>
               </article>
               <article>
                 <strong data-dream-home-stat="ai-organized">0</strong>
@@ -115,16 +118,6 @@
           </section>
 
           <div class="dream-home-main">
-            <section class="dream-home-recent" aria-labelledby="dream-home-recent-title">
-              <div class="dream-home-section-heading">
-                <p class="eyebrow">Recent Dreams</p>
-                <h2 id="dream-home-recent-title">最近的梦</h2>
-              </div>
-              <div class="dream-home-recent-list" data-dream-home-recent aria-live="polite"></div>
-              <p class="dream-home-status" data-dream-home-status aria-live="polite"></p>
-              <button class="secondary-button" type="button" data-dream-home-retry hidden>重新加载</button>
-            </section>
-
             <section class="dream-home-actions" aria-labelledby="dream-home-actions-title">
               <div class="dream-home-section-heading">
                 <p class="eyebrow">Quick Actions</p>
@@ -135,6 +128,16 @@
                 <button type="button" data-dream-home-action="guided">深度引导</button>
                 <button type="button" data-dream-home-action="diary">梦境日记</button>
               </div>
+            </section>
+
+            <section class="dream-home-recent" aria-labelledby="dream-home-recent-title">
+              <div class="dream-home-section-heading">
+                <p class="eyebrow">Recent Dreams</p>
+                <h2 id="dream-home-recent-title">最近的梦</h2>
+              </div>
+              <div class="dream-home-recent-list" data-dream-home-recent aria-live="polite"></div>
+              <p class="dream-home-status" data-dream-home-status aria-live="polite"></p>
+              <button class="secondary-button" type="button" data-dream-home-retry hidden>重新加载</button>
             </section>
           </div>
 
