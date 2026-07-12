@@ -1,10 +1,10 @@
 (function (root, factory) {
   if (typeof module === "object" && module.exports) {
-    module.exports = factory();
+    module.exports = factory(root);
   } else {
-    root.DreamHome = factory();
+    root.DreamHome = factory(root);
   }
-})(typeof window !== "undefined" ? window : globalThis, function () {
+})(typeof window !== "undefined" ? window : globalThis, function (root) {
   const defaultTitleLength = 36;
 
   function getGreeting(date) {
@@ -146,12 +146,255 @@
     return Array.isArray(response.data) ? response.data : [];
   }
 
-  return {
+  function setText(element, value) {
+    if (element) {
+      element.textContent = value == null ? "" : String(value);
+    }
+  }
+
+  function setHidden(element, hidden) {
+    if (element) {
+      element.hidden = hidden;
+    }
+  }
+
+  function replaceChildren(element, ...children) {
+    if (element && typeof element.replaceChildren === "function") {
+      element.replaceChildren(...children);
+    }
+  }
+
+  function getElement(elements, name) {
+    return elements[name] || (elements.stats && elements.stats[name]) || null;
+  }
+
+  function createDreamHomeController(options = {}) {
+    const elements = options.elements || {};
+    const app = options.app || {};
+    const documentRef = options.document || (root && root.document);
+    const fetchRecords = options.fetchRecords || fetchDreamRecords;
+    const now = options.now || (() => new Date());
+    const quotes = options.quotes || (root && root.DreamQuotes);
+    let activeUser = null;
+    let activeClient = null;
+    let records = [];
+    let requestGeneration = 0;
+
+    function clearRecordData() {
+      records = [];
+      setText(elements.greeting, "");
+      setText(elements.email, "");
+      setText(elements.quoteText, "");
+      setText(elements.quoteAuthor, "");
+      setText(getElement(elements, "total"), "");
+      setText(getElement(elements, "important"), "");
+      setText(getElement(elements, "streak"), "");
+      setText(getElement(elements, "aiOrganized"), "");
+      setText(elements.status, "");
+      replaceChildren(elements.recent);
+      setHidden(elements.retry, true);
+    }
+
+    function showHome(isAuthenticated) {
+      setHidden(elements.publicHome, isAuthenticated);
+      setHidden(elements.dreamHome, !isAuthenticated);
+
+      if (typeof app.showView === "function") {
+        app.showView("home");
+      }
+    }
+
+    function renderQuote(date) {
+      const quote = quotes && typeof quotes.getQuoteForDate === "function"
+        ? quotes.getQuoteForDate(date)
+        : null;
+
+      setText(elements.quoteText, quote && quote.text);
+      setText(elements.quoteAuthor, quote && quote.author);
+    }
+
+    function openRecentDream(recordId) {
+      if (typeof app.showView === "function") {
+        app.showView("diary");
+      }
+
+      if (typeof app.openDreamDetail === "function") {
+        app.openDreamDetail(recordId);
+      }
+    }
+
+    function renderRecentDreams() {
+      if (!elements.recent || !documentRef || typeof documentRef.createElement !== "function") {
+        return;
+      }
+
+      const recentRows = getRecentDreams(records).map((record) => {
+        const row = documentRef.createElement("button");
+        row.type = "button";
+        row.textContent = getDisplayTitle(record);
+        row.addEventListener("click", () => openRecentDream(record.id));
+        return row;
+      });
+
+      replaceChildren(elements.recent, ...recentRows);
+    }
+
+    function renderRecordData() {
+      const stats = calculateDreamStats(records, now());
+      setText(getElement(elements, "total"), stats.total);
+      setText(getElement(elements, "important"), stats.important);
+      setText(getElement(elements, "streak"), stats.streak);
+      setText(getElement(elements, "aiOrganized"), stats.aiOrganized);
+      renderRecentDreams();
+      setText(elements.status, records.length === 0 ? "第一条被保存的梦会在这里出现。" : "");
+      setHidden(elements.retry, true);
+    }
+
+    async function handleSession(session = {}) {
+      requestGeneration += 1;
+      const generation = requestGeneration;
+      clearRecordData();
+      activeUser = session.user && session.user.id ? session.user : null;
+      activeClient = session.client || null;
+
+      if (!activeUser) {
+        showHome(false);
+        return [];
+      }
+
+      const userId = activeUser.id;
+      showHome(true);
+      setText(elements.greeting, getGreeting(now()));
+      setText(elements.email, activeUser.email || "");
+      renderQuote(now());
+      setText(elements.status, "正在整理你的梦境档案……");
+
+      try {
+        const loadedRecords = await fetchRecords(activeClient, activeUser);
+
+        if (generation !== requestGeneration || !activeUser || activeUser.id !== userId) {
+          return [];
+        }
+
+        records = Array.isArray(loadedRecords) ? loadedRecords : [];
+        renderRecordData();
+        return records;
+      } catch (error) {
+        if (generation !== requestGeneration || !activeUser || activeUser.id !== userId) {
+          return [];
+        }
+
+        setText(elements.status, "暂时无法整理云端梦境，请稍后重试。");
+        setHidden(elements.retry, false);
+        return [];
+      }
+    }
+
+    function clear() {
+      return handleSession({ client: null, user: null });
+    }
+
+    function init(session) {
+      return handleSession(session || { client: null, user: null });
+    }
+
+    function retry() {
+      if (!activeUser) {
+        return Promise.resolve([]);
+      }
+
+      return handleSession({ client: activeClient, user: activeUser });
+    }
+
+    if (elements.retry && typeof elements.retry.addEventListener === "function") {
+      elements.retry.addEventListener("click", () => {
+        retry();
+      });
+    }
+
+    [
+      [elements.quickAction, "quick"],
+      [elements.guidedAction, "guided"],
+      [elements.diaryAction, "diary"]
+    ].forEach(([element, viewName]) => {
+      if (element && typeof element.addEventListener === "function") {
+        element.addEventListener("click", () => {
+          if (typeof app.showView === "function") {
+            app.showView(viewName);
+          }
+        });
+      }
+    });
+
+    return { clear, handleSession, init, retry };
+  }
+
+  function collectBrowserElements(documentRef) {
+    return {
+      publicHome: documentRef.querySelector("[data-public-home]"),
+      dreamHome: documentRef.querySelector("[data-dream-home]"),
+      greeting: documentRef.querySelector("[data-dream-home-greeting]"),
+      email: documentRef.querySelector("[data-dream-home-email]"),
+      quoteText: documentRef.querySelector("[data-dream-home-quote-text]"),
+      quoteAuthor: documentRef.querySelector("[data-dream-home-quote-author]"),
+      total: documentRef.querySelector("[data-dream-home-stat='total']"),
+      important: documentRef.querySelector("[data-dream-home-stat='important']"),
+      streak: documentRef.querySelector("[data-dream-home-stat='streak']"),
+      aiOrganized: documentRef.querySelector("[data-dream-home-stat='ai-organized']"),
+      recent: documentRef.querySelector("[data-dream-home-recent]"),
+      status: documentRef.querySelector("[data-dream-home-status]"),
+      retry: documentRef.querySelector("[data-dream-home-retry]"),
+      quickAction: documentRef.querySelector("[data-dream-home-action='quick']"),
+      guidedAction: documentRef.querySelector("[data-dream-home-action='guided']"),
+      diaryAction: documentRef.querySelector("[data-dream-home-action='diary']")
+    };
+  }
+
+  function initializeBrowserDreamHome() {
+    if (!root || !root.document || !root.addEventListener) {
+      return;
+    }
+
+    const elements = collectBrowserElements(root.document);
+
+    if (!elements.dreamHome) {
+      return;
+    }
+
+    const controller = createDreamHomeController({
+      app: root.DreamAnatomyApp,
+      document: root.document,
+      elements,
+      quotes: root.DreamQuotes
+    });
+
+    api.controller = controller;
+    controller.init();
+    root.addEventListener("dream-anatomy-auth-session", (event) => {
+      controller.handleSession({
+        user: event.detail && event.detail.user ? event.detail.user : null,
+        client: event.detail ? event.detail.client : null
+      });
+    });
+  }
+
+  const api = {
     calculateDreamStats,
     calculateDreamStreak,
+    createDreamHomeController,
     fetchDreamRecords,
     getDisplayTitle,
     getGreeting,
     getRecentDreams
   };
+
+  if (root && root.document) {
+    if (root.document.readyState === "loading") {
+      root.document.addEventListener("DOMContentLoaded", initializeBrowserDreamHome);
+    } else {
+      initializeBrowserDreamHome();
+    }
+  }
+
+  return api;
 });
