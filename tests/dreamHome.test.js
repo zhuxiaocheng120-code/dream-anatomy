@@ -1,12 +1,14 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
+const path = require("node:path");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const DreamHome = require("../src/dreamHome");
 
 function createFakeElement() {
   const listeners = new Map();
-
-  return {
+  const element = {
     children: [],
     dataset: {},
     hidden: false,
@@ -20,13 +22,21 @@ function createFakeElement() {
     addEventListener(type, listener) {
       listeners.set(type, listener);
     },
-    trigger(type) {
+    trigger(type, event) {
       const listener = listeners.get(type);
       if (listener) {
-        listener();
+        return listener(event);
       }
     }
   };
+
+  Object.defineProperty(element, "innerHTML", {
+    set() {
+      throw new Error("Dream Home rendering must not assign innerHTML");
+    }
+  });
+
+  return element;
 }
 
 function createDreamHomeElements() {
@@ -60,11 +70,13 @@ function createFakeDocument() {
 
 function deferred() {
   let resolve;
-  const promise = new Promise((nextResolve) => {
+  let reject;
+  const promise = new Promise((nextResolve, nextReject) => {
     resolve = nextResolve;
+    reject = nextReject;
   });
 
-  return { promise, resolve };
+  return { promise, reject, resolve };
 }
 
 function createFakeApp() {
@@ -298,7 +310,7 @@ test("renders the active user's Dream Home after loading their records", async (
 
   const run = controller.handleSession({
     client: { name: "active-client" },
-    user: { id: "user-one", email: "one@example.com" }
+    user: { id: "user-one", email: "<img src=x onerror=alert('email')>" }
   });
 
   assert.equal(elements.publicHome.hidden, true);
@@ -311,7 +323,7 @@ test("renders the active user's Dream Home after loading their records", async (
     {
       id: "today",
       created_at: "2026-07-12T08:00:00",
-      dream_summary: "雨中的车站",
+      dream_summary: "<script>alert('title')</script>",
       analysis_type: "快速解析"
     },
     {
@@ -323,7 +335,7 @@ test("renders the active user's Dream Home after loading their records", async (
   ]);
   await run;
 
-  assert.equal(elements.email.textContent, "one@example.com");
+  assert.equal(elements.email.textContent, "<img src=x onerror=alert('email')>");
   assert.equal(elements.greeting.textContent, "早上好");
   assert.equal(elements.quoteText.textContent, "静听梦的回声。");
   assert.equal(elements.quoteAuthor.textContent, "测试");
@@ -332,7 +344,7 @@ test("renders the active user's Dream Home after loading their records", async (
   assert.equal(elements.streak.textContent, "2");
   assert.equal(elements.aiOrganized.textContent, "2");
   assert.equal(elements.recent.children.length, 2);
-  assert.equal(elements.recent.children[0].textContent, "雨中的车站");
+  assert.equal(elements.recent.children[0].textContent, "<script>alert('title')</script>");
 });
 
 test("clears record-derived Dream Home content before returning to the public home", async () => {
@@ -418,6 +430,90 @@ test("discards a stale response after another user becomes active", async () => 
   assert.equal(elements.recent.children.length, 1);
 });
 
+test("discards a stale rejection after another user succeeds", async () => {
+  const first = deferred();
+  const second = deferred();
+  const elements = createDreamHomeElements();
+  const controller = DreamHome.createDreamHomeController({
+    app: createFakeApp(),
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: (_client, user) => user.id === "one" ? first.promise : second.promise,
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  const firstRun = controller.handleSession({
+    user: { id: "one", email: "one@example.com" },
+    client: {}
+  });
+  const secondRun = controller.handleSession({
+    user: { id: "two", email: "two@example.com" },
+    client: {}
+  });
+  second.resolve([{
+    id: "two-record",
+    user_id: "two",
+    created_at: "2026-07-12T08:00:00",
+    dream_summary: "第二位用户的梦"
+  }]);
+  await secondRun;
+  first.reject(new Error("private stale failure"));
+  await firstRun;
+
+  assert.equal(elements.email.textContent, "two@example.com");
+  assert.equal(elements.status.textContent, "");
+  assert.equal(elements.retry.hidden, true);
+  assert.equal(elements.recent.children.length, 1);
+  assert.equal(elements.recent.children[0].textContent, "第二位用户的梦");
+});
+
+test("shows a safe active-session failure and successfully retries that session", async () => {
+  const elements = createDreamHomeElements();
+  const fetchedUsers = [];
+  let attempts = 0;
+  const controller = DreamHome.createDreamHomeController({
+    app: createFakeApp(),
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: async (_client, user) => {
+      attempts += 1;
+      fetchedUsers.push(user.id);
+
+      if (attempts === 1) {
+        throw new Error("private database failure");
+      }
+
+      return [{
+        id: "recovered-record",
+        created_at: "2026-07-12T08:00:00",
+        dream_summary: "重试后回来的梦"
+      }];
+    },
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  await controller.handleSession({
+    client: { name: "same-client" },
+    user: { id: "active-user", email: "active@example.com" }
+  });
+
+  assert.equal(elements.status.textContent, "暂时无法整理云端梦境，请稍后重试。");
+  assert.doesNotMatch(elements.status.textContent, /private|database/i);
+  assert.equal(elements.retry.hidden, false);
+  assert.equal(elements.recent.children.length, 0);
+
+  await controller.retry();
+
+  assert.equal(attempts, 2);
+  assert.deepEqual(fetchedUsers, ["active-user", "active-user"]);
+  assert.equal(elements.email.textContent, "active@example.com");
+  assert.equal(elements.status.textContent, "");
+  assert.equal(elements.retry.hidden, true);
+  assert.equal(elements.recent.children[0].textContent, "重试后回来的梦");
+});
+
 test("retries only while a current session is active", async () => {
   const fetchedUsers = [];
   const controller = DreamHome.createDreamHomeController({
@@ -486,4 +582,102 @@ test("opens a recent Dream Home record through the existing diary detail flow", 
     ["showView", "diary"],
     ["openDreamDetail", "record-one"]
   ]);
+});
+
+test("initializes the browser controller on DOMContentLoaded and maps auth event detail", async () => {
+  const elements = createDreamHomeElements();
+  const selectors = [
+    ["[data-public-home]", elements.publicHome],
+    ["[data-dream-home]", elements.dreamHome],
+    ["[data-dream-home-greeting]", elements.greeting],
+    ["[data-dream-home-email]", elements.email],
+    ["[data-dream-home-quote-text]", elements.quoteText],
+    ["[data-dream-home-quote-author]", elements.quoteAuthor],
+    ["[data-dream-home-stat='total']", elements.total],
+    ["[data-dream-home-stat='important']", elements.important],
+    ["[data-dream-home-stat='streak']", elements.streak],
+    ["[data-dream-home-stat='ai-organized']", elements.aiOrganized],
+    ["[data-dream-home-recent]", elements.recent],
+    ["[data-dream-home-status]", elements.status],
+    ["[data-dream-home-retry]", elements.retry],
+    ["[data-dream-home-action='quick']", elements.quickAction],
+    ["[data-dream-home-action='guided']", elements.guidedAction],
+    ["[data-dream-home-action='diary']", elements.diaryAction]
+  ];
+  const selectorMap = new Map(selectors);
+  const documentListeners = new Map();
+  const queriedSelectors = [];
+  const fakeDocument = {
+    readyState: "loading",
+    addEventListener(type, listener) {
+      documentListeners.set(type, listener);
+    },
+    createElement() {
+      return createFakeElement();
+    },
+    querySelector(selector) {
+      queriedSelectors.push(selector);
+      return selectorMap.get(selector) || null;
+    }
+  };
+  const windowListeners = new Map();
+  const app = createFakeApp();
+  const fake = createFakeSupabase([{
+    id: "browser-record",
+    user_id: "browser-user",
+    created_at: "2026-07-12T08:00:00",
+    dream_summary: "浏览器初始化的梦"
+  }]);
+  const fakeWindow = {
+    DreamAnatomyApp: app,
+    DreamQuotes: testQuotes,
+    addEventListener(type, listener) {
+      windowListeners.set(type, listener);
+    },
+    document: fakeDocument
+  };
+  fakeWindow.window = fakeWindow;
+  fakeWindow.globalThis = fakeWindow;
+
+  const source = fs.readFileSync(path.join(__dirname, "../src/dreamHome.js"), "utf8");
+  vm.runInNewContext(source, { globalThis: fakeWindow, window: fakeWindow });
+
+  assert.equal(typeof documentListeners.get("DOMContentLoaded"), "function");
+  assert.equal(fakeWindow.DreamHome.controller, undefined);
+
+  documentListeners.get("DOMContentLoaded")();
+
+  assert.deepEqual(queriedSelectors, selectors.map(([selector]) => selector));
+  assert.deepEqual(Object.keys(fakeWindow.DreamHome.controller).sort(), [
+    "clear",
+    "handleSession",
+    "init",
+    "retry"
+  ]);
+  assert.equal(typeof windowListeners.get("dream-anatomy-auth-session"), "function");
+  assert.equal(elements.publicHome.hidden, false);
+  assert.equal(elements.dreamHome.hidden, true);
+
+  const eventUser = { id: "browser-user", email: "browser@example.com" };
+  windowListeners.get("dream-anatomy-auth-session")({
+    detail: {
+      client: fake.client,
+      get ignored() {
+        throw new Error("unrelated event detail must not be mapped");
+      },
+      user: eventUser
+    }
+  });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.deepEqual(fake.state.eqCalls, [["user_id", "browser-user"]]);
+  assert.equal(elements.email.textContent, "browser@example.com");
+  assert.equal(elements.recent.children[0].textContent, "浏览器初始化的梦");
+
+  windowListeners.get("dream-anatomy-auth-session")({ detail: null });
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(elements.email.textContent, "");
+  assert.equal(elements.publicHome.hidden, false);
+  assert.equal(elements.dreamHome.hidden, true);
 });
