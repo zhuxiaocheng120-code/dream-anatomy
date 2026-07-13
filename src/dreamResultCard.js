@@ -32,18 +32,26 @@
     return Math.max(0, Math.min(100, number));
   }
 
-  function normalizeDimension(value, definition) {
+  function normalizeScore(value, options) {
+    if ((!options || !options.useZeroForMissingScores) && (value === undefined || value === null || value === "")) {
+      return null;
+    }
+
+    return clampScore(value);
+  }
+
+  function normalizeDimension(value, definition, options) {
     const input = value && typeof value === "object" ? value : {};
     return {
       id: definition.id,
       name: definition.name,
-      score: clampScore(input.score),
+      score: normalizeScore(input.score, options),
       summary: text(input.summary),
       rationale: textList(input.rationale, fallbackText)
     };
   }
 
-  function normalizeDreamResultCard(raw, context) {
+  function normalizeDreamResultCard(raw, context, options = {}) {
     const input = raw && typeof raw === "object" ? raw : {};
     const dimensionMap = new Map(Array.isArray(input.dimensions) ? input.dimensions.map((item) => [item && item.id, item]) : []);
     const emotionalInput = input.emotionalProfile && typeof input.emotionalProfile === "object" ? input.emotionalProfile : {};
@@ -64,12 +72,12 @@
         summary: text(archetype.summary, "本次梦境更接近这个原型，也许值得从具体感受开始观察。")
       },
       coreInsight: text(input.coreInsight),
-      dimensions: dimensionDefinitions.map((definition) => normalizeDimension(dimensionMap.get(definition.id), definition)),
+      dimensions: dimensionDefinitions.map((definition) => normalizeDimension(dimensionMap.get(definition.id), definition, options)),
       symbols,
       emotionalProfile: {
         primary: text(emotionalInput.primary, "未命名情绪"),
         secondary: textList(emotionalInput.secondary, ""),
-        intensity: clampScore(emotionalInput.intensity),
+        intensity: normalizeScore(emotionalInput.intensity, options),
         evidence: text(emotionalInput.evidence)
       },
       reflectionQuestions: textList(input.reflectionQuestions, ""),
@@ -82,6 +90,14 @@
     const report = record.reportContent || record.report_content;
     const card = report && typeof report === "object" ? report.dreamResultCard : null;
     return card && typeof card === "object" && !Array.isArray(card) ? card : null;
+  }
+
+  function getDreamResultCardStatusFromRecord(record) {
+    if (!record || typeof record !== "object") return "";
+    const report = record.reportContent || record.report_content;
+    return report && typeof report === "object" && typeof report.dreamResultCardStatus === "string"
+      ? report.dreamResultCardStatus
+      : "";
   }
 
   function getDimensionDefinitions() {
@@ -105,10 +121,10 @@
     const section = createElement(documentRef, "section", "result-card-dimension");
     const heading = createElement(documentRef, "div", "result-card-dimension-heading");
     appendTextElement(documentRef, heading, "strong", "", dimension.name);
-    appendTextElement(documentRef, heading, "span", "", `${dimension.score}`);
+    appendTextElement(documentRef, heading, "span", "", dimension.score === null ? "暂不可用" : `${dimension.score}`);
     const progress = createElement(documentRef, "div", "result-card-progress");
     const fill = createElement(documentRef, "span", "");
-    fill.style.width = `${dimension.score}%`;
+    fill.style.width = dimension.score === null ? "0%" : `${dimension.score}%`;
     progress.append(fill);
     const details = createElement(documentRef, "details", "result-card-rationale");
     appendTextElement(documentRef, details, "summary", "", "为什么");
@@ -140,7 +156,7 @@
     appendTextElement(documentRef, preview, "p", "", card.symbols.map((symbol) => symbol.name).join(" · ") || "梦境意象");
     const rows = createElement(documentRef, "div", "result-card-share-dimensions");
     card.dimensions.forEach((dimension) => {
-      appendTextElement(documentRef, rows, "p", "", `${dimension.name} ${dimension.score}`);
+      appendTextElement(documentRef, rows, "p", "", `${dimension.name} ${dimension.score === null ? "暂不可用" : dimension.score}`);
     });
     preview.append(rows);
     appendTextElement(documentRef, preview, "small", "", "这是一次自我探索视角，不是诊断或预测。");
@@ -184,7 +200,13 @@
     if (card.emotionalProfile.secondary.length) {
       appendTextElement(documentRef, emotion, "p", "", `伴随情绪：${card.emotionalProfile.secondary.join("、")}`);
     }
-    appendTextElement(documentRef, emotion, "p", "", `情绪强度：${card.emotionalProfile.intensity}`);
+    appendTextElement(
+      documentRef,
+      emotion,
+      "p",
+      "",
+      `情绪强度：${card.emotionalProfile.intensity === null ? "暂不可用" : card.emotionalProfile.intensity}`
+    );
     appendTextElement(documentRef, emotion, "p", "", card.emotionalProfile.evidence);
     appendTextElement(documentRef, emotion, "p", "result-card-note", "这反映的是梦境中的情绪线索，不代表现实中的固定心理状态。");
 
@@ -207,12 +229,22 @@
     const documentRef = options.document || (typeof document !== "undefined" ? document : null);
 
     function renderEmptyCard(container, record) {
+      const statusValue = getDreamResultCardStatusFromRecord(record);
+      const isGenerationFailed = statusValue === "generation_failed";
       const empty = createElement(documentRef, "section", "dream-result-card dream-result-card-empty");
       appendTextElement(documentRef, empty, "h2", "", "梦境画像");
-      appendTextElement(documentRef, empty, "p", "", "尚未生成梦境画像");
-      appendTextElement(documentRef, empty, "p", "", "生成是可选的，只为帮助你整理这一次梦境的线索。");
+      appendTextElement(documentRef, empty, "p", "", isGenerationFailed ? "梦境画像暂时未能完整生成。" : "尚未生成梦境画像");
+      appendTextElement(
+        documentRef,
+        empty,
+        "p",
+        "",
+        isGenerationFailed
+          ? "文字分析仍可以阅读；你也可以稍后重新生成梦境画像。"
+          : "生成是可选的，只为帮助你整理这一次梦境的线索。"
+      );
       const status = createElement(documentRef, "p", "result-card-status", "");
-      const button = createElement(documentRef, "button", "primary-button", "生成梦境画像");
+      const button = createElement(documentRef, "button", "primary-button", isGenerationFailed ? "重新生成梦境画像" : "生成梦境画像");
       button.type = "button";
       button.addEventListener("click", async () => {
         if (typeof options.requestResultCard !== "function") return;
@@ -230,7 +262,7 @@
           render(container, { ...record, reportContent: { ...(record.reportContent || {}), dreamResultCard: normalizedCard } }, statusMessage);
         } catch (error) {
           button.disabled = false;
-          status.textContent = "暂时无法生成梦境画像，请稍后再试。";
+          status.textContent = options.generationErrorMessage || "暂时无法生成梦境画像，请稍后再试。";
         }
       });
       empty.append(button, status);
@@ -244,7 +276,11 @@
         renderEmptyCard(container, record);
         return;
       }
-      container.replaceChildren(renderExistingCard(documentRef, normalizeDreamResultCard(savedCard, record), statusMessage));
+      const statusValue = getDreamResultCardStatusFromRecord(record);
+      const normalizedCard = normalizeDreamResultCard(savedCard, record, {
+        allowUnavailableScores: statusValue === "generation_failed"
+      });
+      container.replaceChildren(renderExistingCard(documentRef, normalizedCard, statusMessage));
     }
 
     return { render };

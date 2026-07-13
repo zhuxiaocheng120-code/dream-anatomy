@@ -140,12 +140,75 @@ function createResultCardFixture() {
   };
 }
 
+function createQuickAnalysisFixture() {
+  return {
+    summary: "你在学校走廊里寻找教室，并停在一扇发光的门前。",
+    coreInterpretation: "寻找教室的片段也许与近期的时间压力或被评价感有关。",
+    emotions: [{ name: "紧张", evidence: "一直找不到教室。" }],
+    symbols: [{ name: "门", contextMeaning: "在这次梦里可能和选择有关。" }],
+    reflectionQuestions: ["最近有什么事情让你感觉一直在追赶？"],
+    gentleReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+}
+
+function createDeepAnalysisFixture() {
+  return {
+    summary: "你梦见自己在学校走廊寻找教室。",
+    emotionClues: "你写下的紧张感与找不到教室的片段互相呼应。",
+    coreImages: "教室、走廊和门是这次梦里较清晰的意象。",
+    jungianView: "这也许是在靠近一个还没完全准备好的内在主题。",
+    lifeConnection: "你提到最近有考试压力，这个回答可能与梦中的寻找互相呼应。",
+    reflectionQuestions: "你可以思考：那扇门让你想靠近，还是想停下来？",
+    smallAction: "今天可以写下一件想准备的小事。",
+    gentleReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+}
+
 function createAppIntegrationHarness(options = {}) {
   const selectors = new Map();
   const viewPanels = [
     Object.assign(createFakeElement("section"), { dataset: { view: "home" } }),
+    Object.assign(createFakeElement("section"), { dataset: { view: "quick" } }),
+    Object.assign(createFakeElement("section"), { dataset: { view: "guided" } }),
     Object.assign(createFakeElement("section"), { dataset: { view: "diary" } })
   ];
+  const quickFormStatus = createFakeElement("p");
+  const quickSubmitButton = Object.assign(createFakeElement("button"), { type: "submit" });
+  const quickForm = Object.assign(createFakeElement("form"), {
+    querySelector(selector) {
+      if (selector === ".status") return quickFormStatus;
+      if (selector === "button[type='submit']") return quickSubmitButton;
+      return null;
+    }
+  });
+  const quickDream = Object.assign(createFakeElement("textarea"), { value: "" });
+  const quickResult = Object.assign(createFakeElement("section"), { hidden: true });
+  const quickResultCard = createFakeElement("div");
+  const resultFields = ["summary", "emotion", "symbols", "jungian", "question", "reminder"].map((field) =>
+    Object.assign(createFakeElement("p"), { dataset: { resultField: field } })
+  );
+  const guidedForm = createFakeElement("form");
+  const guidedDream = Object.assign(createFakeElement("textarea"), { value: "" });
+  const guidedQuestions = Object.assign(createFakeElement("section"), { hidden: true });
+  const guidedStatus = createFakeElement("p");
+  const guidedActions = Object.assign(createFakeElement("div"), { hidden: true });
+  const generateDeepReportButton = createFakeElement("button");
+  const deepReport = Object.assign(createFakeElement("section"), { hidden: true });
+  const guidedResultCard = createFakeElement("div");
+  const saveDeepReportButton = createFakeElement("button");
+  const deepSaveStatus = createFakeElement("p");
+  const deepReportFields = [
+    "summary",
+    "emotionClues",
+    "coreImages",
+    "jungianView",
+    "lifeConnection",
+    "reflectionQuestions",
+    "smallAction",
+    "gentleReminder"
+  ].map((field) => Object.assign(createFakeElement("p"), { dataset: { deepReportField: field } }));
+  quickResult.append(...resultFields, quickResultCard);
+  deepReport.append(...deepReportFields, guidedResultCard);
   const journalListShell = createFakeElement("div");
   const dreamDetail = createFakeElement("section");
   const dreamDetailContent = createFakeElement("div");
@@ -191,6 +254,14 @@ function createAppIntegrationHarness(options = {}) {
         return viewPanels;
       }
 
+      if (selector === "[data-result-field]") {
+        return resultFields;
+      }
+
+      if (selector === "[data-deep-report-field]") {
+        return deepReportFields;
+      }
+
       if (selector === "[data-journal-filter]") {
         return journalFilters;
       }
@@ -216,6 +287,20 @@ function createAppIntegrationHarness(options = {}) {
   }
 
   selectors.set("[data-journal-list-shell]", journalListShell);
+  selectors.set("[data-quick-form]", quickForm);
+  selectors.set("#quickDream", quickDream);
+  selectors.set("#quickResult", quickResult);
+  selectors.set("[data-quick-result-card]", quickResultCard);
+  selectors.set("[data-guided-form]", guidedForm);
+  selectors.set("#guidedDream", guidedDream);
+  selectors.set("[data-guided-questions]", guidedQuestions);
+  selectors.set("[data-guided-status]", guidedStatus);
+  selectors.set("[data-guided-actions]", guidedActions);
+  selectors.set("[data-generate-deep-report]", generateDeepReportButton);
+  selectors.set("[data-deep-report]", deepReport);
+  selectors.set("[data-guided-result-card]", guidedResultCard);
+  selectors.set("[data-save-deep-report]", saveDeepReportButton);
+  selectors.set("[data-deep-save-status]", deepSaveStatus);
   selectors.set("#dreamJournalList", journalList);
   selectors.set("#dreamJournalEmpty", journalEmpty);
   selectors.set("[data-dream-detail]", dreamDetail);
@@ -245,13 +330,30 @@ function createAppIntegrationHarness(options = {}) {
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/app.js"), "utf8"), context);
 
   return {
+    deepReport,
+    deepReportFields,
+    deepSaveStatus,
     dreamDetail,
     dreamDetailContent,
     dreamJournalCalls,
+    generateDeepReportButton,
+    guidedActions,
+    guidedDream,
+    guidedForm,
+    guidedQuestions,
+    guidedResultCard,
+    guidedStatus,
     journalEmpty,
     journalList,
     journalListShell,
     journalNewDream,
+    quickDream,
+    quickForm,
+    quickFormStatus,
+    quickResult,
+    quickResultCard,
+    resultFields,
+    saveDeepReportButton,
     viewPanels,
     windowRef,
     getSavedRecords() {
@@ -557,7 +659,295 @@ test("app.js fallback keeps New Dream and empty state usable without DreamJourna
 
   harness.journalNewDream.trigger("click");
   assert.equal(harness.viewPanels[0].hidden, true);
-  assert.equal(harness.viewPanels[1].hidden, true);
+  assert.equal(harness.viewPanels[1].hidden, false);
+  assert.equal(harness.viewPanels[2].hidden, true);
+  assert.equal(harness.viewPanels[3].hidden, true);
+});
+
+test("quick decode renders Dream Result Card on the current result page and saves it", async () => {
+  const fetchCalls = [];
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      fetchCalls.push([url, options]);
+      return {
+        ok: true,
+        json: async () => ({
+          analysis: createQuickAnalysisFixture(),
+          dreamResultCard: createResultCardFixture(),
+          dreamResultCardStatus: "ai_generated"
+        })
+      };
+    }
+  });
+
+  harness.quickDream.value = "我在学校走廊里一直找不到教室，门发着光。";
+  await harness.quickForm.trigger("submit");
+
+  assert.equal(fetchCalls.length, 1);
+  assert.deepEqual(JSON.parse(fetchCalls[0][1].body), {
+    dreamText: harness.quickDream.value,
+    analysisType: "quick"
+  });
+  assert.equal(harness.quickResult.hidden, false);
+  assert.match(collectText(harness.quickResult).join("\n"), /寻找教室/);
+  assert.match(collectText(harness.quickResultCard).join("\n"), /梦境画像/);
+  assert.match(collectText(harness.quickResultCard).join("\n"), /创造者/);
+
+  const savedRecords = harness.getSavedRecords();
+  assert.equal(savedRecords.length, 1);
+  assert.equal(savedRecords[0].analysisType, "快速解析");
+  assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+  assert.equal(savedRecords[0].reportContent.dreamResultCardStatus, "ai_generated");
+});
+
+test("quick decode keeps analysis readable when result card generation failed", async () => {
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        analysis: createQuickAnalysisFixture(),
+        dreamResultCardStatus: "generation_failed"
+      })
+    })
+  });
+
+  harness.quickDream.value = "我在学校走廊里一直找不到教室。";
+  await harness.quickForm.trigger("submit");
+
+  assert.equal(harness.quickResult.hidden, false);
+  assert.match(collectText(harness.quickResult).join("\n"), /寻找教室/);
+  assert.match(collectText(harness.quickResultCard).join("\n"), /梦境画像暂时未能完整生成。/);
+});
+
+test("quick current-page result card retry does not save a malformed synthetic record", async () => {
+  const fetchCalls = [];
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      fetchCalls.push([url, options]);
+      const body = JSON.parse(options.body);
+      if (body.analysisType === "quick") {
+        return {
+          ok: true,
+          json: async () => ({
+            analysis: createQuickAnalysisFixture(),
+            dreamResultCardStatus: "generation_failed"
+          })
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({ analysis: createResultCardFixture() })
+      };
+    }
+  });
+
+  harness.quickDream.value = "我在学校走廊里一直找不到教室。";
+  await harness.quickForm.trigger("submit");
+  const retryButton = findElements(
+    harness.quickResultCard,
+    (element) => element.tagName === "BUTTON" && element.textContent === "重新生成梦境画像"
+  )[0];
+
+  await retryButton.trigger("click");
+
+  const savedRecords = harness.getSavedRecords();
+  assert.equal(savedRecords.length, 1);
+  assert.ok(savedRecords[0].id);
+  assert.ok(savedRecords[0].createdAt);
+  assert.equal(savedRecords[0].analysisType, "快速解析");
+  assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+});
+
+test("guided questions come from the current dream through the backend", async () => {
+  const fetchCalls = [];
+  const harness = createAppIntegrationHarness({
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      fetchCalls.push([url, options]);
+      return {
+        ok: true,
+        json: async () => ({
+          questions: [
+            { id: "emotion", label: "情绪", question: "在寻找教室时，最明显的感受是什么？", placeholder: "可以写紧张或着急。" },
+            { id: "association", label: "联想", question: "这间教室让你想到现实中的什么场景？", placeholder: "可以写一个最近想到的场景。" },
+            { id: "lifeLink", label: "现实连接", question: "最近有没有让你觉得需要赶上的事情？", placeholder: "只写愿意记录的部分。" }
+          ]
+        })
+      };
+    }
+  });
+
+  harness.guidedDream.value = "我一直找不到教室。";
+  await harness.guidedForm.trigger("submit");
+
+  assert.equal(fetchCalls.length, 1);
+  assert.deepEqual(JSON.parse(fetchCalls[0][1].body), {
+    dreamText: harness.guidedDream.value,
+    analysisType: "guided_questions"
+  });
+  assert.match(collectText(harness.guidedQuestions).join("\n"), /寻找教室/);
+  assert.equal(harness.guidedQuestions.hidden, false);
+});
+
+test("guided final sends all answers once and renders Dream Result Card", async () => {
+  const fetchCalls = [];
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      fetchCalls.push([url, options]);
+      const body = JSON.parse(options.body);
+      if (body.analysisType === "guided_questions") {
+        return {
+          ok: true,
+          json: async () => ({
+            questions: [
+              { id: "emotion", label: "情绪", question: "在寻找教室时，最明显的感受是什么？", placeholder: "可以写紧张或着急。" },
+              { id: "lifeLink", label: "现实连接", question: "最近有没有让你觉得需要赶上的事情？", placeholder: "只写愿意记录的部分。" },
+              { id: "waking", label: "醒后感受", question: "醒来后这个梦留下什么感觉？", placeholder: "可以写一个词。" }
+            ]
+          })
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({
+          analysis: createDeepAnalysisFixture(),
+          dreamResultCard: createResultCardFixture(),
+          dreamResultCardStatus: "ai_generated"
+        })
+      };
+    }
+  });
+
+  harness.guidedDream.value = "我一直找不到教室。";
+  await harness.guidedForm.trigger("submit");
+  const answers = findElements(harness.guidedQuestions, (element) => element.tagName === "TEXTAREA");
+  answers[0].value = "紧张";
+  answers[0].trigger("input");
+  answers[1].value = "最近有考试压力";
+  answers[1].trigger("input");
+
+  await harness.generateDeepReportButton.trigger("click");
+
+  const finalCalls = fetchCalls.filter(([, options]) => JSON.parse(options.body).analysisType === "guided_final");
+  assert.equal(finalCalls.length, 1);
+  assert.deepEqual(JSON.parse(finalCalls[0][1].body), {
+    dreamText: harness.guidedDream.value,
+    analysisType: "guided_final",
+    guidedAnswers: {
+      emotion: "紧张",
+      lifeLink: "最近有考试压力"
+    }
+  });
+  assert.equal(harness.deepReport.hidden, false);
+  assert.match(collectText(harness.deepReport).join("\n"), /考试压力/);
+  assert.match(collectText(harness.guidedResultCard).join("\n"), /梦境画像/);
+});
+
+test("saving guided report stores Dream Result Card in reportContent", async () => {
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.analysisType === "guided_questions") {
+        return {
+          ok: true,
+          json: async () => ({
+            questions: [
+              { id: "emotion", label: "情绪", question: "在寻找教室时，最明显的感受是什么？", placeholder: "可以写紧张或着急。" },
+              { id: "lifeLink", label: "现实连接", question: "最近有没有让你觉得需要赶上的事情？", placeholder: "只写愿意记录的部分。" },
+              { id: "waking", label: "醒后感受", question: "醒来后这个梦留下什么感觉？", placeholder: "可以写一个词。" }
+            ]
+          })
+        };
+      }
+      return {
+        ok: true,
+        json: async () => ({
+          analysis: createDeepAnalysisFixture(),
+          dreamResultCard: createResultCardFixture(),
+          dreamResultCardStatus: "ai_generated"
+        })
+      };
+    }
+  });
+
+  harness.guidedDream.value = "我一直找不到教室。";
+  await harness.guidedForm.trigger("submit");
+  await harness.generateDeepReportButton.trigger("click");
+  await harness.saveDeepReportButton.trigger("click");
+
+  const savedRecords = harness.getSavedRecords();
+  assert.equal(savedRecords.length, 1);
+  assert.equal(savedRecords[0].analysisType, "深度引导");
+  assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+  assert.equal(savedRecords[0].reportContent.dreamResultCardStatus, "ai_generated");
+});
+
+test("guided current-page result card retry before save does not create a malformed synthetic record", async () => {
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.analysisType === "guided_questions") {
+        return {
+          ok: true,
+          json: async () => ({
+            questions: [
+              { id: "emotion", label: "情绪", question: "在寻找教室时，最明显的感受是什么？", placeholder: "可以写紧张或着急。" },
+              { id: "lifeLink", label: "现实连接", question: "最近有没有让你觉得需要赶上的事情？", placeholder: "只写愿意记录的部分。" },
+              { id: "waking", label: "醒后感受", question: "醒来后这个梦留下什么感觉？", placeholder: "可以写一个词。" }
+            ]
+          })
+        };
+      }
+
+      if (body.analysisType === "guided_final") {
+        return {
+          ok: true,
+          json: async () => ({
+            analysis: createDeepAnalysisFixture(),
+            dreamResultCardStatus: "generation_failed"
+          })
+        };
+      }
+
+      return {
+        ok: true,
+        json: async () => ({ analysis: createResultCardFixture() })
+      };
+    }
+  });
+
+  harness.guidedDream.value = "我一直找不到教室。";
+  await harness.guidedForm.trigger("submit");
+  await harness.generateDeepReportButton.trigger("click");
+  const retryButton = findElements(
+    harness.guidedResultCard,
+    (element) => element.tagName === "BUTTON" && element.textContent === "重新生成梦境画像"
+  )[0];
+
+  await retryButton.trigger("click");
+
+  assert.equal(harness.getSavedRecords().length, 0);
+  assert.match(collectText(harness.guidedResultCard).join("\n"), /请先保存这份深度报告，再从梦境详情中重新生成画像。/);
 });
 
 test("app bridge keeps opening existing Dream Detail from Dream Journal records", () => {
@@ -714,6 +1104,65 @@ test("Dream Detail keeps the missing-card fallback and shows a safe error when g
   assert.match(collectText(harness.dreamDetailContent).join("\n"), /尚未生成梦境画像/);
   await generationButton.trigger("click");
   assert.match(collectText(harness.dreamDetailContent).join("\n"), /暂时无法生成梦境画像，请稍后再试。/);
+});
+
+test("opening Dream Journal and Dream Detail does not automatically call AI", () => {
+  let fetchCount = 0;
+  const record = createRecord({
+    id: "read-only-card",
+    reportContent: {
+      summary: "走廊尽头的门",
+      dreamResultCard: createResultCardFixture(),
+      dreamResultCardStatus: "ai_generated"
+    }
+  });
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    records: [record],
+    fetch: async () => {
+      fetchCount += 1;
+      throw new Error("AI should not be called while opening journal or detail");
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.renderDreamJournal([record]);
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+
+  assert.equal(fetchCount, 0);
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /梦境画像/);
+});
+
+test("old records without result cards still show manual generation fallback", () => {
+  const record = createRecord({
+    id: "old-record-without-card",
+    reportContent: { summary: "旧记录" }
+  });
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    records: [record]
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+
+  const text = collectText(harness.dreamDetailContent).join("\n");
+  assert.match(text, /尚未生成梦境画像/);
+  assert.equal(
+    findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "生成梦境画像").length,
+    1
+  );
+});
+
+test("documents unified result-card flow boundaries", () => {
+  const readme = fs.readFileSync(path.join(__dirname, "../README.md"), "utf8");
+  const projectStatus = fs.readFileSync(path.join(__dirname, "../docs/PROJECT_STATUS.md"), "utf8");
+
+  for (const document of [readme, projectStatus]) {
+    assert.match(document, /一次最终请求/);
+    assert.match(document, /当前结果页/);
+    assert.match(document, /reportContent\.dreamResultCard/);
+    assert.match(document, /Dream Journal.*Dream Detail|Dream Detail.*Dream Journal/s);
+    assert.match(document, /不.*自动.*(?:重复|重新).*AI|不.*重复.*调用/s);
+  }
 });
 
 test("static assets include Dream Journal copy, styles, and documentation", () => {

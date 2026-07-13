@@ -119,6 +119,82 @@ test("normalizes Dream Result Card fields safely", () => {
   assert.match(card.safetyReminder, /不是诊断、治疗或预言/);
 });
 
+test("does not render missing dimension scores as real zero values", () => {
+  const card = DreamResultCard.normalizeDreamResultCard({
+    archetype: { id: "observer", summary: "本次梦境更接近观察者原型，也许和停留观看有关。" },
+    coreInsight: "这个梦也许在邀请你看见某个片段。",
+    dimensions: [],
+    symbols: [],
+    emotionalProfile: { primary: "安静", intensity: 41, evidence: "梦里只是站着看。" },
+    reflectionQuestions: ["你最想继续看见什么？"],
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  }, {}, { allowUnavailableScores: true });
+  const container = createFakeElement();
+  const controller = DreamResultCard.createDreamResultCardController({
+    document: { createElement: createFakeElement }
+  });
+
+  controller.render(container, {
+    reportContent: { dreamResultCard: card, dreamResultCardStatus: "generation_failed" }
+  });
+
+  assert.equal(card.dimensions[0].score, null);
+  assert.match(collectText(container), /暂不可用/);
+  assert.doesNotMatch(collectText(container), /象征深度 0/);
+});
+
+test("does not render missing dimension scores as zero for ai generated cards", () => {
+  const card = {
+    archetype: { id: "observer", summary: "本次梦境更接近观察者原型，也许和停留观看有关。" },
+    coreInsight: "这个梦也许在邀请你看见某个片段。",
+    dimensions: [
+      { id: "symbol_depth", summary: "意象线索不足。", rationale: ["没有返回分数。"] }
+    ],
+    symbols: [],
+    emotionalProfile: { primary: "安静", intensity: 41, evidence: "梦里只是站着看。" },
+    reflectionQuestions: ["你最想继续看见什么？"],
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+  const container = createFakeElement();
+  const controller = DreamResultCard.createDreamResultCardController({
+    document: { createElement: createFakeElement }
+  });
+
+  controller.render(container, {
+    reportContent: { dreamResultCard: card, dreamResultCardStatus: "ai_generated" }
+  });
+
+  const text = collectText(container);
+  assert.match(text, /暂不可用/);
+  assert.doesNotMatch(text, /象征深度 0/);
+});
+
+test("does not render missing emotional intensity as zero", () => {
+  const card = {
+    archetype: { id: "observer", summary: "本次梦境更接近观察者原型，也许和停留观看有关。" },
+    coreInsight: "这个梦也许在邀请你看见某个片段。",
+    dimensions: [
+      { id: "symbol_depth", score: 44, summary: "意象线索有限。", rationale: ["门出现。"] }
+    ],
+    symbols: [],
+    emotionalProfile: { primary: "安静", evidence: "梦里只是站着看。" },
+    reflectionQuestions: ["你最想继续看见什么？"],
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+  const container = createFakeElement();
+  const controller = DreamResultCard.createDreamResultCardController({
+    document: { createElement: createFakeElement }
+  });
+
+  controller.render(container, {
+    reportContent: { dreamResultCard: card, dreamResultCardStatus: "ai_generated" }
+  });
+
+  const text = collectText(container);
+  assert.match(text, /情绪强度：暂不可用/);
+  assert.doesNotMatch(text, /情绪强度：0/);
+});
+
 test("removes absolute or identity-defining model language before card rendering", () => {
   const unsafeCard = {
     archetype: { id: "creator", summary: "你会失去重要的人。" },
@@ -243,6 +319,24 @@ test("renders a generation fallback when a record has no dream result card", () 
   assert.match(collectText(container), /尚未生成梦境画像/);
   assert.equal(
     findElements(container, (element) => element.tagName === "BUTTON" && element.textContent === "生成梦境画像").length,
+    1
+  );
+});
+
+test("renders generation failed state with retry copy", () => {
+  const container = createFakeElement();
+  const controller = DreamResultCard.createDreamResultCardController({
+    document: { createElement: createFakeElement }
+  });
+
+  controller.render(container, {
+    reportContent: { dreamResultCardStatus: "generation_failed" }
+  });
+
+  const text = collectText(container);
+  assert.match(text, /梦境画像暂时未能完整生成。/);
+  assert.equal(
+    findElements(container, (element) => element.tagName === "BUTTON" && element.textContent === "重新生成梦境画像").length,
     1
   );
 });
