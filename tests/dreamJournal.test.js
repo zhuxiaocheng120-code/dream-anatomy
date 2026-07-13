@@ -514,12 +514,54 @@ test("app bridge keeps opening existing Dream Detail from Dream Journal records"
 
   harness.windowRef.DreamAnatomyApp.openDreamDetail("record-one", createRecord({
     id: "record-one",
-    dreamSummary: "桥边的梦"
+    createdAt: "2026-07-12T22:35:00.000Z",
+    rawDreamText: "我梦见自己走在一条很长的走廊里。\n尽头有一扇发光的门。\n我停在门前很久。",
+    dreamSummary: "走廊尽头的门",
+    emotions: "安静、迟疑",
+    symbols: "走廊、门、光",
+    sleepQuality: "浅睡",
+    analysisType: "深度引导",
+    reportContent: {
+      summary: "梦境整理",
+      jungianView: "可能是在靠近一个还没有完全展开的内在部分。",
+      lifeConnection: "也许和最近的选择感有关。",
+      reflectionQuestions: "你可以思考那扇门带来的感受。",
+      smallAction: "写下一句话。",
+      gentleReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+    }
   }));
+
+  const detailText = collectText(harness.dreamDetailContent).join("\n");
+  const analysisCards = [];
+  function collectByTag(node, tagName) {
+    if (node.tagName === tagName) {
+      analysisCards.push(node);
+    }
+    node.children.forEach((child) => collectByTag(child, tagName));
+  }
+  collectByTag(harness.dreamDetailContent, "DETAILS");
 
   assert.equal(harness.journalListShell.hidden, true);
   assert.equal(harness.dreamDetail.hidden, false);
-  assert.match(collectText(harness.dreamDetailContent).join("\n"), /桥边的梦/);
+  assert.match(detailText, /走廊尽头的门/);
+  assert.match(detailText, /日期/);
+  assert.match(detailText, /时间/);
+  assert.match(detailText, /我梦见自己走在一条很长的走廊里。\n尽头有一扇发光的门。\n我停在门前很久。/);
+  assert.match(detailText, /梦境摘要/);
+  assert.match(detailText, /情绪标签/);
+  assert.match(detailText, /梦境意象/);
+  assert.match(detailText, /AI 分析/);
+  assert.match(detailText, /荣格/);
+  assert.match(detailText, /弗洛伊德/);
+  assert.match(detailText, /现代心理学/);
+  assert.match(detailText, /温和提醒/);
+  assert.match(detailText, /这不是诊断、治疗或预言，只是一种自我探索视角。/);
+  assert.match(detailText, /自我思考/);
+  assert.match(detailText, /这里先留给之后的自我思考记录。/);
+  assert.equal(analysisCards.length, 3);
+  analysisCards.forEach((card) => {
+    assert.notEqual(card.open, true);
+  });
 });
 
 test("static assets include Dream Journal copy, styles, and documentation", () => {
@@ -549,6 +591,10 @@ test("static assets include Dream Journal copy, styles, and documentation", () =
   assert.match(css, /\.dream-journal-kind-badge/);
   assert.match(css, /\.dream-journal-sync-badge/);
   assert.match(css, /\.dream-journal-empty/);
+  assert.match(css, /\.detail-hero/);
+  assert.match(css, /\.detail-section/);
+  assert.match(css, /\.detail-analysis-card/);
+  assert.match(css, /\.detail-reflection/);
   assert.match(css, /@media \(min-width: 821px\)[\s\S]*\.dream-journal-page-heading/);
   assert.doesNotMatch(css, /@media \(max-width: 820px\)[\s\S]*\.dream-journal-page-heading,[\s\S]*\.dream-journal-record-heading/);
 

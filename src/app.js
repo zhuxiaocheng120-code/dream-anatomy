@@ -419,6 +419,117 @@ function formatRecordDate(createdAt) {
   }).format(new Date(createdAt));
 }
 
+function normalizeDetailText(value) {
+  return typeof value === "string" ? value.replace(/\s+/g, " ").trim() : "";
+}
+
+function formatDetailValue(value) {
+  if (Array.isArray(value)) {
+    return value.map((item) => String(item).trim()).filter(Boolean).join("、") || "未记录";
+  }
+
+  return normalizeDetailText(value) || "未记录";
+}
+
+function getRecordField(record, snakeCaseKey, camelCaseKey) {
+  if (!record || typeof record !== "object") {
+    return "";
+  }
+
+  return record[camelCaseKey] || record[snakeCaseKey] || "";
+}
+
+function getReportContent(record) {
+  const report = getRecordField(record, "report_content", "reportContent");
+  return report && typeof report === "object" ? report : {};
+}
+
+function getDreamTitle(record) {
+  const rawDreamText = normalizeDetailText(getRecordField(record, "raw_dream_text", "rawDreamText"));
+
+  return normalizeDetailText(record && record.title)
+    || normalizeDetailText(getRecordField(record, "dream_summary", "dreamSummary"))
+    || (rawDreamText ? getShortDreamText(rawDreamText) : "")
+    || "未命名的梦";
+}
+
+function formatRecordDateParts(createdAt) {
+  const date = new Date(createdAt);
+
+  if (Number.isNaN(date.getTime())) {
+    return {
+      date: "日期未记录",
+      time: "时间未记录"
+    };
+  }
+
+  return {
+    date: new Intl.DateTimeFormat("zh-CN", {
+      year: "numeric",
+      month: "2-digit",
+      day: "2-digit"
+    }).format(date),
+    time: new Intl.DateTimeFormat("zh-CN", {
+      hour: "2-digit",
+      minute: "2-digit"
+    }).format(date)
+  };
+}
+
+function createDetailMetaItem(label, value) {
+  const item = document.createElement("div");
+  const labelNode = document.createElement("span");
+  const valueNode = document.createElement("strong");
+
+  labelNode.textContent = label;
+  valueNode.textContent = value || "未记录";
+  item.append(labelNode, valueNode);
+
+  return item;
+}
+
+function createDetailSection(label, value, options = {}) {
+  const section = document.createElement("section");
+  const title = document.createElement("h4");
+  const text = document.createElement("p");
+
+  section.className = "detail-section";
+  title.textContent = label;
+  text.textContent = options.preserveWhitespace ? (value || "未记录") : formatDetailValue(value);
+  section.append(title, text);
+
+  return section;
+}
+
+function createAnalysisCard(title, text) {
+  const card = document.createElement("details");
+  const summary = document.createElement("summary");
+  const content = document.createElement("p");
+
+  card.className = "detail-analysis-card";
+  summary.textContent = title;
+  content.textContent = formatDetailValue(text);
+  card.append(summary, content);
+
+  return card;
+}
+
+function buildDetailAnalysis(record) {
+  const report = getReportContent(record);
+  const dreamSummary = formatDetailValue(getRecordField(record, "dream_summary", "dreamSummary"));
+  const emotions = formatDetailValue(getRecordField(record, "emotions", "emotions"));
+  const symbols = formatDetailValue(getRecordField(record, "symbols", "symbols"));
+  const jungText = report.jungianView || report.jungian || report.summary || dreamSummary;
+  const freudText = `从弗洛伊德视角，可以温和地留意梦里是否有愿望、担心或未说出口的感受。你可以把“${emotions}”当作线索，而不是结论。`;
+  const modernText = `从现代心理学视角，可以先观察梦醒后的情绪和反复出现的意象。“${symbols}”也许和近期注意力、压力或休息状态有关。`;
+
+  return [
+    ["荣格", jungText],
+    ["弗洛伊德", freudText],
+    ["现代心理学", modernText]
+  ];
+}
+
 function createJournalMeta(label, value) {
   const item = document.createElement("div");
   const labelNode = document.createElement("span");
@@ -535,32 +646,60 @@ function renderDreamDetail(recordId, fallbackRow) {
     return;
   }
 
-  const overview = document.createElement("div");
-  const reportSection = document.createElement("section");
-  const reportTitle = document.createElement("h4");
-  const reportGrid = document.createElement("div");
+  const createdAt = getRecordField(record, "created_at", "createdAt");
+  const dateParts = formatRecordDateParts(createdAt);
+  const rawDreamText = getRecordField(record, "raw_dream_text", "rawDreamText");
+  const dreamSummary = getRecordField(record, "dream_summary", "dreamSummary");
+  const emotions = getRecordField(record, "emotions", "emotions");
+  const symbols = getRecordField(record, "symbols", "symbols");
+  const sleepQuality = getRecordField(record, "sleep_quality", "sleepQuality");
+  const analysisType = getRecordField(record, "analysis_type", "analysisType");
+  const report = getReportContent(record);
+  const gentleReminder = report.gentleReminder || report.reminder;
+  const hero = document.createElement("header");
+  const heroTitle = document.createElement("h3");
+  const heroMeta = document.createElement("div");
+  const analysisSection = document.createElement("section");
+  const analysisTitle = document.createElement("h4");
+  const analysisCards = document.createElement("div");
+  const reflection = document.createElement("section");
+  const reflectionTitle = document.createElement("h4");
+  const reflectionCopy = document.createElement("p");
 
-  overview.className = "detail-overview";
-  overview.append(
-    createDetailBlock("日期", formatRecordDate(record.createdAt)),
-    createDetailBlock("分析类型", record.analysisType),
-    createDetailBlock("原始梦境文本", record.rawDreamText),
-    createDetailBlock("梦境摘要", record.dreamSummary),
-    createDetailBlock("主要情绪", record.emotions),
-    createDetailBlock("主要意象", record.symbols),
-    createDetailBlock("睡眠质量", record.sleepQuality)
+  hero.className = "detail-hero";
+  heroTitle.textContent = getDreamTitle(record);
+  heroMeta.className = "detail-hero-meta";
+  heroMeta.append(
+    createDetailMetaItem("日期", dateParts.date),
+    createDetailMetaItem("时间", dateParts.time),
+    createDetailMetaItem("分析类型", formatDetailValue(analysisType)),
+    createDetailMetaItem("睡眠质量", formatDetailValue(sleepQuality))
   );
+  hero.append(heroTitle, heroMeta);
 
-  reportSection.className = "detail-report";
-  reportTitle.textContent = "分析内容";
-  reportGrid.className = "detail-report-grid";
-
-  getReportSections(record).forEach(([label, value]) => {
-    reportGrid.append(createDetailBlock(label, value));
+  analysisSection.className = "detail-analysis";
+  analysisTitle.textContent = "AI 分析";
+  analysisCards.className = "detail-analysis-list";
+  buildDetailAnalysis(record).forEach(([title, text]) => {
+    analysisCards.append(createAnalysisCard(title, text));
   });
+  analysisSection.append(analysisTitle, analysisCards);
 
-  reportSection.append(reportTitle, reportGrid);
-  dreamDetailContent.append(overview, reportSection);
+  reflection.className = "detail-reflection";
+  reflectionTitle.textContent = "自我思考";
+  reflectionCopy.textContent = "这里先留给之后的自我思考记录。你可以在下一步功能里慢慢补充自己的理解。";
+  reflection.append(reflectionTitle, reflectionCopy);
+
+  dreamDetailContent.append(
+    hero,
+    createDetailSection("梦境原文", rawDreamText, { preserveWhitespace: true }),
+    createDetailSection("梦境摘要", dreamSummary),
+    createDetailSection("情绪标签", emotions),
+    createDetailSection("梦境意象", symbols),
+    createDetailSection("温和提醒", gentleReminder),
+    analysisSection,
+    reflection
+  );
 }
 
 function openDreamDetail(recordId, fallbackRow) {
