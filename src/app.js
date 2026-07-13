@@ -8,6 +8,10 @@ const journalListShell = document.querySelector("[data-journal-list-shell]");
 const dreamJournalList = document.querySelector("#dreamJournalList");
 const dreamJournalEmpty = document.querySelector("#dreamJournalEmpty");
 const clearJournalButton = document.querySelector("[data-clear-journal]");
+const dreamJournalSearch = document.querySelector("[data-journal-search]");
+const dreamJournalFilters = Array.from(document.querySelectorAll("[data-journal-filter]"));
+const dreamJournalNewDreamButton = document.querySelector("[data-journal-new-dream]");
+const dreamJournalLoading = document.querySelector("[data-journal-loading]");
 const dreamDetail = document.querySelector("[data-dream-detail]");
 const dreamDetailContent = document.querySelector("[data-dream-detail-content]");
 const backToJournalButton = document.querySelector("[data-back-to-journal]");
@@ -24,6 +28,8 @@ const saveDeepReportButton = document.querySelector("[data-save-deep-report]");
 const deepSaveStatus = document.querySelector("[data-deep-save-status]");
 const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
 const maxDreamTextLength = 5000;
+const canUseDreamJournal = window.DreamJournal
+  && typeof window.DreamJournal.createDreamJournalController === "function";
 const dreamSyncController = window.DreamSync
   ? window.DreamSync.createDreamSyncController({
       client: window.DreamAnatomyAuth ? window.DreamAnatomyAuth.getClient() : null,
@@ -40,6 +46,23 @@ const guidedDraftState = {
   currentReport: null,
   savedReportRecordId: ""
 };
+const dreamJournalController = canUseDreamJournal
+  ? window.DreamJournal.createDreamJournalController({
+      app: {
+        openDreamDetail,
+        showView
+      },
+      document,
+      elements: {
+        empty: dreamJournalEmpty,
+        filters: dreamJournalFilters,
+        list: dreamJournalList,
+        loading: dreamJournalLoading,
+        newDreamButton: dreamJournalNewDreamButton,
+        searchInput: dreamJournalSearch
+      }
+    })
+  : null;
 
 function updateJournalSyncStatus(message) {
   if (journalSyncStatus) {
@@ -86,6 +109,12 @@ viewButtons.forEach((button) => {
     showView(button.dataset.viewTarget);
   });
 });
+
+if (!dreamJournalController && dreamJournalNewDreamButton) {
+  dreamJournalNewDreamButton.addEventListener("click", () => {
+    showView("quick");
+  });
+}
 
 function getShortDreamText(rawDreamText) {
   return rawDreamText.length > 72
@@ -402,6 +431,35 @@ function createJournalMeta(label, value) {
   return item;
 }
 
+function renderFallbackJournalEmptyState() {
+  if (!dreamJournalEmpty) {
+    return;
+  }
+
+  const emptyContent = document.createElement("div");
+  const moon = document.createElement("p");
+  const title = document.createElement("h3");
+  const lineOne = document.createElement("p");
+  const lineTwo = document.createElement("p");
+  const button = document.createElement("button");
+
+  emptyContent.className = "dream-journal-empty-content";
+  moon.className = "dream-journal-empty-mark";
+  moon.textContent = "🌙";
+  title.textContent = "你还没有记录任何梦。";
+  lineOne.textContent = "今天开始，";
+  lineTwo.textContent = "把梦轻轻放进梦境档案。";
+  button.className = "secondary-button";
+  button.type = "button";
+  button.textContent = "记录第一个梦";
+  button.addEventListener("click", () => {
+    showView("quick");
+  });
+
+  emptyContent.append(moon, title, lineOne, lineTwo, button);
+  dreamJournalEmpty.replaceChildren(emptyContent);
+}
+
 function showDreamJournalList() {
   if (journalListShell) {
     journalListShell.hidden = false;
@@ -520,6 +578,7 @@ function openDreamDetail(recordId, fallbackRow) {
 
 window.DreamAnatomyApp = {
   openDreamDetail,
+  renderDreamJournal,
   showView
 };
 
@@ -528,8 +587,14 @@ function renderDreamJournal(records = loadDreamRecords()) {
     return;
   }
 
+  if (dreamJournalController) {
+    dreamJournalController.setRecords(records);
+    return;
+  }
+
   dreamJournalList.textContent = "";
   dreamJournalEmpty.hidden = records.length > 0;
+  renderFallbackJournalEmptyState();
 
   if (clearJournalButton) {
     clearJournalButton.hidden = records.length === 0;

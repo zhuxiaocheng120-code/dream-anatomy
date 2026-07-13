@@ -963,6 +963,7 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
     "auth.js",
     "dreamQuotes.js",
     "dreamHome.js",
+    "dreamJournal.js",
     "app.js"
   ];
   scripts.reduce((previousIndex, script) => {
@@ -972,7 +973,7 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   }, -1);
   assert.match(
     appCode,
-    /window\.DreamAnatomyApp\s*=\s*\{\s*openDreamDetail,\s*showView\s*\};/
+    /window\.DreamAnatomyApp\s*=\s*\{[\s\S]*openDreamDetail,[\s\S]*renderDreamJournal,[\s\S]*showView[\s\S]*\};/
   );
   assert.match(css, /\.dream-home-layout\[hidden\]\s*\{\s*display:\s*none;\s*\}/);
   assert.match(
