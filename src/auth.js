@@ -78,9 +78,10 @@
     return supabaseClient;
   }
 
-  function notifyAuthUser(session) {
+  function notifyAuthUser(session, authEvent) {
     window.dispatchEvent(new CustomEvent("dream-anatomy-auth-session", {
       detail: {
+        authEvent: authEvent || "",
         user: session && session.user ? session.user : null,
         client: getSupabaseClient()
       }
@@ -191,7 +192,7 @@
     if (data && data.session) {
       await client.auth.signOut();
       renderSession(null);
-      notifyAuthUser(null);
+      notifyAuthUser(null, "SIGNED_OUT");
     }
 
     setFormBusy(registerForm, false);
@@ -229,13 +230,13 @@
     if (data && data.user && !data.user.email_confirmed_at && !data.user.confirmed_at) {
       await client.auth.signOut();
       renderSession(null);
-      notifyAuthUser(null);
+      notifyAuthUser(null, "SIGNED_OUT");
       setStatus("请先完成邮箱验证。", "error");
       return;
     }
 
     renderSession(data ? data.session : null);
-    notifyAuthUser(data ? data.session : null);
+    notifyAuthUser(data ? data.session : null, "SIGNED_IN");
     loginForm.reset();
     setStatus("欢迎回来，继续探索你的梦境。", "success");
   }
@@ -288,7 +289,7 @@
     recoveryMode = false;
     await client.auth.signOut();
     renderSession(null);
-    notifyAuthUser(null);
+    notifyAuthUser(null, "SIGNED_OUT");
     showAuthPanel("login");
     setStatus("密码已更新，请重新登录。", "success");
   }
@@ -296,7 +297,7 @@
   async function handleLogout() {
     const client = getSupabaseClient();
     renderSession(null);
-    notifyAuthUser(null);
+    notifyAuthUser(null, "SIGNED_OUT");
 
     if (!client) {
       return;
@@ -313,7 +314,7 @@
         const { data } = await client.auth.getSession();
         const authoritativeSession = data ? data.session : null;
         renderSession(authoritativeSession);
-        notifyAuthUser(authoritativeSession);
+        notifyAuthUser(authoritativeSession, "SESSION_RESTORED");
       } catch (sessionError) {
         return;
       }
@@ -371,7 +372,7 @@
 
     const { data } = await client.auth.getSession();
     renderSession(data ? data.session : null);
-    notifyAuthUser(data ? data.session : null);
+    notifyAuthUser(data ? data.session : null, "INITIAL_SESSION");
 
     client.auth.onAuthStateChange((event, session) => {
       if (event === "PASSWORD_RECOVERY") {
@@ -383,7 +384,7 @@
 
       if (!recoveryMode) {
         renderSession(session);
-        notifyAuthUser(session);
+        notifyAuthUser(session, event);
       }
     });
   }

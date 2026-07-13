@@ -243,13 +243,33 @@
       setHidden(elements.retry, true);
     }
 
-    function showHome(isAuthenticated) {
+    function showHome(isAuthenticated, options = {}) {
       setHidden(elements.publicHome, isAuthenticated);
       setHidden(elements.dreamHome, !isAuthenticated);
 
-      if (typeof app.showView === "function") {
+      if (options.navigate && typeof app.showView === "function") {
         app.showView("home");
       }
+    }
+
+    function shouldNavigateHomeForSession(authEvent, previousUser, nextUser) {
+      if (!nextUser && authEvent === "SIGNED_OUT") {
+        return true;
+      }
+
+      if (authEvent === "INITIAL_SESSION" || authEvent === "TOKEN_REFRESHED" || authEvent === "SESSION_RESTORED") {
+        return false;
+      }
+
+      if (!nextUser) {
+        return !authEvent;
+      }
+
+      if (authEvent === "SIGNED_IN") {
+        return !previousUser;
+      }
+
+      return !authEvent;
     }
 
     function renderQuote(date) {
@@ -304,17 +324,23 @@
     async function handleSession(session = {}) {
       requestGeneration += 1;
       const generation = requestGeneration;
+      const previousUser = activeUser;
+      const authEvent = session.authEvent || session.event || "";
       clearRecordData();
       activeUser = session.user && session.user.id ? session.user : null;
       activeClient = session.client || null;
 
       if (!activeUser) {
-        showHome(false);
+        showHome(false, {
+          navigate: shouldNavigateHomeForSession(authEvent, previousUser, activeUser)
+        });
         return [];
       }
 
       const userId = activeUser.id;
-      showHome(true);
+      showHome(true, {
+        navigate: shouldNavigateHomeForSession(authEvent, previousUser, activeUser)
+      });
       setText(elements.greeting, getGreeting(now()));
       setText(elements.email, activeUser.email || "");
       renderQuote(now());
@@ -429,6 +455,7 @@
     controller.init();
     root.addEventListener("dream-anatomy-auth-session", (event) => {
       controller.handleSession({
+        authEvent: event.detail ? event.detail.authEvent : "",
         user: event.detail && event.detail.user ? event.detail.user : null,
         client: event.detail ? event.detail.client : null
       });

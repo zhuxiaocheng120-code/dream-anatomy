@@ -496,6 +496,90 @@ test("clears record-derived Dream Home content before returning to the public ho
   assert.equal(elements.dreamHome.hidden, true);
 });
 
+test("keeps the current view during restored and refreshed auth sessions", async () => {
+  const elements = createDreamHomeElements();
+  const app = createFakeApp();
+  const fetchedUsers = [];
+  const controller = DreamHome.createDreamHomeController({
+    app,
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: async (_client, user) => {
+      fetchedUsers.push(user.id);
+      return [];
+    },
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  await controller.handleSession({
+    authEvent: "INITIAL_SESSION",
+    client: {},
+    user: { id: "user-one", email: "one@example.com" }
+  });
+  await controller.handleSession({
+    authEvent: "TOKEN_REFRESHED",
+    client: {},
+    user: { id: "user-one", email: "one@example.com" }
+  });
+
+  assert.deepEqual(fetchedUsers, ["user-one", "user-one"]);
+  assert.deepEqual(app.calls, []);
+  assert.equal(elements.publicHome.hidden, true);
+  assert.equal(elements.dreamHome.hidden, false);
+});
+
+test("does not navigate home for an empty initial session", async () => {
+  const elements = createDreamHomeElements();
+  const app = createFakeApp();
+  const controller = DreamHome.createDreamHomeController({
+    app,
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: async () => {
+      throw new Error("Empty initial sessions should not query records");
+    },
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  await controller.handleSession({
+    authEvent: "INITIAL_SESSION",
+    client: {},
+    user: null
+  });
+
+  assert.deepEqual(app.calls, []);
+  assert.equal(elements.publicHome.hidden, false);
+  assert.equal(elements.dreamHome.hidden, true);
+});
+
+test("enters Dream Home only after a real first sign-in", async () => {
+  const elements = createDreamHomeElements();
+  const app = createFakeApp();
+  const controller = DreamHome.createDreamHomeController({
+    app,
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: async () => [],
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  await controller.handleSession({
+    authEvent: "SIGNED_IN",
+    client: {},
+    user: { id: "user-one", email: "one@example.com" }
+  });
+  await controller.handleSession({
+    authEvent: "SIGNED_IN",
+    client: {},
+    user: { id: "user-one", email: "one@example.com" }
+  });
+
+  assert.deepEqual(app.calls, [["showView", "home"]]);
+});
+
 test("initializes a public home without querying Supabase", async () => {
   let queryCount = 0;
   const elements = createDreamHomeElements();
