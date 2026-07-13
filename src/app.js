@@ -30,6 +30,8 @@ const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
 const maxDreamTextLength = 5000;
 const canUseDreamJournal = window.DreamJournal
   && typeof window.DreamJournal.createDreamJournalController === "function";
+const canUseDreamResultCard = window.DreamResultCard
+  && typeof window.DreamResultCard.createDreamResultCardController === "function";
 const dreamSyncController = window.DreamSync
   ? window.DreamSync.createDreamSyncController({
       client: window.DreamAnatomyAuth ? window.DreamAnatomyAuth.getClient() : null,
@@ -61,6 +63,15 @@ const dreamJournalController = canUseDreamJournal
         newDreamButton: dreamJournalNewDreamButton,
         searchInput: dreamJournalSearch
       }
+    })
+  : null;
+const dreamResultCardController = canUseDreamResultCard
+  ? window.DreamResultCard.createDreamResultCardController({
+      document,
+      requestResultCard(record) {
+        return requestDreamResultCard(getRecordField(record, "raw_dream_text", "rawDreamText"));
+      },
+      saveResultCard: saveDreamResultCard
     })
   : null;
 
@@ -175,6 +186,31 @@ async function requestQuickDecode(rawDreamText) {
   }
 
   return mapApiQuickDecode(data.analysis);
+}
+
+async function requestDreamResultCard(rawDreamText) {
+  const response = await fetch("/api/dream-analysis", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      dreamText: rawDreamText,
+      analysisType: "result_card"
+    })
+  });
+
+  if (!response.ok) {
+    throw new Error("Dream result card request failed.");
+  }
+
+  const data = await response.json();
+
+  if (!data || !data.analysis || typeof data.analysis !== "object") {
+    throw new Error("Dream result card response is empty.");
+  }
+
+  return data.analysis;
 }
 
 function generateMockQuickDecode(rawDreamText) {
@@ -352,8 +388,23 @@ function loadDreamRecords() {
   return loadLocalDreamRecords();
 }
 
-function saveDreamRecordLocally(record) {
-  const records = [record, ...loadLocalDreamRecords()];
+function upsertDreamRecordLocally(record) {
+  const recordId = String(record.localRecordId || record.local_record_id || record.id || "");
+  const records = loadLocalDreamRecords();
+  const existingIndex = records.findIndex((item) => {
+    const itemId = String(item.localRecordId || item.local_record_id || item.id || "");
+    return itemId === recordId;
+  });
+
+  if (existingIndex >= 0) {
+    records[existingIndex] = {
+      ...records[existingIndex],
+      ...record
+    };
+  } else {
+    records.unshift(record);
+  }
+
   localStorage.setItem(dreamJournalStorageKey, JSON.stringify(records));
   return records;
 }
@@ -364,9 +415,23 @@ async function saveDreamRecord(record) {
   }
 
   return {
-    records: saveDreamRecordLocally(record),
+    records: upsertDreamRecordLocally(record),
     syncStatus: "local"
   };
+}
+
+async function saveDreamResultCard(record, card) {
+  const updatedRecord = {
+    ...record,
+    reportContent: {
+      ...getReportContent(record),
+      dreamResultCard: card
+    }
+  };
+  const saveResult = await saveDreamRecord(updatedRecord);
+
+  renderDreamJournal(saveResult.records);
+  return saveResult;
 }
 
 function getSaveStatusMessage(syncStatus, prefix) {
@@ -665,6 +730,7 @@ function renderDreamDetail(recordId, fallbackRow) {
   const reflection = document.createElement("section");
   const reflectionTitle = document.createElement("h4");
   const reflectionCopy = document.createElement("p");
+  const dreamResultCard = document.createElement("div");
 
   hero.className = "detail-hero";
   heroTitle.textContent = getDreamTitle(record);
@@ -690,6 +756,11 @@ function renderDreamDetail(recordId, fallbackRow) {
   reflectionCopy.textContent = "这里先留给之后的自我思考记录。你可以在下一步功能里慢慢补充自己的理解。";
   reflection.append(reflectionTitle, reflectionCopy);
 
+  dreamResultCard.className = "dream-result-card";
+  if (dreamResultCardController) {
+    dreamResultCardController.render(dreamResultCard, record);
+  }
+
   dreamDetailContent.append(
     hero,
     createDetailSection("梦境原文", rawDreamText, { preserveWhitespace: true }),
@@ -697,6 +768,7 @@ function renderDreamDetail(recordId, fallbackRow) {
     createDetailSection("情绪标签", emotions),
     createDetailSection("梦境意象", symbols),
     createDetailSection("温和提醒", gentleReminder),
+    dreamResultCard,
     analysisSection,
     reflection
   );

@@ -125,6 +125,12 @@ This PR does not add Timeline, Calendar, Favorite, Trash, Edit, Delete, Growth, 
 
 ## Dream Detail Boundaries
 
-Dream Detail is a read-only view of an existing dream record. It does not edit records, save new analysis, call DeepSeek again, or add database fields.
+Dream Detail is a read-only view of an existing dream record's original content. It does not edit dream text, change titles, or add database fields.
 
 The folded AI analysis sections are presentation views derived from the existing saved record content. They are not diagnosis, treatment, fortune telling, or future prediction.
+
+## Dream Result Card Boundaries
+
+Dream Detail may display or generate a single on-demand `reportContent.dreamResultCard` **梦境画像** for the opened record. Generation uses the existing backend DeepSeek proxy and saves the result into the existing record content; this feature 不新增 schema 或数据库字段。
+
+The result card includes a share card preview for the current page only. It does not auto-generate cards for historical records, and 图片下载和分享功能未实现。

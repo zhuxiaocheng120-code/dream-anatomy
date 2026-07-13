@@ -2,6 +2,7 @@ require("dotenv").config();
 
 const express = require("express");
 const path = require("path");
+const DreamResultCard = require("./src/dreamResultCard");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -42,6 +43,27 @@ function buildUserPrompt(dreamText) {
   ].join("\n");
 }
 
+function buildResultCardUserPrompt(dreamText) {
+  return [
+    "请基于用户的梦境碎片生成梦境画像。",
+    "只返回严格合法 JSON，不要 Markdown，不要代码块。",
+    "不要诊断、治疗、预测未来、判断吉凶、算命，或给出固定的象征含义与人格结论。",
+    "所有解读使用可能、也许、可以理解为等非绝对表达。",
+    "返回 JSON 结构必须严格符合：",
+    "{",
+    '  "archetype": { "id": "seeker", "summary": "本次梦境更接近寻路者，也许与你正在寻找方向有关。" },',
+    '  "coreInsight": "一句温和且不绝对的核心洞察",',
+    '  "dimensions": [{ "id": "symbol_depth", "score": 0, "summary": "简短说明", "rationale": ["线索"] }],',
+    '  "symbols": [{ "name": "意象", "generalPossibility": "可能性", "contextMeaning": "这次梦里的可能含义", "evidence": "梦中线索", "reflectionQuestion": "开放问题" }],',
+    '  "emotionalProfile": { "primary": "主要情绪", "secondary": ["伴随情绪"], "intensity": 0, "evidence": "梦中线索" },',
+    '  "reflectionQuestions": ["开放问题"],',
+    '  "safetyReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"',
+    "}",
+    "梦境内容：",
+    dreamText
+  ].join("\n");
+}
+
 function validateDreamAnalysisRequest(body) {
   const dreamText = typeof body.dreamText === "string" ? body.dreamText.trim() : "";
 
@@ -53,8 +75,8 @@ function validateDreamAnalysisRequest(body) {
     return { error: "dreamText must be 5000 characters or fewer." };
   }
 
-  if (body.analysisType !== "quick") {
-    return { error: "analysisType must be quick." };
+  if (body.analysisType !== "quick" && body.analysisType !== "result_card") {
+    return { error: "analysisType must be quick or result_card." };
   }
 
   return { dreamText };
@@ -71,6 +93,10 @@ function parseJsonObject(content) {
 
 function isStringArray(value) {
   return Array.isArray(value) && value.every((item) => typeof item === "string");
+}
+
+function isPlainObject(value) {
+  return value && typeof value === "object" && !Array.isArray(value);
 }
 
 function normalizeDeepSeekOutput(parsed) {
@@ -95,7 +121,34 @@ function normalizeDeepSeekOutput(parsed) {
   };
 }
 
-async function requestDeepSeekQuickAnalysis(dreamText) {
+function normalizeDeepSeekResultCardOutput(parsed) {
+  if (
+    !isPlainObject(parsed) ||
+    !isPlainObject(parsed.archetype) ||
+    typeof parsed.coreInsight !== "string" ||
+    !Array.isArray(parsed.dimensions) ||
+    !Array.isArray(parsed.symbols) ||
+    !isPlainObject(parsed.emotionalProfile) ||
+    !Array.isArray(parsed.reflectionQuestions) ||
+    typeof parsed.safetyReminder !== "string"
+  ) {
+    return null;
+  }
+
+  if (
+    typeof parsed.archetype.id !== "string" ||
+    typeof parsed.archetype.summary !== "string" ||
+    !parsed.dimensions.every((dimension) => isPlainObject(dimension) && typeof dimension.id === "string") ||
+    !parsed.symbols.every((symbol) => isPlainObject(symbol) && typeof symbol.name === "string") ||
+    typeof parsed.emotionalProfile.primary !== "string"
+  ) {
+    return null;
+  }
+
+  return DreamResultCard.normalizeDreamResultCard(parsed);
+}
+
+async function requestDeepSeekAnalysis(dreamText, analysisType) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
 
   if (!apiKey) {
@@ -115,7 +168,12 @@ async function requestDeepSeekQuickAnalysis(dreamText) {
       temperature: 0.6,
       messages: [
         { role: "system", content: buildSystemPrompt() },
-        { role: "user", content: buildUserPrompt(dreamText) }
+        {
+          role: "user",
+          content: analysisType === "result_card"
+            ? buildResultCardUserPrompt(dreamText)
+            : buildUserPrompt(dreamText)
+        }
       ]
     })
   });
@@ -131,7 +189,11 @@ async function requestDeepSeekQuickAnalysis(dreamText) {
     ? data.choices[0].message.content
     : "";
   const parsed = typeof content === "string" ? parseJsonObject(content) : null;
-  const normalized = parsed ? normalizeDeepSeekOutput(parsed) : null;
+  const normalized = parsed
+    ? analysisType === "result_card"
+      ? normalizeDeepSeekResultCardOutput(parsed)
+      : normalizeDeepSeekOutput(parsed)
+    : null;
 
   if (!normalized) {
     const invalidJsonError = new Error("DeepSeek response was not valid JSON.");
@@ -151,7 +213,7 @@ app.post("/api/dream-analysis", async (request, response) => {
   }
 
   try {
-    const analysis = await requestDeepSeekQuickAnalysis(validation.dreamText);
+    const analysis = await requestDeepSeekAnalysis(validation.dreamText, request.body.analysisType);
     response.json({ analysis });
   } catch (error) {
     const statusCode = error.statusCode || 502;
@@ -179,6 +241,9 @@ if (require.main === module) {
 module.exports = {
   app,
   buildSystemPrompt,
+  buildResultCardUserPrompt,
   normalizeDeepSeekOutput,
+  normalizeDeepSeekResultCardOutput,
+  requestDeepSeekAnalysis,
   validateDreamAnalysisRequest
 };
