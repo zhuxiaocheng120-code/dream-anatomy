@@ -14,8 +14,9 @@
 - 三个明确入口：快速解析、深度引导、梦境日记。
 - 点击入口后可以进入快速解析、Dream Journal 和 Dream Detail 等现有流程。
 - 深度引导入口目前保留展示，但通过 `src/featureFlags.js` 暂时标记为“正在开发中”，不能开始新的深度引导。
-- 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API；快速解析的一次最终请求会同时返回分析正文和完整 `reportContent.dreamResultCard` 梦境画像。
-- 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果。
+- 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API；快速解析的一次最终请求会同时返回 V2 结构化分析正文和完整 `reportContent.dreamResultCard` 梦境画像。
+- 快速解析 V2 会要求结果包含梦境摘要、核心主题、核心解析、梦境证据与解释、情绪画像、主要意象、自我思考、今日小行动和温和提醒，并在服务端做基础质量检查。
+- 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果，AI 输出质量不完整时不会伪装成本地 mock。
 - 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
 - 梦境日记区域会在同一个列表中显示快速解析和深度引导记录，并可以点击查看单条记录详情。
 - 梦境详情会展示梦境标题、日期、时间、完整原文、AI 摘要、情绪标签、梦境意象、睡眠质量和分析类型。
@@ -132,6 +133,6 @@ The folded AI analysis sections and saved Dream Result Card are presentation vie
 
 ## Dream Result Card Boundaries
 
-Quick decode uses 一次最终请求 to generate analysis text and `reportContent.dreamResultCard` **梦境画像** from the same context. The current result page displays the Dream Result Card immediately after analysis, and saving writes it into the existing record content; this feature 不新增 schema 或数据库字段。Guided final analysis keeps its source code and server path, but starting new deep guidance is currently disabled by feature flag.
+Quick decode uses 一次最终请求 to generate V2 structured analysis text and `reportContent.dreamResultCard` **梦境画像** from the same context. The server checks that the quick result includes concrete dream evidence, complete dimensions, rationale, safe language, and `quick-analysis-v2` generation metadata before accepting it. The current result page displays the Dream Result Card immediately after analysis, and saving writes it into the existing record content; this feature 不新增 schema 或数据库字段。Guided final analysis keeps its source code and server path, but starting new deep guidance is currently disabled by feature flag.
 
 Dream Detail may still show a manual generation option for old records that do not have a saved card, but Dream Journal and Dream Detail do not automatically regenerate cards or overwrite saved results. The result card includes a share card preview for the current page only; 图片下载和分享功能未实现。

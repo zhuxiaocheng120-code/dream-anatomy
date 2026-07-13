@@ -142,12 +142,41 @@ function createResultCardFixture() {
 
 function createQuickAnalysisFixture() {
   return {
-    summary: "你在学校走廊里寻找教室，并停在一扇发光的门前。",
-    coreInterpretation: "寻找教室的片段也许与近期的时间压力或被评价感有关。",
-    emotions: [{ name: "紧张", evidence: "一直找不到教室。" }],
-    symbols: [{ name: "门", contextMeaning: "在这次梦里可能和选择有关。" }],
-    reflectionQuestions: ["最近有什么事情让你感觉一直在追赶？"],
-    gentleReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+    dreamSummary: "你梦见自己在学校走廊里寻找教室，最后停在一扇发光的门前。",
+    coreTheme: "这个梦更像是在围绕寻找方向、准备不足和靠近选择的感受展开。",
+    coreInterpretation: "寻找教室的片段也许与近期的时间压力或被评价感有关；发光的门则可能像一个已经出现、但你还没有真正进入的入口。",
+    evidence: [
+      {
+        dreamFragment: "寻找教室",
+        interpretation: "这个片段支持追赶、准备或被评价感的分析。"
+      },
+      {
+        dreamFragment: "发光的门",
+        interpretation: "这个片段支持靠近选择或新方向的分析。"
+      }
+    ],
+    emotionalReading: {
+      primaryEmotion: "紧张",
+      secondaryEmotions: ["迟疑"],
+      intensity: 68,
+      evidence: "紧张主要来自一直找不到教室。"
+    },
+    symbolReading: [
+      {
+        symbol: "门",
+        context: "门出现在寻找教室之后。",
+        possibleMeaning: "在这次梦里可能和选择有关。",
+        evidence: "门发着光。",
+        reflectionQuestion: "如果门可以打开，你希望门后是什么？"
+      }
+    ],
+    reflectionQuestions: [
+      "最近有什么事情让你感觉一直在追赶？",
+      "梦里的教室让你想到哪一种准备？",
+      "发光的门让你更想靠近还是观察？"
+    ],
+    gentleAction: "你可以用两分钟写下：梦里最让你着急的寻找片段，以及现实中是否有类似感受。",
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
   };
 }
 
@@ -184,7 +213,7 @@ function createAppIntegrationHarness(options = {}) {
   const quickDream = Object.assign(createFakeElement("textarea"), { value: "" });
   const quickResult = Object.assign(createFakeElement("section"), { hidden: true });
   const quickResultCard = createFakeElement("div");
-  const resultFields = ["summary", "emotion", "symbols", "jungian", "question", "reminder"].map((field) =>
+  const resultFields = ["summary", "theme", "emotion", "symbols", "jungian", "evidence", "question", "action", "reminder"].map((field) =>
     Object.assign(createFakeElement("p"), { dataset: { resultField: field } })
   );
   const guidedForm = createFakeElement("form");
@@ -696,14 +725,43 @@ test("quick decode renders Dream Result Card on the current result page and save
   });
   assert.equal(harness.quickResult.hidden, false);
   assert.match(collectText(harness.quickResult).join("\n"), /寻找教室/);
+  assert.match(collectText(harness.quickResult).join("\n"), /寻找方向、准备不足/);
+  assert.match(collectText(harness.quickResult).join("\n"), /梦境片段：寻找教室/);
+  assert.match(collectText(harness.quickResult).join("\n"), /两分钟写下/);
   assert.match(collectText(harness.quickResultCard).join("\n"), /梦境画像/);
   assert.match(collectText(harness.quickResultCard).join("\n"), /创造者/);
 
   const savedRecords = harness.getSavedRecords();
   assert.equal(savedRecords.length, 1);
   assert.equal(savedRecords[0].analysisType, "快速解析");
+  assert.equal(savedRecords[0].reportContent.coreTheme, createQuickAnalysisFixture().coreTheme);
+  assert.equal(savedRecords[0].reportContent.evidence.length, 2);
   assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
   assert.equal(savedRecords[0].reportContent.dreamResultCardStatus, "ai_generated");
+});
+
+test("quick decode shows an incomplete generation message without mock fallback", async () => {
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: false,
+      status: 422,
+      json: async () => ({
+        error: "Dream analysis result was incomplete.",
+        generationMeta: { source: "generation_failed", qualityStatus: "incomplete" }
+      })
+    })
+  });
+
+  harness.quickDream.value = "我梦见一条黑狗被困住。";
+  await harness.quickForm.trigger("submit");
+
+  assert.equal(harness.quickResult.hidden, true);
+  assert.match(harness.quickFormStatus.textContent, /AI 结果暂时不够完整/);
+  assert.doesNotMatch(harness.quickFormStatus.textContent, /本地示例结果/);
+  assert.equal(harness.getSavedRecords().length, 0);
 });
 
 test("disabled deep guidance entries do not navigate or request analysis", async () => {
