@@ -10,9 +10,22 @@ function createFakeElement() {
   const listeners = new Map();
   const element = {
     children: [],
+    className: "",
     dataset: {},
     hidden: false,
     textContent: "",
+    classList: {
+      values: new Set(),
+      add(value) {
+        this.values.add(value);
+      },
+      remove(value) {
+        this.values.delete(value);
+      },
+      contains(value) {
+        return this.values.has(value);
+      }
+    },
     append(...nodes) {
       this.children.push(...nodes);
     },
@@ -27,6 +40,13 @@ function createFakeElement() {
       if (listener) {
         return listener(event);
       }
+    },
+    querySelector(selector) {
+      if (selector !== "[data-feature-status]") {
+        return null;
+      }
+
+      return this.children.find((child) => child.dataset && Object.prototype.hasOwnProperty.call(child.dataset, "featureStatus")) || null;
     }
   };
 
@@ -700,6 +720,7 @@ test("uses existing app views for Dream Home quick actions", () => {
     app,
     document: createFakeDocument(),
     elements,
+    featureFlags: { DEEP_GUIDANCE_ENABLED: true },
     now: () => new Date(2026, 6, 12, 8),
     quotes: testQuotes
   });
@@ -713,6 +734,49 @@ test("uses existing app views for Dream Home quick actions", () => {
     ["showView", "guided"],
     ["showView", "diary"]
   ]);
+});
+
+test("keeps Dream Home deep guidance action visible but disabled by feature flag", () => {
+  const elements = createDreamHomeElements();
+  const app = createFakeApp();
+  DreamHome.createDreamHomeController({
+    app,
+    document: createFakeDocument(),
+    elements,
+    featureFlags: { DEEP_GUIDANCE_ENABLED: false },
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  elements.quickAction.trigger("click");
+  elements.guidedAction.trigger("click");
+  elements.diaryAction.trigger("click");
+
+  assert.equal(elements.guidedAction.disabled, true);
+  assert.match(collectText(elements.guidedAction).join("\n"), /正在开发中/);
+  assert.deepEqual(app.calls, [
+    ["showView", "quick"],
+    ["showView", "diary"]
+  ]);
+});
+
+test("keeps Dream Home deep guidance action enabled when feature flag is enabled", () => {
+  const elements = createDreamHomeElements();
+  const app = createFakeApp();
+  DreamHome.createDreamHomeController({
+    app,
+    document: createFakeDocument(),
+    elements,
+    featureFlags: { DEEP_GUIDANCE_ENABLED: true },
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  elements.guidedAction.trigger("click");
+
+  assert.equal(elements.guidedAction.disabled, false);
+  assert.doesNotMatch(collectText(elements.guidedAction).join("\n"), /正在开发中/);
+  assert.deepEqual(app.calls, [["showView", "guided"]]);
 });
 
 test("opens a recent Dream Home record through the existing diary detail flow", async () => {
@@ -946,6 +1010,7 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
     [...html.matchAll(/data-dream-home-action="([^"]+)"/g)].map((match) => match[1]),
     ["quick", "guided", "diary"]
   );
+  assert.match(html, /data-feature-flag="deep-guidance"[\s\S]*正在开发中/);
   assert.ok(
     html.indexOf('class="dream-home-actions"') < html.indexOf('class="dream-home-recent"'),
     "quick actions must precede recent dreams in semantic mobile order"
@@ -959,6 +1024,7 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   const scripts = [
     "vendor/supabase.js",
     "runtime-env.js",
+    "featureFlags.js",
     "dreamSync.js",
     "auth.js",
     "dreamQuotes.js",
@@ -975,6 +1041,8 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
     appCode,
     /window\.DreamAnatomyApp\s*=\s*\{[\s\S]*openDreamDetail,[\s\S]*renderDreamJournal,[\s\S]*showView[\s\S]*\};/
   );
+  assert.match(css, /\.feature-status-badge/);
+  assert.match(css, /\.is-feature-disabled/);
   assert.match(css, /\.dream-home-layout\[hidden\]\s*\{\s*display:\s*none;\s*\}/);
   assert.match(
     css,
