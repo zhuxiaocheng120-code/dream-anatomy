@@ -227,12 +227,12 @@ test("truncates display titles after whitespace normalization", () => {
   );
 });
 
-test("maps analysis type to Quick and Deep labels", () => {
-  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysisType: "快速解析" })), "Quick");
-  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysisType: "深度引导" })), "Deep");
-  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysis_type: "快速解析" })), "Quick");
-  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysis_type: "深度引导" })), "Deep");
-  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysisType: "其他" })), "Dream");
+test("maps analysis type to Chinese display labels", () => {
+  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysisType: "快速解析" })), "快速解析");
+  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysisType: "深度引导" })), "深度解析");
+  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysis_type: "快速解析" })), "快速解析");
+  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysis_type: "深度引导" })), "深度解析");
+  assert.equal(DreamJournal.getAnalysisKind(createRecord({ analysisType: "其他" })), "梦境记录");
 });
 
 test("extracts at most three symbols from string or array values", () => {
@@ -258,11 +258,11 @@ test("groups records by local date buckets in descending order", () => {
   ], now);
 
   assert.deepEqual(grouped.map((group) => group.label), [
-    "Today",
-    "Yesterday",
-    "Earlier This Week",
-    "Earlier This Month",
-    "Older"
+    "今天",
+    "昨天",
+    "本周更早",
+    "本月更早",
+    "更早记录"
   ]);
   assert.deepEqual(grouped.flatMap((group) => group.records.map((record) => record.id)), [
     "today",
@@ -301,15 +301,15 @@ test("filters records by live search query and selected type", () => {
     ["deep-sea"]
   );
   assert.deepEqual(
-    DreamJournal.filterRecords(records, { query: "", filter: "Quick" }).map((record) => record.id),
+    DreamJournal.filterRecords(records, { query: "", filter: "快速解析" }).map((record) => record.id),
     ["quick-school", "pending-rain"]
   );
   assert.deepEqual(
-    DreamJournal.filterRecords(records, { query: "", filter: "Deep" }).map((record) => record.id),
+    DreamJournal.filterRecords(records, { query: "", filter: "深度解析" }).map((record) => record.id),
     ["deep-sea"]
   );
   assert.deepEqual(
-    DreamJournal.filterRecords(records, { query: "", filter: "Pending Sync" }).map((record) => record.id),
+    DreamJournal.filterRecords(records, { query: "", filter: "待同步" }).map((record) => record.id),
     ["pending-rain"]
   );
 });
@@ -365,24 +365,27 @@ test("renders grouped Dream Journal cards without assigning innerHTML", () => {
   const text = collectText(elements.list).join("\n");
 
   assert.equal(elements.empty.hidden, true);
-  assert.match(text, /Today/);
-  assert.match(text, /Older/);
+  assert.match(text, /今天/);
+  assert.match(text, /更早记录/);
   assert.match(text, /<script>alert\('dream'\)<\/script>/);
-  assert.match(text, /Quick/);
-  assert.match(text, /Deep/);
-  assert.match(text, /Pending Sync/);
+  assert.match(text, /快速解析/);
+  assert.match(text, /深度解析/);
+  assert.match(text, /待同步/);
+  assert.match(text, /情绪：/);
+  assert.match(text, /意象：/);
   assert.match(text, /森林/);
   assert.match(text, /门/);
   assert.match(text, /河/);
   assert.doesNotMatch(text, /Symbols: 森林、门、河、桥/);
+  assert.doesNotMatch(text, /Today|Older|Quick|Deep|Pending Sync|Emotion:|Symbols:/);
 });
 
 test("updates rendered records for live search and selected filters", () => {
   const elements = createDreamJournalElements();
   elements.filters[0].dataset.journalFilter = "全部";
-  elements.filters[1].dataset.journalFilter = "Quick";
-  elements.filters[2].dataset.journalFilter = "Deep";
-  elements.filters[3].dataset.journalFilter = "Pending Sync";
+  elements.filters[1].dataset.journalFilter = "快速解析";
+  elements.filters[2].dataset.journalFilter = "深度解析";
+  elements.filters[3].dataset.journalFilter = "待同步";
   const controller = DreamJournal.createDreamJournalController({
     document: createFakeDocument(),
     elements,
@@ -444,7 +447,7 @@ test("opens existing detail flow and New Dream quick entry", () => {
 test("empty-state action opens quick entry and clear resets visible controls", () => {
   const elements = createDreamJournalElements();
   elements.filters[0].dataset.journalFilter = "全部";
-  elements.filters[1].dataset.journalFilter = "Quick";
+  elements.filters[1].dataset.journalFilter = "快速解析";
   const calls = [];
   const controller = DreamJournal.createDreamJournalController({
     app: {
@@ -525,13 +528,17 @@ test("static assets include Dream Journal copy, styles, and documentation", () =
   const readme = fs.readFileSync(path.join(__dirname, "../README.md"), "utf8");
   const projectStatus = fs.readFileSync(path.join(__dirname, "../docs/PROJECT_STATUS.md"), "utf8");
 
-  assert.match(html, /Dream Journal/);
+  assert.match(html, /Dream Archive/);
+  assert.match(html, /梦境日记/);
   assert.match(html, /你的每一个梦，都值得被温柔收藏。/);
+  assert.match(html, />记录新梦</);
+  assert.match(html, />搜索</);
   assert.match(html, /data-journal-loading/);
   assert.match(html, /data-journal-search/);
-  assert.match(html, /data-journal-filter="Quick"/);
-  assert.match(html, /data-journal-filter="Deep"/);
-  assert.match(html, /data-journal-filter="Pending Sync"/);
+  assert.match(html, /data-journal-filter="快速解析"/);
+  assert.match(html, /data-journal-filter="深度解析"/);
+  assert.match(html, /data-journal-filter="待同步"/);
+  assert.doesNotMatch(html, />Dream Journal<|>New Dream<|>Search<|>Quick<|>Deep<|>Pending Sync</);
   assert.ok(html.indexOf("dreamJournal.js") < html.indexOf("app.js"));
 
   assert.match(css, /\.dream-journal-page-heading/);
@@ -547,7 +554,7 @@ test("static assets include Dream Journal copy, styles, and documentation", () =
 
   assert.match(readme, /Dream Journal/);
   assert.match(readme, /实时搜索/);
-  assert.match(readme, /Pending Sync/);
+  assert.match(readme, /待同步/);
   assert.match(readme, /scripts\/\n│   └── writeRuntimeEnv\.js/);
   assert.match(readme, /runtime-env\.js/);
   assert.match(readme, /ACCEPTANCE\.md/);
@@ -563,7 +570,7 @@ test("static assets include Dream Journal copy, styles, and documentation", () =
   assert.match(projectStatus, /scripts\/\n│   └── writeRuntimeEnv\.js/);
   assert.match(projectStatus, /runtime-env\.js/);
   assert.match(projectStatus, /vendor\/\n│       └── supabase\.js/);
-  assert.match(projectStatus, /按日期自动分组/);
+  assert.match(projectStatus, /今天、昨天、本周更早、本月更早和更早记录/);
   assert.match(projectStatus, /tests\/：包含当前自动化测试/);
   assert.match(projectStatus, /本轮没有实现 Timeline/);
   assert.doesNotMatch(projectStatus, /编辑或删除能力/);
