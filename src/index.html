@@ -126,7 +126,7 @@
               <div class="dream-home-action-list">
                 <button type="button" data-dream-home-action="quick">快速解析</button>
                 <button type="button" data-dream-home-action="guided">深度引导</button>
-                <button type="button" data-dream-home-action="diary">梦境日记</button>
+                <button type="button" data-dream-home-action="diary">查看梦境档案</button>
               </div>
             </section>
 
@@ -295,23 +295,30 @@
       </section>
 
       <section class="view-panel work-panel" data-view="diary" aria-labelledby="diary-title" hidden>
-        <div class="panel-copy">
-          <p class="eyebrow">Dream Notation</p>
-          <h2 id="diary-title">梦境日记</h2>
-          <p class="summary">
-            未登录时，记录会保存在当前浏览器里；登录后，会优先显示并同步你的云端梦境档案。
-          </p>
-          <p class="status journal-sync-status" data-journal-sync-status aria-live="polite"></p>
+        <div class="dream-journal-page-heading">
+          <div class="panel-copy">
+            <p class="eyebrow">Dream Archive</p>
+            <h2 id="diary-title">Dream Journal</h2>
+            <p class="summary">你的每一个梦，都值得被温柔收藏。</p>
+            <p class="status journal-sync-status" data-journal-sync-status aria-live="polite"></p>
+            <p class="status dream-journal-loading" data-journal-loading aria-live="polite"></p>
+          </div>
+          <button class="secondary-button" type="button" data-journal-new-dream>New Dream</button>
         </div>
 
         <div data-journal-list-shell>
-          <div id="dreamJournalEmpty" class="empty-state">
-            <p class="card-label">私人梦境档案</p>
-            <h3>暂时还没有梦境记录</h3>
-            <p>
-              完成一次快速解析，或保存一份深度引导报告后，记录会保存在这个浏览器里，并显示在这里。
-            </p>
+          <div class="dream-journal-toolbar" aria-label="梦境档案工具">
+            <label for="dreamJournalSearch">Search</label>
+            <input id="dreamJournalSearch" type="search" data-journal-search placeholder="搜索标题、梦境、情绪或意象">
+            <div class="dream-journal-filters" aria-label="筛选梦境记录">
+              <button class="text-button is-current" type="button" data-journal-filter="全部">全部</button>
+              <button class="text-button" type="button" data-journal-filter="Quick">Quick</button>
+              <button class="text-button" type="button" data-journal-filter="Deep">Deep</button>
+              <button class="text-button" type="button" data-journal-filter="Pending Sync">Pending Sync</button>
+            </div>
           </div>
+
+          <div id="dreamJournalEmpty" class="empty-state dream-journal-empty"></div>
 
           <div id="dreamJournalList" class="journal-list" aria-live="polite"></div>
 
@@ -389,6 +396,7 @@
     <script src="auth.js"></script>
     <script src="dreamQuotes.js"></script>
     <script src="dreamHome.js"></script>
+    <script src="dreamJournal.js"></script>
     <script src="app.js"></script>
   </body>
 </html>

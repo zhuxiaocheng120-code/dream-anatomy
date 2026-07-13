@@ -12,7 +12,7 @@
 
 - 中文首页，介绍梦境记录和自我探索的核心想法。
 - 三个明确入口：快速解析、深度引导、梦境日记。
-- 基础区域切换，点击入口后可以查看对应占位区域。
+- 点击入口后可以进入快速解析、深度引导、Dream Journal 和 Dream Detail 等现有流程。
 - 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API，失败时回退到本地 mock 的结构化快速解析结果。
 - 快速解析结果会保存到浏览器本地梦境日记，并在梦境日记区域显示摘要列表。
 - 深度引导区域可以输入梦境，并在本地生成 5 个温和短问题，帮助补充情绪、联想、现实连接、梦中主动性和醒后感受。
@@ -25,6 +25,10 @@
 - 登录后会自动把当前浏览器里的本地梦境迁移到 Supabase，并以云端梦境日记为主；未登录或云端暂时不可用时，仍保留 localStorage 本地保存和待同步兜底。
 - 已认证用户会自动进入 **Dream Home**；退出登录后会立即回到原有公开首页。
 - Dream Home 只读取当前登录用户的 Supabase `dream_records`，用这些记录计算梦境总数、连续记录夜晚、AI 整理次数，并显示最近五条梦境。它不会读取其他账户的记录。
+- Dream Home 的“查看梦境档案”会进入 **Dream Journal**，这是梦境档案的主要页面。
+- Dream Journal 会展示当前用户可见的全部梦境记录，按 Today、Yesterday、Earlier This Week、Earlier This Month、Older 自动分组，并按时间倒序排列。
+- Dream Journal 支持实时搜索标题、原文、梦境摘要、情绪和意象，也支持 `全部`、`Quick`、`Deep`、`Pending Sync` 过滤。
+- Dream Journal 里的记录会继续进入现有 Dream Detail 页面，不会重新实现另一套详情页。
 - 每日引语来自已核验的公版中文经典文本，并按浏览器本地日期稳定选择；同一日期刷新页面会显示同一句引语。
 - Dream Home 的“重要梦境”当前固定显示为 `0`，因为现有记录和数据库 schema 没有收藏或重要标记字段。
 - “AI 洞察”和“标签 / 分类”目前只是标有 `Coming Soon` 的非交互视觉区域，不包含模拟数据或可用功能。
@@ -36,19 +40,35 @@
 ```text
 .
 ├── AGENTS.md
+├── .env.example
 ├── README.md
 ├── assets/
 ├── docs/
+│   ├── ACCEPTANCE.md
+│   ├── IMPROVEMENT_IDEAS.md
+│   ├── MVP_SPEC.md
+│   ├── PRD_ALIGNMENT.md
+│   ├── PROJECT_STATUS.md
+│   └── superpowers/
+├── lib/
 ├── package.json
+├── scripts/
+│   └── writeRuntimeEnv.js
 ├── server.js
 ├── src/
 │   ├── app.js
 │   ├── auth.js
 │   ├── dreamHome.js
+│   ├── dreamJournal.js
 │   ├── dreamQuotes.js
 │   ├── dreamSync.js
 │   ├── index.html
-│   └── style.css
+│   ├── runtime-env.js
+│   ├── style.css
+│   └── vendor/
+│       └── supabase.js
+├── supabase/
+│   └── migrations/
 └── tests/
 ```
 - src/index.html: page content and structure.
@@ -56,14 +76,20 @@
 - src/app.js: interactions for the dream analysis, local journal, and view switching flows.
 - src/auth.js: Supabase Auth interactions for account registration, login, logout, password reset, and persistent session display.
 - src/dreamHome.js: authenticated Dream Home session handling, current-user cloud-record loading, statistics, recent dreams, and reuse of existing navigation/detail flows.
+- src/dreamJournal.js: Dream Journal archive grouping, realtime search, filters, empty state, record rendering, and existing detail navigation.
 - src/dreamQuotes.js: verified public-domain daily quote records and browser-local, date-stable quote selection.
 - src/dreamSync.js: localStorage to Supabase dream record sync, cloud loading, pending retry, and record mapping.
+- src/runtime-env.js: browser runtime configuration generated for local or deployed Supabase public settings.
+- src/vendor/supabase.js: browser Supabase SDK asset used by the account UI.
 - server.js: Express server that serves src and proxies quick dream analysis requests.
+- scripts/writeRuntimeEnv.js: writes `src/runtime-env.js` from environment variables before startup.
 - lib/supabaseClient.js: helper for creating a Supabase client from environment variables.
-- supabase/migrations/: database migrations for future cloud dream record storage.
+- supabase/migrations/: database migrations for cloud dream record storage and sync fields.
 - .env.example: example environment variables for local backend configuration.
 - AGENTS.md: contributor guidelines for this repository.
-- How to Open the App
+
+## How to Open the App
+
 - Install dependencies with `npm install`.
 - Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY` locally. The server loads this file automatically.
 - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` locally to enable the account UI. These are browser-safe Supabase project values, not service role secrets.
@@ -72,13 +98,26 @@
 - Without `DEEPSEEK_API_KEY`, the page can still open; quick analysis API requests will fail safely and the frontend will show the local fallback result.
 - Without Supabase values, the page can still open; account actions will show a configuration prompt.
 - Run unit tests with `npm test`.
-- Editing the App
-- To change the text on the page, edit src/index.html. To change colors or layout, edit src/style.css. To change the button behavior of reflection messages, edit src/app.js.
-- Contributing
-- Before making larger changes, read [AGENTS.md](AGENTS.md). Keep updates small, clear, and easy for a beginner to understand.
+
+## Editing the App
+
+- To change page structure or copy, edit `src/index.html`.
+- To change colors or layout, edit `src/style.css`.
+- To change dream-analysis interactions, edit `src/app.js`.
+- To change Dream Journal grouping, search, filter, or archive rendering, edit `src/dreamJournal.js`.
+
+## Contributing
+
+Before making larger changes, read [AGENTS.md](AGENTS.md). Keep updates small, clear, and easy for a beginner to understand.
 
 ## Dream Home Boundaries
 
 Dream Home is a read-only authenticated home experience. It does not change the existing DeepSeek integration or prompts, Supabase Auth rules, `dreamSync.js` synchronization behavior, or the Supabase schema.
 
-The following are intentionally not implemented yet: search, favorites, a dream timeline, trash or deletion, title/content editing, and analytics. The fixed-zero “重要梦境” value is a visible reminder of that current schema boundary, rather than a hidden or invented data field.
+The following are intentionally not implemented inside Dream Home itself yet: favorites, a dream timeline, trash or deletion, title/content editing, and analytics. The fixed-zero “重要梦境” value is a visible reminder of that current schema boundary, rather than a hidden or invented data field.
+
+## Dream Journal Boundaries
+
+Dream Journal is the primary dream archive page. It reads the records already visible to the current session through the existing local/cloud sync flow, then groups, searches, filters, and opens them through the existing Dream Detail view.
+
+This PR does not add Timeline, Calendar, Favorite, Trash, Edit, Delete, Growth, Atlas, payment, membership, new schema fields, or a new detail system. Search is local and realtime; `Pending Sync` only reflects the existing local pending-sync status.
