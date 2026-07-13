@@ -19,7 +19,8 @@
 - 深度引导回答只在当前页面临时暂存，可以回答部分或全部问题，并生成一份本地 mock 的 Dream Anatomy Report。
 - 深度报告包含梦境整理、情绪线索、核心意象、荣格式初步解读、现实连接、自我反思问题、今日小行动和温和提醒，并可保存到本地梦境日记。
 - 梦境日记区域会在同一个列表中显示快速解析和深度引导记录，并可以点击查看单条记录详情。
-- 梦境详情会展示日期、分析类型、原始梦境、摘要、情绪、意象、睡眠质量和完整分析内容。
+- 梦境详情会展示梦境标题、日期、时间、完整原文、AI 摘要、情绪标签、梦境意象、睡眠质量和分析类型。
+- 梦境详情里的 AI 分析采用可折叠卡片，包含荣格、弗洛伊德和现代心理学三个温和视角，并预留“自我思考”区域供后续扩展。
 - 项目包含 Supabase 基础设施准备：JavaScript SDK 依赖、环境变量示例，以及 `dream_records` 表迁移和 RLS 策略。
 - 右上角提供 Supabase Auth 账户入口，支持邮箱注册、邮箱验证后登录、退出登录、忘记密码和重置密码。
 - 登录后会自动把当前浏览器里的本地梦境迁移到 Supabase，并以云端梦境日记为主；未登录或云端暂时不可用时，仍保留 localStorage 本地保存和待同步兜底。
@@ -121,3 +122,9 @@ The following are intentionally not implemented inside Dream Home itself yet: fa
 Dream Journal is the primary dream archive page. It reads the records already visible to the current session through the existing local/cloud sync flow, then groups, searches, filters, and opens them through the existing Dream Detail view.
 
 This PR does not add Timeline, Calendar, Favorite, Trash, Edit, Delete, Growth, Atlas, payment, membership, new schema fields, or a new detail system. Search is local and realtime; `Pending Sync` only reflects the existing local pending-sync status.
+
+## Dream Detail Boundaries
+
+Dream Detail is a read-only view of an existing dream record. It does not edit records, save new analysis, call DeepSeek again, or add database fields.
+
+The folded AI analysis sections are presentation views derived from the existing saved record content. They are not diagnosis, treatment, fortune telling, or future prediction.

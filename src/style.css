@@ -945,6 +945,104 @@ input:focus-visible {
   gap: 22px;
 }
 
+.detail-hero {
+  display: grid;
+  gap: 18px;
+  padding-bottom: 6px;
+}
+
+.detail-hero h3 {
+  max-width: 18em;
+  margin-bottom: 0;
+  font-size: clamp(1.7rem, 4vw, 2.4rem);
+  line-height: 1.28;
+}
+
+.detail-hero-meta {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: 10px;
+}
+
+.detail-hero-meta div,
+.detail-section,
+.detail-analysis-card,
+.detail-reflection {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 250, 241, 0.72);
+  box-shadow: none;
+}
+
+.detail-hero-meta div {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+}
+
+.detail-hero-meta span,
+.detail-section h4,
+.detail-analysis h4,
+.detail-reflection h4 {
+  color: var(--teal);
+  font-size: 0.92rem;
+  font-weight: 800;
+}
+
+.detail-hero-meta strong {
+  color: var(--ink);
+  line-height: 1.5;
+}
+
+.detail-section,
+.detail-reflection {
+  padding: 18px;
+}
+
+.detail-section h4,
+.detail-analysis h4,
+.detail-reflection h4 {
+  margin: 0 0 10px;
+}
+
+.detail-section p,
+.detail-analysis-card p,
+.detail-reflection p {
+  margin-bottom: 0;
+  color: var(--muted);
+  line-height: 1.8;
+  white-space: pre-wrap;
+}
+
+.detail-analysis {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-analysis-list {
+  display: grid;
+  gap: 12px;
+}
+
+.detail-analysis-card {
+  padding: 0;
+  overflow: hidden;
+}
+
+.detail-analysis-card summary {
+  min-height: 54px;
+  display: flex;
+  align-items: center;
+  padding: 14px 18px;
+  color: var(--ink);
+  font-weight: 800;
+  cursor: pointer;
+}
+
+.detail-analysis-card p {
+  padding: 0 18px 18px;
+}
+
 .detail-overview,
 .detail-report-grid {
   display: grid;
@@ -1096,6 +1194,10 @@ input:focus-visible {
     flex-direction: row;
     justify-content: space-between;
     gap: 16px;
+  }
+
+  .detail-hero-meta {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
   }
 }
 
