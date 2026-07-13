@@ -36,12 +36,6 @@
 - 每日引语由 `src/dreamQuotes.js` 在浏览器本地日期上稳定选择，来源为已核验的公版中文经典文本；同一日期内刷新不会变更引语。
 - “重要梦境”目前固定为 `0`，因为既有记录和 schema 没有 favorite 或 important 字段；Dream Home 不会查询或编造不存在的字段。
 - “AI 洞察”和“标签 / 分类”是无数据、无控件的 `Coming Soon` 视觉区域，尚未提供 AI 洞察或分类功能。
-- Dream Home 的“查看梦境档案”会进入 **Dream Journal**，这是当前梦境档案的主要页面。
-- Dream Journal 会显示当前用户可见的全部梦境记录，并按日期自动分组为 Today、Yesterday、Earlier This Week、Earlier This Month 和 Older。
-- Dream Journal 支持本地实时搜索，搜索范围包括自动标题、原文、梦境摘要、情绪和意象。
-- Dream Journal 支持 `全部`、`Quick`、`Deep`、`Pending Sync` 四个过滤入口。
-- Dream Journal 记录点击后继续进入现有 Dream Detail 页面；本轮没有重新实现另一套详情页。
-- Dream Journal 没有记录时会显示温和空状态，并提供“记录第一个梦”入口。
 
 未登录时梦境记录仍只保存在当前浏览器的 localStorage 中；登录后，梦境日记会优先使用 Supabase 云端记录，并保留 localStorage 作为缓存和失败兜底。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API；如果 API key 未配置或调用失败，前端会显示本地示例结果。
 深度引导当前生成的是本地 mock Dream Anatomy Report；真实 Supabase 云同步仍需要使用实际 Supabase 项目完成注册、邮箱验证、跨浏览器、双账号隔离和断网恢复验收。
@@ -51,7 +45,6 @@
 ```text
 .
 ├── AGENTS.md
-├── .env.example
 ├── README.md
 ├── assets/
 ├── docs/
@@ -59,28 +52,19 @@
 │   ├── IMPROVEMENT_IDEAS.md
 │   ├── MVP_SPEC.md
 │   ├── PRD_ALIGNMENT.md
-│   ├── PROJECT_STATUS.md
-│   └── superpowers/
-│       ├── plans/
-│       └── specs/
+│   └── PROJECT_STATUS.md
 ├── lib/
 │   └── supabaseClient.js
 ├── package.json
-├── scripts/
-│   └── writeRuntimeEnv.js
 ├── server.js
 ├── src/
 │   ├── app.js
 │   ├── auth.js
 │   ├── dreamHome.js
-│   ├── dreamJournal.js
 │   ├── dreamQuotes.js
 │   ├── dreamSync.js
 │   ├── index.html
-│   ├── runtime-env.js
-│   ├── style.css
-│   └── vendor/
-│       └── supabase.js
+│   └── style.css
 ├── supabase/
 │   └── migrations/
 └── tests/
@@ -90,36 +74,28 @@ src/style.css：页面颜色、排版、按钮和响应式布局。
 src/app.js：梦境解析、深度引导、本地日记和视图切换逻辑。
 src/auth.js：Supabase Auth 注册、登录、退出、忘记密码、重置密码和登录状态展示逻辑。
 src/dreamHome.js：Dream Home 的会话处理、当前用户云端记录读取、统计、最近梦境和既有导航/详情复用。
-src/dreamJournal.js：Dream Journal 的记录分组、实时搜索、过滤、空状态、列表渲染和既有详情页跳转。
 src/dreamQuotes.js：已核验公版引语数据，以及按浏览器本地日期稳定选择引语的逻辑。
 src/dreamSync.js：梦境记录 localStorage 与 Supabase 的映射、迁移、云端加载、待同步重试逻辑。
-src/runtime-env.js：由启动脚本生成的浏览器运行时配置文件，用于公开 Supabase 配置。
-src/vendor/supabase.js：浏览器端 Supabase SDK 资源，用于账户入口。
 server.js：Express 静态托管和快速解析后端代理。
-scripts/writeRuntimeEnv.js：启动前从环境变量写入 `src/runtime-env.js`。
 lib/supabaseClient.js：从环境变量创建 Supabase client 的基础设施 helper。
 supabase/migrations/：Supabase 数据表和 RLS 策略迁移。
 .env.example：本地后端环境变量示例，不包含真实 API key。
 README.md：项目简介和如何打开页面。
 AGENTS.md：贡献者和编码助手的工作指南。
 assets/：以后可以放图片、图标或示例素材。
-tests/：包含当前自动化测试，包括 Dream Journal、Dream Home、Dream Quotes、Dream Sync 和 Auth diagnostics。
+tests/：以后可以放测试文件。
 
 ## Dream Home 的当前边界
 
 Dream Home 是已认证用户的只读首页体验。它没有修改 DeepSeek 调用或提示词、Supabase Auth 规则、`dreamSync.js` 同步逻辑或 Supabase schema。
 
 以下能力仍未实现：搜索、收藏、梦境时间线、回收站或删除、标题/内容编辑、分析图表。它们不会被 Dream Home 的 `Coming Soon` 区域模拟为可用功能。
-
-## Dream Journal 的当前边界
-
-Dream Journal 是登录后从 Dream Home 进入的梦境档案页，也兼容未登录本地记录。它复用现有 `dreamSync.js` 提供的可见记录和现有 Dream Detail 页面，不修改 DeepSeek、Auth、云同步规则或 Supabase schema。
-
-本轮没有实现 Timeline、Calendar、Favorite、Trash、Edit、Delete、Growth、Atlas、支付、会员或新的详情系统。`Pending Sync` 只是显示既有待同步状态；搜索和过滤都在当前页面本地完成。
 # 下一步可以做什么
 适合初学者继续添加的功能：
-继续完善 Dream Journal 的移动端视觉验收。
-为 Dream Journal 增加更细的本地测试，覆盖更多日期边界和搜索组合。
-整理 Dream Journal 与 Dream Home 的中文命名一致性。
-补充浏览器验收记录，确认搜索、过滤和详情跳转在桌面与移动端都可用。
+把本地 mock 深度报告替换为经过后端代理的 OpenAI 或 DeepSeek API 返回结果。
+继续扩展云端梦境详情、编辑或删除能力。
+给常见梦境象征添加更丰富的中文提示。
+添加简单的深色模式切换。
+在 assets/ 中加入图片或图标，让页面更有梦境氛围。
+添加基础测试，检查按钮点击后是否显示提示文字。
 建议一次只做一个小功能。完成后先在浏览器里打开 src/index.html，确认页面仍然可以正常使用。
