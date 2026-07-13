@@ -5,6 +5,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const DreamJournal = require("../src/dreamJournal");
+const DreamResultCard = require("../src/dreamResultCard");
 
 function createRecord(overrides = {}) {
   return {
@@ -32,6 +33,7 @@ function createFakeElement(tagName = "div") {
     textContent: "",
     type: "",
     value: "",
+    style: {},
     attributes: {},
     classList: {
       values: new Set(),
@@ -111,6 +113,33 @@ function collectText(node) {
   ].filter(Boolean);
 }
 
+function findElements(node, predicate) {
+  return [node, ...node.children.flatMap((child) => findElements(child, predicate))]
+    .filter(predicate);
+}
+
+function createResultCardFixture() {
+  return {
+    archetype: {
+      id: "creator",
+      summary: "本次梦境更接近创造者原型，也许和表达有关。"
+    },
+    coreInsight: "这个梦也许在提醒你重新看见表达。",
+    dimensions: [
+      { id: "symbol_depth", score: 72, summary: "多个意象出现。", rationale: ["门出现。"] },
+      { id: "emotion_intensity", score: 64, summary: "情绪清晰。", rationale: ["梦里感到迟疑。"] },
+      { id: "self_awareness", score: 55, summary: "你注意到自己的停留。", rationale: ["记录了迟疑。"] },
+      { id: "growth_signal", score: 72, summary: "也许出现新的方向。", rationale: ["发光的门。"] }
+    ],
+    symbols: [
+      { name: "门", contextMeaning: "在这次梦里可能和选择有关。", evidence: "门发光。", reflectionQuestion: "门后是什么？" }
+    ],
+    emotionalProfile: { primary: "迟疑", secondary: ["好奇"], intensity: 64, evidence: "停在门前很久。" },
+    reflectionQuestions: ["门后可能是什么？"],
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+}
+
 function createAppIntegrationHarness(options = {}) {
   const selectors = new Map();
   const viewPanels = [
@@ -135,6 +164,10 @@ function createAppIntegrationHarness(options = {}) {
     confirm: () => false,
     scrollTo() {}
   };
+
+  if (options.realDreamResultCard) {
+    windowRef.DreamResultCard = DreamResultCard;
+  }
 
   if (options.fakeDreamJournal !== false && !options.realDreamJournal && !options.noDreamJournal) {
     windowRef.DreamJournal = {
@@ -165,11 +198,22 @@ function createAppIntegrationHarness(options = {}) {
       return [];
     }
   };
+  const storageItems = new Map();
   const localStorage = {
-    getItem: () => null,
-    removeItem() {},
-    setItem() {}
+    getItem(key) {
+      return storageItems.has(key) ? storageItems.get(key) : null;
+    },
+    removeItem(key) {
+      storageItems.delete(key);
+    },
+    setItem(key, value) {
+      storageItems.set(key, String(value));
+    }
   };
+
+  if (options.records) {
+    localStorage.setItem("dreamAnatomy.quickDecodeRecords", JSON.stringify(options.records));
+  }
 
   selectors.set("[data-journal-list-shell]", journalListShell);
   selectors.set("#dreamJournalList", journalList);
@@ -186,6 +230,9 @@ function createAppIntegrationHarness(options = {}) {
 
   const context = {
     document: documentRef,
+    fetch: options.fetch || (async () => {
+      throw new Error("Unexpected fetch request");
+    }),
     localStorage,
     window: windowRef,
     Intl
@@ -206,7 +253,11 @@ function createAppIntegrationHarness(options = {}) {
     journalListShell,
     journalNewDream,
     viewPanels,
-    windowRef
+    windowRef,
+    getSavedRecords() {
+      const savedRecords = localStorage.getItem("dreamAnatomy.quickDecodeRecords");
+      return savedRecords ? JSON.parse(savedRecords) : [];
+    }
   };
 }
 
@@ -562,6 +613,107 @@ test("app bridge keeps opening existing Dream Detail from Dream Journal records"
   analysisCards.forEach((card) => {
     assert.notEqual(card.open, true);
   });
+});
+
+test("Dream Detail renders a saved dream result card without replacing existing sections", () => {
+  const record = createRecord({
+    id: "saved-result-card",
+    reportContent: {
+      summary: "走廊尽头的门",
+      jungian: "也许和最近的选择感有关。",
+      reminder: "这不是诊断、治疗或预言，只是一种自我探索视角。",
+      dreamResultCard: createResultCardFixture()
+    }
+  });
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    records: [record]
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+
+  const detailText = collectText(harness.dreamDetailContent).join("\n");
+  assert.match(detailText, /梦境原文/);
+  assert.match(detailText, /梦境摘要/);
+  assert.match(detailText, /情绪标签/);
+  assert.match(detailText, /梦境意象/);
+  assert.match(detailText, /AI 分析/);
+  assert.match(detailText, /自我思考/);
+  assert.match(detailText, /梦境画像/);
+  assert.match(detailText, /创造者/);
+  assert.match(detailText, /一句话核心洞察/);
+});
+
+test("Dream Detail generates, saves, and re-renders a missing dream result card", async () => {
+  const record = createRecord({
+    id: "generate-result-card",
+    localRecordId: "local-generate-result-card",
+    cloudId: "cloud-generate-result-card",
+    userId: "user-generate-result-card",
+    syncStatus: "pending_sync",
+    reportContent: { summary: "保留已有报告内容" }
+  });
+  const fetchCalls = [];
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    records: [record],
+    fetch: async (url, options) => {
+      fetchCalls.push([url, options]);
+      return {
+        ok: true,
+        json: async () => ({ analysis: createResultCardFixture() })
+      };
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const generationButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "生成梦境画像"
+  )[0];
+
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /尚未生成梦境画像/);
+  assert.ok(generationButton);
+  await generationButton.trigger("click");
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0][0], "/api/dream-analysis");
+  assert.deepEqual(JSON.parse(fetchCalls[0][1].body), {
+    dreamText: record.rawDreamText,
+    analysisType: "result_card"
+  });
+
+  const savedRecords = harness.getSavedRecords();
+  assert.equal(savedRecords.length, 1);
+  assert.equal(savedRecords[0].id, record.id);
+  assert.equal(savedRecords[0].localRecordId, record.localRecordId);
+  assert.equal(savedRecords[0].cloudId, record.cloudId);
+  assert.equal(savedRecords[0].userId, record.userId);
+  assert.equal(savedRecords[0].syncStatus, record.syncStatus);
+  assert.equal(savedRecords[0].reportContent.summary, "保留已有报告内容");
+  assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /一句话核心洞察/);
+});
+
+test("Dream Detail keeps the missing-card fallback and shows a safe error when generation fails", async () => {
+  const record = createRecord({ id: "failed-result-card", reportContent: { summary: "旧记录" } });
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    records: [record],
+    fetch: async () => {
+      throw new Error("Network unavailable");
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const generationButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "生成梦境画像"
+  )[0];
+
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /尚未生成梦境画像/);
+  await generationButton.trigger("click");
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /暂时无法生成梦境画像，请稍后再试。/);
 });
 
 test("static assets include Dream Journal copy, styles, and documentation", () => {
