@@ -88,6 +88,13 @@ button {
   font-size: 0.95rem;
 }
 
+.text-button.is-feature-disabled {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  flex-wrap: wrap;
+}
+
 .header-actions {
   justify-content: flex-end;
   gap: 20px;
@@ -268,6 +275,42 @@ h3 {
 
 .entry-card strong {
   font-size: 1.35rem;
+}
+
+.feature-status-badge {
+  display: inline-flex;
+  align-items: center;
+  width: fit-content;
+  max-width: 100%;
+  padding: 3px 8px;
+  border: 1px solid rgba(125, 111, 74, 0.22);
+  border-radius: 999px;
+  color: var(--muted);
+  background: rgba(255, 255, 255, 0.58);
+  font-size: 0.72rem;
+  font-weight: 800;
+  line-height: 1.35;
+  white-space: nowrap;
+}
+
+.is-feature-disabled,
+.is-feature-disabled:hover,
+.is-feature-disabled:focus-visible {
+  cursor: not-allowed;
+  opacity: 0.58;
+  transform: none;
+}
+
+.is-feature-disabled:hover,
+.is-feature-disabled:focus-visible {
+  border-color: var(--border);
+  color: inherit;
+  background: rgba(255, 255, 255, 0.66);
+}
+
+.entry-card.is-feature-disabled:hover,
+.entry-card.is-feature-disabled:focus-visible {
+  border-color: var(--border);
 }
 
 .dream-home-layout {
@@ -523,7 +566,7 @@ input {
 
 button:disabled,
 button:disabled:hover {
-  cursor: wait;
+  cursor: not-allowed;
   opacity: 0.62;
 }
 

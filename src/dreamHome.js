@@ -168,6 +168,48 @@
     }
   }
 
+  function isDeepGuidanceEnabled(featureFlags) {
+    return featureFlags && featureFlags.DEEP_GUIDANCE_ENABLED === true;
+  }
+
+  function applyDeepGuidanceActionState(element, documentRef, enabled) {
+    if (!element) {
+      return;
+    }
+
+    element.disabled = !enabled;
+    if (typeof element.setAttribute === "function") {
+      element.setAttribute("aria-disabled", enabled ? "false" : "true");
+    }
+    if (element.classList && typeof element.classList.add === "function") {
+      if (enabled) {
+        element.classList.remove("is-feature-disabled");
+      } else {
+        element.classList.add("is-feature-disabled");
+      }
+    }
+
+    const status = element.querySelector && element.querySelector("[data-feature-status]");
+    if (status) {
+      status.hidden = enabled;
+      return;
+    }
+
+    if (enabled || String(element.textContent || "").includes("正在开发中")) {
+      return;
+    }
+
+    if (documentRef && typeof documentRef.createElement === "function") {
+      const badge = documentRef.createElement("span");
+      badge.className = "feature-status-badge";
+      badge.dataset.featureStatus = "";
+      badge.textContent = "正在开发中";
+      element.append(badge);
+    } else {
+      element.textContent = `${element.textContent || "深度引导"} 正在开发中`;
+    }
+  }
+
   function getElement(elements, name) {
     return elements[name] || (elements.stats && elements.stats[name]) || null;
   }
@@ -179,6 +221,8 @@
     const fetchRecords = options.fetchRecords || fetchDreamRecords;
     const now = options.now || (() => new Date());
     const quotes = options.quotes || (root && root.DreamQuotes);
+    const featureFlags = options.featureFlags || (root && root.DreamAnatomyFeatureFlags) || {};
+    const deepGuidanceEnabled = isDeepGuidanceEnabled(featureFlags);
     let activeUser = null;
     let activeClient = null;
     let records = [];
@@ -319,6 +363,8 @@
       });
     }
 
+    applyDeepGuidanceActionState(elements.guidedAction, documentRef, deepGuidanceEnabled);
+
     [
       [elements.quickAction, "quick"],
       [elements.guidedAction, "guided"],
@@ -326,6 +372,10 @@
     ].forEach(([element, viewName]) => {
       if (element && typeof element.addEventListener === "function") {
         element.addEventListener("click", () => {
+          if (viewName === "guided" && !deepGuidanceEnabled) {
+            return;
+          }
+
           if (typeof app.showView === "function") {
             app.showView(viewName);
           }

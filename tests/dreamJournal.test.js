@@ -227,6 +227,9 @@ function createAppIntegrationHarness(options = {}) {
     confirm: () => false,
     scrollTo() {}
   };
+  windowRef.DreamAnatomyFeatureFlags = {
+    DEEP_GUIDANCE_ENABLED: options.deepGuidanceEnabled !== false
+  };
 
   if (options.realDreamResultCard) {
     windowRef.DreamResultCard = DreamResultCard;
@@ -703,6 +706,50 @@ test("quick decode renders Dream Result Card on the current result page and save
   assert.equal(savedRecords[0].reportContent.dreamResultCardStatus, "ai_generated");
 });
 
+test("disabled deep guidance entries do not navigate or request analysis", async () => {
+  const fetchCalls = [];
+  const harness = createAppIntegrationHarness({
+    deepGuidanceEnabled: false,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      fetchCalls.push([url, options]);
+      throw new Error("Deep guidance should not request analysis while disabled.");
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.showView("home");
+  harness.windowRef.DreamAnatomyApp.showView("guided");
+
+  assert.equal(harness.viewPanels.find((panel) => panel.dataset.view === "home").hidden, false);
+  assert.equal(harness.viewPanels.find((panel) => panel.dataset.view === "guided").hidden, true);
+
+  harness.guidedDream.value = "我梦见一条长走廊。";
+  await harness.guidedForm.trigger("submit");
+  await harness.generateDeepReportButton.trigger("click");
+  await harness.saveDeepReportButton.trigger("click");
+
+  assert.equal(fetchCalls.length, 0);
+  assert.equal(harness.guidedQuestions.hidden, true);
+  assert.equal(harness.deepReport.hidden, true);
+  assert.equal(harness.getSavedRecords().length, 0);
+  assert.match(harness.guidedStatus.textContent, /深度引导正在开发中/);
+});
+
+test("deep guidance entry can navigate when feature flag is enabled", () => {
+  const html = fs.readFileSync(path.join(__dirname, "../src/index.html"), "utf8");
+  const harness = createAppIntegrationHarness({
+    deepGuidanceEnabled: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false
+  });
+
+  harness.windowRef.DreamAnatomyApp.showView("guided");
+
+  assert.equal(harness.viewPanels.find((panel) => panel.dataset.view === "guided").hidden, false);
+  assert.doesNotMatch(html, /data-feature-flag="deep-guidance"[^>]*disabled/);
+});
+
 test("quick decode keeps analysis readable when result card generation failed", async () => {
   const harness = createAppIntegrationHarness({
     realDreamResultCard: true,
@@ -770,6 +817,7 @@ test("quick current-page result card retry does not save a malformed synthetic r
 test("guided questions come from the current dream through the backend", async () => {
   const fetchCalls = [];
   const harness = createAppIntegrationHarness({
+    deepGuidanceEnabled: true,
     noDreamJournal: true,
     fakeDreamJournal: false,
     fetch: async (url, options) => {
@@ -802,6 +850,7 @@ test("guided questions come from the current dream through the backend", async (
 test("guided final sends all answers once and renders Dream Result Card", async () => {
   const fetchCalls = [];
   const harness = createAppIntegrationHarness({
+    deepGuidanceEnabled: true,
     realDreamResultCard: true,
     noDreamJournal: true,
     fakeDreamJournal: false,
@@ -859,6 +908,7 @@ test("guided final sends all answers once and renders Dream Result Card", async 
 
 test("guided final failure does not fall back to a mock report", async () => {
   const harness = createAppIntegrationHarness({
+    deepGuidanceEnabled: true,
     realDreamResultCard: true,
     noDreamJournal: true,
     fakeDreamJournal: false,
@@ -900,6 +950,7 @@ test("guided final failure does not fall back to a mock report", async () => {
 
 test("saving guided report stores Dream Result Card in reportContent", async () => {
   const harness = createAppIntegrationHarness({
+    deepGuidanceEnabled: true,
     realDreamResultCard: true,
     noDreamJournal: true,
     fakeDreamJournal: false,
@@ -942,6 +993,7 @@ test("saving guided report stores Dream Result Card in reportContent", async () 
 
 test("guided current-page result card retry before save does not create a malformed synthetic record", async () => {
   const harness = createAppIntegrationHarness({
+    deepGuidanceEnabled: true,
     realDreamResultCard: true,
     noDreamJournal: true,
     fakeDreamJournal: false,

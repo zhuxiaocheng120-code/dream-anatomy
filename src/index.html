@@ -14,7 +14,10 @@
       <div class="header-actions">
         <nav class="nav-links" aria-label="主要导航">
           <button type="button" class="text-button" data-view-target="quick">快速解析</button>
-          <button type="button" class="text-button" data-view-target="guided">深度引导</button>
+          <button type="button" class="text-button" data-view-target="guided" data-feature-flag="deep-guidance">
+            <span>深度引导</span>
+            <span class="feature-status-badge" data-feature-status>正在开发中</span>
+          </button>
           <button type="button" class="text-button" data-view-target="diary">梦境日记</button>
         </nav>
 
@@ -60,9 +63,9 @@
               <span>写下一段刚醒来还记得的梦境碎片，先获得一个简短整理入口。</span>
             </button>
 
-            <button class="entry-card" type="button" data-view-target="guided">
+            <button class="entry-card" type="button" data-view-target="guided" data-feature-flag="deep-guidance">
               <span class="entry-number">02</span>
-              <strong>深度引导</strong>
+              <strong>深度引导 <span class="feature-status-badge" data-feature-status>正在开发中</span></strong>
               <span>通过几个温和问题，慢慢补充梦里的情绪、联想和现实连接。</span>
             </button>
 
@@ -125,7 +128,10 @@
               </div>
               <div class="dream-home-action-list">
                 <button type="button" data-dream-home-action="quick">快速解析</button>
-                <button type="button" data-dream-home-action="guided">深度引导</button>
+                <button type="button" data-dream-home-action="guided" data-feature-flag="deep-guidance">
+                  <span>深度引导</span>
+                  <span class="feature-status-badge" data-feature-status>正在开发中</span>
+                </button>
                 <button type="button" data-dream-home-action="diary">查看梦境档案</button>
               </div>
             </section>
@@ -394,6 +400,7 @@
 
     <script src="vendor/supabase.js"></script>
     <script src="runtime-env.js"></script>
+    <script src="featureFlags.js"></script>
     <script src="dreamSync.js"></script>
     <script src="auth.js"></script>
     <script src="dreamQuotes.js"></script>

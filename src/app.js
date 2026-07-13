@@ -34,6 +34,8 @@ const canUseDreamJournal = window.DreamJournal
   && typeof window.DreamJournal.createDreamJournalController === "function";
 const canUseDreamResultCard = window.DreamResultCard
   && typeof window.DreamResultCard.createDreamResultCardController === "function";
+const featureFlags = window.DreamAnatomyFeatureFlags || {};
+const deepGuidanceEnabled = featureFlags.DEEP_GUIDANCE_ENABLED === true;
 const dreamSyncController = window.DreamSync
   ? window.DreamSync.createDreamSyncController({
       client: window.DreamAnatomyAuth ? window.DreamAnatomyAuth.getClient() : null,
@@ -100,6 +102,11 @@ if (dreamSyncController) {
 }
 
 function showView(viewName) {
+  if (viewName === "guided" && !deepGuidanceEnabled) {
+    updateGuidedStatus("深度引导正在开发中。");
+    return;
+  }
+
   if (viewName === "diary") {
     showDreamJournalList();
   }
@@ -117,8 +124,32 @@ function showView(viewName) {
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
+function applyDeepGuidanceFeatureState() {
+  const guidedEntryControls = document.querySelectorAll("[data-feature-flag='deep-guidance']");
+
+  guidedEntryControls.forEach((control) => {
+    const status = control.querySelector("[data-feature-status]");
+    const disabled = !deepGuidanceEnabled;
+
+    control.disabled = disabled;
+    control.setAttribute("aria-disabled", disabled ? "true" : "false");
+    control.classList.toggle("is-feature-disabled", disabled);
+
+    if (status) {
+      status.hidden = !disabled;
+    }
+  });
+}
+
+applyDeepGuidanceFeatureState();
+
 viewButtons.forEach((button) => {
   button.addEventListener("click", () => {
+    if (button.dataset.viewTarget === "guided" && !deepGuidanceEnabled) {
+      updateGuidedStatus("深度引导正在开发中。");
+      return;
+    }
+
     showView(button.dataset.viewTarget);
   });
 });
@@ -1080,6 +1111,16 @@ if (guidedForm) {
   guidedForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
+    if (!deepGuidanceEnabled) {
+      hideDeepReport();
+      renderGuidedQuestions([]);
+      if (guidedActions) {
+        guidedActions.hidden = true;
+      }
+      updateGuidedStatus("深度引导正在开发中。");
+      return;
+    }
+
     const rawDreamText = guidedDream.value.trim();
 
     if (!rawDreamText) {
@@ -1132,6 +1173,12 @@ if (guidedForm) {
 
 if (generateDeepReportButton) {
   generateDeepReportButton.addEventListener("click", async () => {
+    if (!deepGuidanceEnabled) {
+      hideDeepReport();
+      updateGuidedStatus("深度引导正在开发中。");
+      return;
+    }
+
     const rawDreamText = guidedDream.value.trim();
 
     if (!rawDreamText) {
@@ -1191,6 +1238,11 @@ if (generateDeepReportButton) {
 
 if (saveDeepReportButton) {
   saveDeepReportButton.addEventListener("click", async () => {
+    if (!deepGuidanceEnabled) {
+      updateDeepSaveStatus("深度引导正在开发中，暂时不能创建新的深度引导记录。");
+      return;
+    }
+
     if (!guidedDraftState.currentReport) {
       updateDeepSaveStatus("请先生成深度报告，再保存到梦境日记。");
       return;

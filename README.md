@@ -12,12 +12,11 @@
 
 - 中文首页，介绍梦境记录和自我探索的核心想法。
 - 三个明确入口：快速解析、深度引导、梦境日记。
-- 点击入口后可以进入快速解析、深度引导、Dream Journal 和 Dream Detail 等现有流程。
+- 点击入口后可以进入快速解析、Dream Journal 和 Dream Detail 等现有流程。
+- 深度引导入口目前保留展示，但通过 `src/featureFlags.js` 暂时标记为“正在开发中”，不能开始新的深度引导。
 - 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API；快速解析的一次最终请求会同时返回分析正文和完整 `reportContent.dreamResultCard` 梦境画像。
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果。
-- 深度引导区域可以输入梦境，并优先通过后端根据当次梦境动态生成 3-5 个温和短问题，帮助补充情绪、联想、现实连接、梦中主动性和醒后感受。
-- 深度引导回答只在当前页面临时暂存，可以回答部分或全部问题；点击生成深度报告后，会综合梦境原文和全部回答发起一次最终请求，同时返回 Dream Anatomy Report 和完整梦境画像。
-- 深度报告包含梦境整理、情绪线索、核心意象、荣格式初步解读、现实连接、自我反思问题、今日小行动和温和提醒，并会在当前结果页直接展示梦境画像，可保存到梦境日记。
+- 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
 - 梦境日记区域会在同一个列表中显示快速解析和深度引导记录，并可以点击查看单条记录详情。
 - 梦境详情会展示梦境标题、日期、时间、完整原文、AI 摘要、情绪标签、梦境意象、睡眠质量和分析类型。
 - 梦境详情里的 AI 分析采用可折叠卡片，包含荣格、弗洛伊德和现代心理学三个温和视角，并预留“自我思考”区域供后续扩展。
@@ -63,6 +62,7 @@
 │   ├── dreamJournal.js
 │   ├── dreamQuotes.js
 │   ├── dreamSync.js
+│   ├── featureFlags.js
 │   ├── index.html
 │   ├── runtime-env.js
 │   ├── style.css
@@ -80,6 +80,7 @@
 - src/dreamJournal.js: Dream Journal archive grouping, realtime search, filters, empty state, record rendering, and existing detail navigation.
 - src/dreamQuotes.js: verified public-domain daily quote records and browser-local, date-stable quote selection.
 - src/dreamSync.js: localStorage to Supabase dream record sync, cloud loading, pending retry, and record mapping.
+- src/featureFlags.js: small browser feature flag module; `DEEP_GUIDANCE_ENABLED` currently keeps new deep guidance creation disabled.
 - src/runtime-env.js: browser runtime configuration generated for local or deployed Supabase public settings.
 - src/vendor/supabase.js: browser Supabase SDK asset used by the account UI.
 - server.js: Express server that serves src and proxies quick, guided-question, guided-final, and legacy manual result-card dream analysis requests.
@@ -131,6 +132,6 @@ The folded AI analysis sections and saved Dream Result Card are presentation vie
 
 ## Dream Result Card Boundaries
 
-Quick decode and guided final analysis each use 一次最终请求 to generate analysis text and `reportContent.dreamResultCard` **梦境画像** from the same context. The current result page displays the Dream Result Card immediately after analysis, and saving writes it into the existing record content; this feature 不新增 schema 或数据库字段。
+Quick decode uses 一次最终请求 to generate analysis text and `reportContent.dreamResultCard` **梦境画像** from the same context. The current result page displays the Dream Result Card immediately after analysis, and saving writes it into the existing record content; this feature 不新增 schema 或数据库字段。Guided final analysis keeps its source code and server path, but starting new deep guidance is currently disabled by feature flag.
 
 Dream Detail may still show a manual generation option for old records that do not have a saved card, but Dream Journal and Dream Detail do not automatically regenerate cards or overwrite saved results. The result card includes a share card preview for the current page only; 图片下载和分享功能未实现。
