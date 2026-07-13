@@ -659,6 +659,10 @@ input:focus-visible {
   margin-bottom: 0;
 }
 
+.result-grid [data-result-field="evidence"] {
+  white-space: pre-line;
+}
+
 .wide-report-card {
   grid-column: 1 / -1;
 }

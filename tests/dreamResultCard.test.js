@@ -169,6 +169,33 @@ test("does not render missing dimension scores as zero for ai generated cards", 
   assert.doesNotMatch(text, /象征深度 0/);
 });
 
+test("does not render non-numeric dimension scores as zero for ai generated cards", () => {
+  const card = {
+    archetype: { id: "observer", summary: "本次梦境更接近观察者原型，也许和停留观看有关。" },
+    coreInsight: "这个梦也许在邀请你看见某个片段。",
+    dimensions: [
+      { id: "symbol_depth", score: "   ", summary: "意象线索有限。", rationale: ["门出现。"] }
+    ],
+    symbols: [],
+    emotionalProfile: { primary: "安静", intensity: false, evidence: "梦里只是站着看。" },
+    reflectionQuestions: ["你最想继续看见什么？"],
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+  const container = createFakeElement();
+  const controller = DreamResultCard.createDreamResultCardController({
+    document: { createElement: createFakeElement }
+  });
+
+  controller.render(container, {
+    reportContent: { dreamResultCard: card, dreamResultCardStatus: "ai_generated" }
+  });
+
+  const text = collectText(container);
+  assert.match(text, /暂不可用/);
+  assert.doesNotMatch(text, /象征深度 0/);
+  assert.doesNotMatch(text, /情绪强度：0/);
+});
+
 test("does not render missing emotional intensity as zero", () => {
   const card = {
     archetype: { id: "observer", summary: "本次梦境更接近观察者原型，也许和停留观看有关。" },

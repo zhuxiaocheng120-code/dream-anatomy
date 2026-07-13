@@ -27,8 +27,10 @@
   }
 
   function clampScore(value) {
-    const number = Number(value);
-    if (!Number.isFinite(number)) return 0;
+    const number = typeof value === "number"
+      ? value
+      : (typeof value === "string" && /^-?\d+(?:\.\d+)?$/.test(value.trim()) ? Number(value.trim()) : NaN);
+    if (!Number.isFinite(number)) return null;
     return Math.max(0, Math.min(100, number));
   }
 
@@ -69,7 +71,8 @@
     return {
       archetype: {
         ...archetype,
-        summary: text(archetype.summary, "本次梦境更接近这个原型，也许值得从具体感受开始观察。")
+        summary: text(archetype.summary, "本次梦境更接近这个原型，也许值得从具体感受开始观察。"),
+        evidence: textList(input.archetype && input.archetype.evidence, fallbackText)
       },
       coreInsight: text(input.coreInsight),
       dimensions: dimensionDefinitions.map((definition) => normalizeDimension(dimensionMap.get(definition.id), definition, options)),
@@ -176,6 +179,14 @@
     appendTextElement(documentRef, hero, "strong", "", card.archetype.nameZh);
     appendTextElement(documentRef, hero, "span", "", card.archetype.nameEn);
     appendTextElement(documentRef, hero, "p", "", card.archetype.summary);
+    if (card.archetype.evidence.length) {
+      const evidence = createElement(documentRef, "details", "result-card-rationale");
+      appendTextElement(documentRef, evidence, "summary", "", "识别线索");
+      const list = createElement(documentRef, "ul", "");
+      card.archetype.evidence.forEach((item) => appendTextElement(documentRef, list, "li", "", item));
+      evidence.append(list);
+      hero.append(evidence);
+    }
 
     const insight = createElement(documentRef, "section", "result-card-insight");
     appendTextElement(documentRef, insight, "h3", "", "一句话核心洞察");

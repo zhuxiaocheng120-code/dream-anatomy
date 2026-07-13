@@ -179,11 +179,21 @@ function getPossibleSymbols(rawDreamText) {
 
 function fillQuickResult(result) {
   resultFields.forEach((field) => {
-    field.textContent = result[field.dataset.resultField];
+    const key = field.dataset.resultField;
+    field.textContent = key === "evidence" ? formatEvidenceList(result.evidence) : result[key];
   });
 }
 
 function formatEmotionList(emotions) {
+  if (emotions && typeof emotions === "object" && !Array.isArray(emotions)) {
+    return [
+      emotions.primaryEmotion || emotions.primary,
+      emotions.secondaryEmotions && emotions.secondaryEmotions.length ? `伴随情绪：${emotions.secondaryEmotions.join("、")}` : "",
+      emotions.intensity !== null && emotions.intensity !== undefined ? `强度：${emotions.intensity}` : "",
+      emotions.evidence ? `线索：${emotions.evidence}` : ""
+    ].filter(Boolean).join("；");
+  }
+
   if (Array.isArray(emotions)) {
     return emotions
       .map((emotion) => {
@@ -205,7 +215,12 @@ function formatSymbolList(symbols) {
     return symbols
       .map((symbol) => {
         if (symbol && typeof symbol === "object") {
-          return [symbol.name, symbol.contextMeaning].filter(Boolean).join("：");
+          const name = symbol.symbol || symbol.name;
+          const context = symbol.context || symbol.contextMeaning;
+          const meaning = symbol.possibleMeaning || symbol.generalPossibility;
+          const evidence = symbol.evidence ? `线索：${symbol.evidence}` : "";
+          const question = symbol.reflectionQuestion ? `你可以思考：${symbol.reflectionQuestion}` : "";
+          return [name, context, meaning, evidence, question].filter(Boolean).join("：");
         }
 
         return String(symbol || "").trim();
@@ -217,18 +232,34 @@ function formatSymbolList(symbols) {
   return symbols || "";
 }
 
+function formatEvidenceList(evidence) {
+  return Array.isArray(evidence)
+    ? evidence
+      .map((item) => {
+        if (!item || typeof item !== "object") return "";
+        return [`梦境片段：${item.dreamFragment}`, `可能理解：${item.interpretation}`].filter(Boolean).join("\n");
+      })
+      .filter(Boolean)
+      .join("\n\n")
+    : "";
+}
+
 function formatQuestionList(questions) {
   return Array.isArray(questions) ? questions.filter(Boolean).join(" ") : (questions || "");
 }
 
 function mapApiQuickDecode(apiResult) {
   return {
+    ...apiResult,
     summary: apiResult.summary || apiResult.dreamSummary || "",
-    emotion: formatEmotionList(apiResult.emotions || apiResult.coreEmotion),
-    symbols: formatSymbolList(apiResult.symbols),
+    theme: apiResult.coreTheme || "",
+    emotion: formatEmotionList(apiResult.emotionalReading || apiResult.emotions || apiResult.coreEmotion),
+    symbols: formatSymbolList(apiResult.symbolReading || apiResult.symbols),
     jungian: apiResult.coreInterpretation || apiResult.jungianInterpretation || "",
+    evidence: Array.isArray(apiResult.evidence) ? apiResult.evidence : [],
     question: formatQuestionList(apiResult.reflectionQuestions),
-    reminder: apiResult.gentleReminder || ""
+    action: apiResult.gentleAction || "",
+    reminder: apiResult.safetyReminder || apiResult.gentleReminder || ""
   };
 }
 
@@ -247,6 +278,7 @@ async function requestQuickDecode(rawDreamText) {
   if (!response.ok) {
     const error = new Error("Dream analysis request failed.");
     error.isValidationError = response.status === 400;
+    error.isIncompleteGeneration = response.status === 422;
     throw error;
   }
 
@@ -259,7 +291,8 @@ async function requestQuickDecode(rawDreamText) {
   return {
     ...mapApiQuickDecode(data.analysis),
     dreamResultCard: data.dreamResultCard || null,
-    dreamResultCardStatus: data.dreamResultCardStatus || (data.dreamResultCard ? "ai_generated" : "generation_failed")
+    dreamResultCardStatus: data.dreamResultCardStatus || (data.dreamResultCard ? "ai_generated" : "generation_failed"),
+    generationMeta: data.generationMeta || null
   };
 }
 
@@ -752,7 +785,7 @@ function buildDetailAnalysis(record) {
   const dreamSummary = formatDetailValue(getRecordField(record, "dream_summary", "dreamSummary"));
   const emotions = formatDetailValue(getRecordField(record, "emotions", "emotions"));
   const symbols = formatDetailValue(getRecordField(record, "symbols", "symbols"));
-  const jungText = report.jungianView || report.jungian || report.summary || dreamSummary;
+  const jungText = report.jungianView || report.jungian || report.coreInterpretation || report.summary || report.dreamSummary || dreamSummary;
   const freudText = `从弗洛伊德视角，可以温和地留意梦里是否有愿望、担心或未说出口的感受。你可以把“${emotions}”当作线索，而不是结论。`;
   const modernText = `从现代心理学视角，可以先观察梦醒后的情绪和反复出现的意象。“${symbols}”也许和近期注意力、压力或休息状态有关。`;
 
@@ -830,12 +863,15 @@ function getReportSections(record) {
   }
 
   return [
-    ["梦境整理", report.summary],
+    ["梦境整理", report.summary || report.dreamSummary],
+    ["核心主题", report.theme || report.coreTheme],
     ["核心情绪", report.emotion],
     ["主要象征", report.symbols],
-    ["初步荣格解读", report.jungian],
+    ["初步荣格解读", report.jungian || report.coreInterpretation],
+    ["证据与解释", report.evidence],
     ["反思问题", report.question],
-    ["温和提醒", report.reminder]
+    ["今日小行动", report.action || report.gentleAction],
+    ["温和提醒", report.reminder || report.safetyReminder]
   ];
 }
 
@@ -888,7 +924,7 @@ function renderDreamDetail(recordId, fallbackRow) {
   const sleepQuality = getRecordField(record, "sleep_quality", "sleepQuality");
   const analysisType = getRecordField(record, "analysis_type", "analysisType");
   const report = getReportContent(record);
-  const gentleReminder = report.gentleReminder || report.reminder;
+  const gentleReminder = report.safetyReminder || report.gentleReminder || report.reminder;
   const hero = document.createElement("header");
   const heroTitle = document.createElement("h3");
   const heroMeta = document.createElement("div");
@@ -1057,6 +1093,20 @@ if (quickForm) {
       if (error.isValidationError) {
         if (status) {
           status.textContent = "梦境内容暂时无法提交，可以检查文字长度后再试。";
+        }
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+        return;
+      }
+
+      if (error.isIncompleteGeneration) {
+        quickResult.hidden = true;
+        if (quickResultCard) {
+          quickResultCard.textContent = "";
+        }
+        if (status) {
+          status.textContent = "AI 结果暂时不够完整，没有保存这次解析。你可以稍后再试，或补充一点梦境细节后重新生成。";
         }
         if (submitButton) {
           submitButton.disabled = false;
