@@ -7,11 +7,11 @@
 })(typeof window !== "undefined" ? window : globalThis, function () {
   const defaultTitleLength = 36;
   const groupLabels = [
-    "Today",
-    "Yesterday",
-    "Earlier This Week",
-    "Earlier This Month",
-    "Older"
+    "今天",
+    "昨天",
+    "本周更早",
+    "本月更早",
+    "更早记录"
   ];
 
   function getRecordValue(record, snakeCaseKey, camelCaseKey) {
@@ -52,6 +52,20 @@
     }
 
     return "Dream";
+  }
+
+  function getAnalysisLabel(record) {
+    const kind = getAnalysisKind(record);
+
+    if (kind === "Quick") {
+      return "快速解析";
+    }
+
+    if (kind === "Deep") {
+      return "深度解析";
+    }
+
+    return "梦境记录";
   }
 
   function toTextArray(value) {
@@ -126,15 +140,15 @@
     yesterday.setDate(today.getDate() - 1);
 
     if (getLocalDateKey(recordDay) === getLocalDateKey(today)) {
-      return "Today";
+      return "今天";
     }
 
     if (getLocalDateKey(recordDay) === getLocalDateKey(yesterday)) {
-      return "Yesterday";
+      return "昨天";
     }
 
     if (recordDay >= startOfWeek(today) && recordDay < yesterday) {
-      return "Earlier This Week";
+      return "本周更早";
     }
 
     if (
@@ -142,10 +156,10 @@
       && recordDay.getMonth() === today.getMonth()
       && recordDay < startOfWeek(today)
     ) {
-      return "Earlier This Month";
+      return "本月更早";
     }
 
-    return "Older";
+    return "更早记录";
   }
 
   function sortRecords(records) {
@@ -164,7 +178,7 @@
 
     sortRecords(records).forEach((record) => {
       const recordDate = getRecordDate(record);
-      const label = recordDate && isValidDate(now) ? getDateGroupLabel(recordDate, now) : "Older";
+      const label = recordDate && isValidDate(now) ? getDateGroupLabel(recordDate, now) : "更早记录";
       groups.get(label).push(record);
     });
 
@@ -190,15 +204,15 @@
       return true;
     }
 
-    if (normalizedFilter === "quick") {
+    if (normalizedFilter === "quick" || normalizedFilter === "快速解析") {
       return getAnalysisKind(record) === "Quick";
     }
 
-    if (normalizedFilter === "deep") {
+    if (normalizedFilter === "deep" || normalizedFilter === "深度解析") {
       return getAnalysisKind(record) === "Deep";
     }
 
-    if (normalizedFilter === "pending" || normalizedFilter === "pending sync") {
+    if (normalizedFilter === "pending" || normalizedFilter === "pending sync" || normalizedFilter === "待同步") {
       return getRecordValue(record, "sync_status", "syncStatus") === "pending_sync";
     }
 
@@ -303,20 +317,20 @@
         || "梦境内容未记录"
     );
     const meta = createElement(documentRef, "div", "dream-journal-record-meta");
-    const emotion = createElement(documentRef, "span", "", `Emotion: ${getEmotionText(record)}`);
+    const emotion = createElement(documentRef, "span", "", `情绪：${getEmotionText(record)}`);
     const symbols = getSymbolList(record);
     const symbolText = symbols.length > 0 ? symbols.join("、") : "未记录";
-    const symbolNode = createElement(documentRef, "span", "", `Symbols: ${symbolText}`);
+    const symbolNode = createElement(documentRef, "span", "", `意象：${symbolText}`);
 
     action.type = "button";
     action.addEventListener("click", () => {
       onOpenDetail(record);
     });
 
-    badges.append(createBadge(documentRef, getAnalysisKind(record), "dream-journal-kind-badge"));
+    badges.append(createBadge(documentRef, getAnalysisLabel(record), "dream-journal-kind-badge"));
 
     if (getRecordValue(record, "sync_status", "syncStatus") === "pending_sync") {
-      badges.append(createBadge(documentRef, "Pending Sync", "dream-journal-sync-badge"));
+      badges.append(createBadge(documentRef, "待同步", "dream-journal-sync-badge"));
     }
 
     heading.append(title, date);
