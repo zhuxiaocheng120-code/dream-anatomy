@@ -3,6 +3,7 @@ const viewButtons = document.querySelectorAll("[data-view-target]");
 const quickForm = document.querySelector("[data-quick-form]");
 const quickDream = document.querySelector("#quickDream");
 const quickResult = document.querySelector("#quickResult");
+const quickResultCard = document.querySelector("[data-quick-result-card]");
 const resultFields = document.querySelectorAll("[data-result-field]");
 const journalListShell = document.querySelector("[data-journal-list-shell]");
 const dreamJournalList = document.querySelector("#dreamJournalList");
@@ -24,6 +25,7 @@ const guidedActions = document.querySelector("[data-guided-actions]");
 const generateDeepReportButton = document.querySelector("[data-generate-deep-report]");
 const deepReport = document.querySelector("[data-deep-report]");
 const deepReportFields = document.querySelectorAll("[data-deep-report-field]");
+const guidedResultCard = document.querySelector("[data-guided-result-card]");
 const saveDeepReportButton = document.querySelector("[data-save-deep-report]");
 const deepSaveStatus = document.querySelector("[data-deep-save-status]");
 const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
@@ -150,14 +152,52 @@ function fillQuickResult(result) {
   });
 }
 
+function formatEmotionList(emotions) {
+  if (Array.isArray(emotions)) {
+    return emotions
+      .map((emotion) => {
+        if (emotion && typeof emotion === "object") {
+          return [emotion.name, emotion.evidence].filter(Boolean).join("：");
+        }
+
+        return String(emotion || "").trim();
+      })
+      .filter(Boolean)
+      .join("；");
+  }
+
+  return emotions || "";
+}
+
+function formatSymbolList(symbols) {
+  if (Array.isArray(symbols)) {
+    return symbols
+      .map((symbol) => {
+        if (symbol && typeof symbol === "object") {
+          return [symbol.name, symbol.contextMeaning].filter(Boolean).join("：");
+        }
+
+        return String(symbol || "").trim();
+      })
+      .filter(Boolean)
+      .join("；");
+  }
+
+  return symbols || "";
+}
+
+function formatQuestionList(questions) {
+  return Array.isArray(questions) ? questions.filter(Boolean).join(" ") : (questions || "");
+}
+
 function mapApiQuickDecode(apiResult) {
   return {
-    summary: apiResult.dreamSummary,
-    emotion: apiResult.coreEmotion,
-    symbols: Array.isArray(apiResult.symbols) ? apiResult.symbols.join("、") : "",
-    jungian: apiResult.jungianInterpretation,
-    question: Array.isArray(apiResult.reflectionQuestions) ? apiResult.reflectionQuestions.join(" ") : "",
-    reminder: apiResult.gentleReminder
+    summary: apiResult.summary || apiResult.dreamSummary || "",
+    emotion: formatEmotionList(apiResult.emotions || apiResult.coreEmotion),
+    symbols: formatSymbolList(apiResult.symbols),
+    jungian: apiResult.coreInterpretation || apiResult.jungianInterpretation || "",
+    question: formatQuestionList(apiResult.reflectionQuestions),
+    reminder: apiResult.gentleReminder || ""
   };
 }
 
@@ -185,7 +225,70 @@ async function requestQuickDecode(rawDreamText) {
     throw new Error("Dream analysis response is empty.");
   }
 
-  return mapApiQuickDecode(data.analysis);
+  return {
+    ...mapApiQuickDecode(data.analysis),
+    dreamResultCard: data.dreamResultCard || null,
+    dreamResultCardStatus: data.dreamResultCardStatus || (data.dreamResultCard ? "ai_generated" : "generation_failed")
+  };
+}
+
+async function requestGuidedQuestions(rawDreamText) {
+  const response = await fetch("/api/dream-analysis", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      dreamText: rawDreamText,
+      analysisType: "guided_questions"
+    })
+  });
+
+  if (!response.ok) {
+    const error = new Error("Guided questions request failed.");
+    error.isValidationError = response.status === 400;
+    throw error;
+  }
+
+  const data = await response.json();
+
+  if (!data || !Array.isArray(data.questions)) {
+    throw new Error("Guided questions response is empty.");
+  }
+
+  return data.questions;
+}
+
+async function requestGuidedFinalReport(rawDreamText, guidedAnswers) {
+  const response = await fetch("/api/dream-analysis", {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify({
+      dreamText: rawDreamText,
+      analysisType: "guided_final",
+      guidedAnswers
+    })
+  });
+
+  if (!response.ok) {
+    const error = new Error("Guided final report request failed.");
+    error.isValidationError = response.status === 400;
+    throw error;
+  }
+
+  const data = await response.json();
+
+  if (!data || !data.analysis) {
+    throw new Error("Guided final report response is empty.");
+  }
+
+  return {
+    ...data.analysis,
+    dreamResultCard: data.dreamResultCard || null,
+    dreamResultCardStatus: data.dreamResultCardStatus || (data.dreamResultCard ? "ai_generated" : "generation_failed")
+  };
 }
 
 async function requestDreamResultCard(rawDreamText) {
@@ -224,7 +327,9 @@ function generateMockQuickDecode(rawDreamText) {
     symbols: `主要象征也许包括：${possibleSymbols}。这些意象不需要被固定解释，可以先看它们让你联想到什么。`,
     jungian: "从温和的荣格视角看，这个梦可以理解为内在经验的一次呈现，也许正在邀请你靠近某个还没有被充分表达的部分。",
     question: "你可以思考：梦里哪个画面最吸引你，或让你最想避开？它和你最近的情绪、选择或关系有什么轻微连接吗？",
-    reminder: "这不是诊断、治疗或预言，只是一种自我探索视角。如果梦境让你持续不安，可以考虑寻求可信任的人或专业支持。"
+    reminder: "这不是诊断、治疗或预言，只是一种自我探索视角。如果梦境让你持续不安，可以考虑寻求可信任的人或专业支持。",
+    dreamResultCard: null,
+    dreamResultCardStatus: "mock_legacy"
   };
 }
 
@@ -292,7 +397,9 @@ function generateMockDeepReport(rawDreamText) {
     lifeConnection: `你写下的现实连接是：${lifeLinkAnswer} 梦中主动性的线索是：${agencyAnswer} 你可以思考它们是否和最近的节奏、关系、压力或选择有轻微呼应。`,
     reflectionQuestions: `你可以带着这些问题再看一遍梦：哪个画面最想被你记住？如果梦里的某个意象会说话，它也许会提醒你什么？醒后感受“${wakingAnswer}”和你最近的生活状态有怎样的细小连接？`,
     smallAction: "今天可以做一个很小的记录动作：用一句话写下梦里最清晰的画面，再写下它带给你的一个感受。这个动作只是帮助你温和地整理自己，不需要得出结论。",
-    gentleReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。你可以只保留对自己有帮助的部分；如果梦境让你持续不安，可以考虑和可信任的人或专业支持者谈谈。"
+    gentleReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。你可以只保留对自己有帮助的部分；如果梦境让你持续不安，可以考虑和可信任的人或专业支持者谈谈。",
+    dreamResultCard: null,
+    dreamResultCardStatus: "mock_legacy"
   };
 }
 
@@ -316,6 +423,10 @@ function hideDeepReport() {
   deepReportFields.forEach((field) => {
     field.textContent = "";
   });
+
+  if (guidedResultCard) {
+    guidedResultCard.textContent = "";
+  }
 
   guidedDraftState.currentReport = null;
   guidedDraftState.savedReportRecordId = "";
@@ -369,6 +480,32 @@ function renderDeepReport(report) {
   });
 
   deepReport.hidden = false;
+}
+
+function renderDreamResultCardMount(container, rawDreamText, result, record, options = {}) {
+  if (!container || !canUseDreamResultCard || !result) {
+    return;
+  }
+
+  const controller = options.disableRetrySave
+      ? window.DreamResultCard.createDreamResultCardController({
+        document,
+        generationErrorMessage: "请先保存这份深度报告，再从梦境详情中重新生成画像。",
+        requestResultCard: async () => {
+          throw new Error("Save the report before retrying result card generation.");
+        }
+      })
+    : dreamResultCardController;
+
+  controller.render(container, {
+    ...(record || {}),
+    rawDreamText,
+    reportContent: {
+      ...((record && getReportContent(record)) || {}),
+      dreamResultCard: result.dreamResultCard,
+      dreamResultCardStatus: result.dreamResultCardStatus
+    }
+  });
 }
 
 function loadLocalDreamRecords() {
@@ -903,9 +1040,11 @@ if (quickForm) {
     try {
       const dreamRecord = createDreamRecord(rawDreamText, quickDecode);
       const saveResult = await saveDreamRecord(dreamRecord);
+      const savedRecord = saveResult.records.find((record) => String(record.id) === String(dreamRecord.id)) || dreamRecord;
 
       fillQuickResult(quickDecode);
       quickResult.hidden = false;
+      renderDreamResultCardMount(quickResultCard, rawDreamText, quickDecode, savedRecord);
       renderDreamJournal(saveResult.records);
       if (status) {
         status.textContent = getSaveStatusMessage(saveResult.syncStatus, statusPrefix);
@@ -923,6 +1062,9 @@ if (quickForm) {
 
   quickForm.addEventListener("reset", () => {
     quickResult.hidden = true;
+    if (quickResultCard) {
+      quickResultCard.textContent = "";
+    }
     resultFields.forEach((field) => {
       field.textContent = "";
     });
@@ -935,7 +1077,7 @@ if (quickForm) {
 }
 
 if (guidedForm) {
-  guidedForm.addEventListener("submit", (event) => {
+  guidedForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
     const rawDreamText = guidedDream.value.trim();
@@ -947,15 +1089,30 @@ if (guidedForm) {
     }
 
     guidedDraftState.rawDreamText = rawDreamText;
-    guidedDraftState.questions = generateGuidedQuestions(rawDreamText);
     guidedDraftState.answers = {};
+
+    try {
+      updateGuidedStatus("正在整理几个适合这次梦境的问题……");
+      guidedDraftState.questions = await requestGuidedQuestions(rawDreamText);
+    } catch (error) {
+      if (error.isValidationError) {
+        updateGuidedStatus("梦境内容暂时无法提交，可以检查文字长度后再试。");
+        guidedDream.focus();
+        return;
+      }
+
+      guidedDraftState.questions = generateGuidedQuestions(rawDreamText);
+      updateGuidedStatus("当前无法连接 AI，已为你展示本地示例问题。");
+    }
 
     renderGuidedQuestions(guidedDraftState.questions);
     hideDeepReport();
     if (guidedActions) {
       guidedActions.hidden = false;
     }
-    updateGuidedStatus("已生成 5 个温和问题。你可以简单回答，不需要写得很完整；不想回答的问题可以跳过。");
+    if (!guidedStatus || !guidedStatus.textContent.includes("本地示例问题")) {
+      updateGuidedStatus("已生成几个温和问题。你可以简单回答，不需要写得很完整；不想回答的问题可以跳过。");
+    }
   });
 
   guidedForm.addEventListener("reset", () => {
@@ -974,7 +1131,7 @@ if (guidedForm) {
 }
 
 if (generateDeepReportButton) {
-  generateDeepReportButton.addEventListener("click", () => {
+  generateDeepReportButton.addEventListener("click", async () => {
     const rawDreamText = guidedDream.value.trim();
 
     if (!rawDreamText) {
@@ -991,15 +1148,36 @@ if (generateDeepReportButton) {
       renderGuidedQuestions(guidedDraftState.questions);
     }
 
-    const deepReportResult = generateMockDeepReport(rawDreamText);
+    let deepReportResult;
+
+    try {
+      updateGuidedStatus("正在综合梦境和你的回答……");
+      deepReportResult = await requestGuidedFinalReport(rawDreamText, guidedDraftState.answers);
+    } catch (error) {
+      if (error.isValidationError) {
+        hideDeepReport();
+        updateGuidedStatus("梦境内容暂时无法提交，可以检查文字长度后再试。");
+        guidedDream.focus();
+        return;
+      }
+
+      deepReportResult = generateMockDeepReport(rawDreamText);
+      updateGuidedStatus("当前无法连接 AI，已为你展示本地示例深度报告。");
+    }
+
     guidedDraftState.currentReport = deepReportResult;
     guidedDraftState.savedReportRecordId = "";
     renderDeepReport(deepReportResult);
+    renderDreamResultCardMount(guidedResultCard, rawDreamText, deepReportResult, null, {
+      disableRetrySave: true
+    });
 
     if (guidedActions) {
       guidedActions.hidden = false;
     }
-    updateGuidedStatus("已生成本地 mock 深度报告。当前不会发送到服务器。");
+    if (!guidedStatus || !guidedStatus.textContent.includes("本地示例深度报告")) {
+      updateGuidedStatus("已生成深度报告和梦境画像。");
+    }
     updateDeepSaveStatus("可以点击“保存到梦境日记”，把这份深度引导记录保存在当前浏览器里。");
   });
 }
@@ -1021,8 +1199,10 @@ if (saveDeepReportButton) {
 
     try {
       const saveResult = await saveDreamRecord(deepDreamRecord);
+      const savedRecord = saveResult.records.find((record) => String(record.id) === String(deepDreamRecord.id)) || deepDreamRecord;
       renderDreamJournal(saveResult.records);
       guidedDraftState.savedReportRecordId = deepDreamRecord.id;
+      renderDreamResultCardMount(guidedResultCard, rawDreamText, guidedDraftState.currentReport, savedRecord);
       updateDeepSaveStatus(getSaveStatusMessage(saveResult.syncStatus, "深度报告已保存"));
     } catch (error) {
       updateDeepSaveStatus("这份深度报告已经生成，但浏览器暂时无法保存本地记录。");

@@ -13,11 +13,11 @@
 - 中文首页，介绍梦境记录和自我探索的核心想法。
 - 三个明确入口：快速解析、深度引导、梦境日记。
 - 点击入口后可以进入快速解析、深度引导、Dream Journal 和 Dream Detail 等现有流程。
-- 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API，失败时回退到本地 mock 的结构化快速解析结果。
-- 快速解析结果会保存到浏览器本地梦境日记，并在梦境日记区域显示摘要列表。
-- 深度引导区域可以输入梦境，并在本地生成 5 个温和短问题，帮助补充情绪、联想、现实连接、梦中主动性和醒后感受。
-- 深度引导回答只在当前页面临时暂存，可以回答部分或全部问题，并生成一份本地 mock 的 Dream Anatomy Report。
-- 深度报告包含梦境整理、情绪线索、核心意象、荣格式初步解读、现实连接、自我反思问题、今日小行动和温和提醒，并可保存到本地梦境日记。
+- 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API；快速解析的一次最终请求会同时返回分析正文和完整 `reportContent.dreamResultCard` 梦境画像。
+- 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果。
+- 深度引导区域可以输入梦境，并优先通过后端根据当次梦境动态生成 3-5 个温和短问题，帮助补充情绪、联想、现实连接、梦中主动性和醒后感受。
+- 深度引导回答只在当前页面临时暂存，可以回答部分或全部问题；点击生成深度报告后，会综合梦境原文和全部回答发起一次最终请求，同时返回 Dream Anatomy Report 和完整梦境画像。
+- 深度报告包含梦境整理、情绪线索、核心意象、荣格式初步解读、现实连接、自我反思问题、今日小行动和温和提醒，并会在当前结果页直接展示梦境画像，可保存到梦境日记。
 - 梦境日记区域会在同一个列表中显示快速解析和深度引导记录，并可以点击查看单条记录详情。
 - 梦境详情会展示梦境标题、日期、时间、完整原文、AI 摘要、情绪标签、梦境意象、睡眠质量和分析类型。
 - 梦境详情里的 AI 分析采用可折叠卡片，包含荣格、弗洛伊德和现代心理学三个温和视角，并预留“自我思考”区域供后续扩展。
@@ -29,7 +29,7 @@
 - Dream Home 的“查看梦境档案”会进入 **Dream Journal**，这是梦境档案的主要页面。
 - Dream Journal 会展示当前用户可见的全部梦境记录，按 Today、Yesterday、Earlier This Week、Earlier This Month、Older 自动分组，并按时间倒序排列。
 - Dream Journal 支持实时搜索标题、原文、梦境摘要、情绪和意象，也支持 `全部`、`Quick`、`Deep`、`Pending Sync` 过滤。
-- Dream Journal 里的记录会继续进入现有 Dream Detail 页面，不会重新实现另一套详情页。
+- Dream Journal 里的记录会继续进入现有 Dream Detail 页面，不会重新实现另一套详情页，也不会自动重复调用 AI。
 - 每日引语来自已核验的公版中文经典文本，并按浏览器本地日期稳定选择；同一日期刷新页面会显示同一句引语。
 - Dream Home 的“重要梦境”当前固定显示为 `0`，因为现有记录和数据库 schema 没有收藏或重要标记字段。
 - “AI 洞察”和“标签 / 分类”目前只是标有 `Coming Soon` 的非交互视觉区域，不包含模拟数据或可用功能。
@@ -82,7 +82,7 @@
 - src/dreamSync.js: localStorage to Supabase dream record sync, cloud loading, pending retry, and record mapping.
 - src/runtime-env.js: browser runtime configuration generated for local or deployed Supabase public settings.
 - src/vendor/supabase.js: browser Supabase SDK asset used by the account UI.
-- server.js: Express server that serves src and proxies quick dream analysis requests.
+- server.js: Express server that serves src and proxies quick, guided-question, guided-final, and legacy manual result-card dream analysis requests.
 - scripts/writeRuntimeEnv.js: writes `src/runtime-env.js` from environment variables before startup.
 - lib/supabaseClient.js: helper for creating a Supabase client from environment variables.
 - supabase/migrations/: database migrations for cloud dream record storage and sync fields.
@@ -96,7 +96,7 @@
 - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` locally to enable the account UI. These are browser-safe Supabase project values, not service role secrets.
 - Start the app with `npm start`.
 - Open `http://localhost:3000` in your browser.
-- Without `DEEPSEEK_API_KEY`, the page can still open; quick analysis API requests will fail safely and the frontend will show the local fallback result.
+- Without `DEEPSEEK_API_KEY`, the page can still open; analysis API requests will fail safely and the frontend will show clearly marked local fallback results.
 - Without Supabase values, the page can still open; account actions will show a configuration prompt.
 - Run unit tests with `npm test`.
 
@@ -127,10 +127,10 @@ This PR does not add Timeline, Calendar, Favorite, Trash, Edit, Delete, Growth, 
 
 Dream Detail is a read-only view of an existing dream record's original content. It does not edit dream text, change titles, or add database fields.
 
-The folded AI analysis sections are presentation views derived from the existing saved record content. They are not diagnosis, treatment, fortune telling, or future prediction.
+The folded AI analysis sections and saved Dream Result Card are presentation views derived from the existing saved record content. Dream Journal and Dream Detail read saved data and do not automatically repeat AI calls. They are not diagnosis, treatment, fortune telling, or future prediction.
 
 ## Dream Result Card Boundaries
 
-Dream Detail may display or generate a single on-demand `reportContent.dreamResultCard` **梦境画像** for the opened record. Generation uses the existing backend DeepSeek proxy and saves the result into the existing record content; this feature 不新增 schema 或数据库字段。
+Quick decode and guided final analysis each use 一次最终请求 to generate analysis text and `reportContent.dreamResultCard` **梦境画像** from the same context. The current result page displays the Dream Result Card immediately after analysis, and saving writes it into the existing record content; this feature 不新增 schema 或数据库字段。
 
-The result card includes a share card preview for the current page only. It does not auto-generate cards for historical records, and 图片下载和分享功能未实现。
+Dream Detail may still show a manual generation option for old records that do not have a saved card, but Dream Journal and Dream Detail do not automatically regenerate cards or overwrite saved results. The result card includes a share card preview for the current page only; 图片下载和分享功能未实现。
