@@ -1161,8 +1161,17 @@ if (generateDeepReportButton) {
         return;
       }
 
-      deepReportResult = generateMockDeepReport(rawDreamText);
-      updateGuidedStatus("当前无法连接 AI，已为你展示本地示例深度报告。");
+      guidedDraftState.currentReport = null;
+      guidedDraftState.savedReportRecordId = "";
+      hideDeepReport();
+      renderDreamResultCardMount(guidedResultCard, rawDreamText, {
+        dreamResultCardStatus: "generation_failed"
+      }, null, {
+        disableRetrySave: true
+      });
+      updateGuidedStatus("当前暂时无法生成深度报告，请稍后重试。你的梦境和回答不会被伪装成本地结果。");
+      updateDeepSaveStatus("深度报告生成成功后，才能保存到梦境日记。");
+      return;
     }
 
     guidedDraftState.currentReport = deepReportResult;
@@ -1175,9 +1184,7 @@ if (generateDeepReportButton) {
     if (guidedActions) {
       guidedActions.hidden = false;
     }
-    if (!guidedStatus || !guidedStatus.textContent.includes("本地示例深度报告")) {
-      updateGuidedStatus("已生成深度报告和梦境画像。");
-    }
+    updateGuidedStatus("已生成深度报告和梦境画像。");
     updateDeepSaveStatus("可以点击“保存到梦境日记”，把这份深度引导记录保存在当前浏览器里。");
   });
 }

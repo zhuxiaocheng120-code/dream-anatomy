@@ -857,6 +857,47 @@ test("guided final sends all answers once and renders Dream Result Card", async 
   assert.match(collectText(harness.guidedResultCard).join("\n"), /梦境画像/);
 });
 
+test("guided final failure does not fall back to a mock report", async () => {
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      const body = JSON.parse(options.body);
+      if (body.analysisType === "guided_questions") {
+        return {
+          ok: true,
+          json: async () => ({
+            questions: [
+              { id: "emotion", label: "情绪", question: "在寻找教室时，最明显的感受是什么？", placeholder: "可以写紧张或着急。" },
+              { id: "lifeLink", label: "现实连接", question: "最近有没有让你觉得需要赶上的事情？", placeholder: "只写愿意记录的部分。" },
+              { id: "waking", label: "醒后感受", question: "醒来后这个梦留下什么感觉？", placeholder: "可以写一个词。" }
+            ]
+          })
+        };
+      }
+
+      return {
+        ok: false,
+        status: 502,
+        json: async () => ({ error: "Dream analysis service is temporarily unavailable." })
+      };
+    }
+  });
+
+  harness.guidedDream.value = "我一直找不到教室。";
+  await harness.guidedForm.trigger("submit");
+  await harness.generateDeepReportButton.trigger("click");
+
+  assert.equal(harness.deepReport.hidden, true);
+  assert.doesNotMatch(collectText(harness.deepReport).join("\n"), /本地示例|本地 mock|今天可以写下一件想准备的小事/);
+  assert.match(harness.guidedStatus.textContent, /暂时无法生成深度报告/);
+  assert.match(collectText(harness.guidedResultCard).join("\n"), /梦境画像暂时未能完整生成/);
+
+  await harness.saveDeepReportButton.trigger("click");
+  assert.equal(harness.getSavedRecords().length, 0);
+});
+
 test("saving guided report stores Dream Result Card in reportContent", async () => {
   const harness = createAppIntegrationHarness({
     realDreamResultCard: true,
@@ -1155,6 +1196,7 @@ test("old records without result cards still show manual generation fallback", (
 test("documents unified result-card flow boundaries", () => {
   const readme = fs.readFileSync(path.join(__dirname, "../README.md"), "utf8");
   const projectStatus = fs.readFileSync(path.join(__dirname, "../docs/PROJECT_STATUS.md"), "utf8");
+  const indexHtml = fs.readFileSync(path.join(__dirname, "../src/index.html"), "utf8");
 
   for (const document of [readme, projectStatus]) {
     assert.match(document, /一次最终请求/);
@@ -1163,6 +1205,8 @@ test("documents unified result-card flow boundaries", () => {
     assert.match(document, /Dream Journal.*Dream Detail|Dream Detail.*Dream Journal/s);
     assert.match(document, /不.*自动.*(?:重复|重新).*AI|不.*重复.*调用/s);
   }
+
+  assert.doesNotMatch(indexHtml, /本地 mock 生成/);
 });
 
 test("static assets include Dream Journal copy, styles, and documentation", () => {
