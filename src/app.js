@@ -263,26 +263,72 @@ function mapApiQuickDecode(apiResult) {
   };
 }
 
-async function requestQuickDecode(rawDreamText) {
-  const response = await fetch("/api/dream-analysis", {
+async function getDreamAnalysisAuthHeader() {
+  const client = window.DreamAnatomyAuth && typeof window.DreamAnatomyAuth.getClient === "function"
+    ? window.DreamAnatomyAuth.getClient()
+    : null;
+
+  if (!client || !client.auth || typeof client.auth.getSession !== "function") {
+    return {};
+  }
+
+  const { data } = await client.auth.getSession();
+  const token = data && data.session ? data.session.access_token : "";
+
+  return token ? { Authorization: `Bearer ${token}` } : {};
+}
+
+async function requestDreamAnalysis(payload) {
+  const authHeader = await getDreamAnalysisAuthHeader();
+  const response = await fetch("/api/v1/dream-analysis", {
     method: "POST",
     headers: {
-      "Content-Type": "application/json"
+      "Content-Type": "application/json",
+      ...authHeader
     },
-    body: JSON.stringify({
-      dreamText: rawDreamText,
-      analysisType: "quick"
-    })
+    body: JSON.stringify(payload)
   });
+  const data = await response.json().catch(() => ({}));
 
   if (!response.ok) {
-    const error = new Error("Dream analysis request failed.");
-    error.isValidationError = response.status === 400;
-    error.isIncompleteGeneration = response.status === 422;
+    const apiError = data && data.error && typeof data.error === "object" ? data.error : {};
+    const error = new Error(apiError.message || "Dream analysis request failed.");
+    error.status = response.status;
+    error.code = apiError.code || "";
+    error.usage = data ? data.usage : null;
+    error.generationMeta = data ? data.generationMeta : null;
+    error.isValidationError = response.status === 400 || error.code === "INVALID_REQUEST";
+    error.isIncompleteGeneration = response.status === 422 || error.code === "GENERATION_INCOMPLETE";
+    error.isAccessControlledError = ["AUTH_INVALID", "FEATURE_DISABLED", "RATE_LIMITED", "DAILY_LIMIT_REACHED", "REQUEST_IN_PROGRESS"].includes(error.code);
     throw error;
   }
 
-  const data = await response.json();
+  return data;
+}
+
+function getAccessControlledErrorMessage(error) {
+  const message = error && error.message ? error.message : "请求暂时没有完成，请稍后再试。";
+
+  if (error && error.code === "DAILY_LIMIT_REACHED" && error.usage && error.usage.authenticated === false) {
+    return `${message}\n登录后可获得更多免费解析次数，并跨设备保存梦境。`;
+  }
+
+  return message;
+}
+
+function formatRemainingUsage(usage) {
+  if (!usage || typeof usage.remaining !== "number" || usage.remaining > 2) {
+    return "";
+  }
+
+  return `剩余 ${usage.remaining} 次免费解析`;
+}
+
+async function requestQuickDecode(rawDreamText) {
+  const data = await requestDreamAnalysis({
+    dreamText: rawDreamText,
+    analysisType: "quick"
+  });
 
   if (!data || !data.analysis) {
     throw new Error("Dream analysis response is empty.");
@@ -292,29 +338,16 @@ async function requestQuickDecode(rawDreamText) {
     ...mapApiQuickDecode(data.analysis),
     dreamResultCard: data.dreamResultCard || null,
     dreamResultCardStatus: data.dreamResultCardStatus || (data.dreamResultCard ? "ai_generated" : "generation_failed"),
-    generationMeta: data.generationMeta || null
+    generationMeta: data.generationMeta || null,
+    usage: data.usage || null
   };
 }
 
 async function requestGuidedQuestions(rawDreamText) {
-  const response = await fetch("/api/dream-analysis", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      dreamText: rawDreamText,
-      analysisType: "guided_questions"
-    })
+  const data = await requestDreamAnalysis({
+    dreamText: rawDreamText,
+    analysisType: "guided_questions"
   });
-
-  if (!response.ok) {
-    const error = new Error("Guided questions request failed.");
-    error.isValidationError = response.status === 400;
-    throw error;
-  }
-
-  const data = await response.json();
 
   if (!data || !Array.isArray(data.questions)) {
     throw new Error("Guided questions response is empty.");
@@ -324,25 +357,11 @@ async function requestGuidedQuestions(rawDreamText) {
 }
 
 async function requestGuidedFinalReport(rawDreamText, guidedAnswers) {
-  const response = await fetch("/api/dream-analysis", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      dreamText: rawDreamText,
-      analysisType: "guided_final",
-      guidedAnswers
-    })
+  const data = await requestDreamAnalysis({
+    dreamText: rawDreamText,
+    analysisType: "guided_final",
+    guidedAnswers
   });
-
-  if (!response.ok) {
-    const error = new Error("Guided final report request failed.");
-    error.isValidationError = response.status === 400;
-    throw error;
-  }
-
-  const data = await response.json();
 
   if (!data || !data.analysis) {
     throw new Error("Guided final report response is empty.");
@@ -356,22 +375,10 @@ async function requestGuidedFinalReport(rawDreamText, guidedAnswers) {
 }
 
 async function requestDreamResultCard(rawDreamText) {
-  const response = await fetch("/api/dream-analysis", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      dreamText: rawDreamText,
-      analysisType: "result_card"
-    })
+  const data = await requestDreamAnalysis({
+    dreamText: rawDreamText,
+    analysisType: "result_card"
   });
-
-  if (!response.ok) {
-    throw new Error("Dream result card request failed.");
-  }
-
-  const data = await response.json();
 
   if (!data || !data.analysis || typeof data.analysis !== "object") {
     throw new Error("Dream result card response is empty.");
@@ -1114,6 +1121,20 @@ if (quickForm) {
         return;
       }
 
+      if (error.isAccessControlledError) {
+        quickResult.hidden = true;
+        if (quickResultCard) {
+          quickResultCard.textContent = "";
+        }
+        if (status) {
+          status.textContent = getAccessControlledErrorMessage(error);
+        }
+        if (submitButton) {
+          submitButton.disabled = false;
+        }
+        return;
+      }
+
       quickDecode = generateMockQuickDecode(rawDreamText);
       statusPrefix = "当前无法连接 AI，已为你展示本地示例结果";
     }
@@ -1128,7 +1149,9 @@ if (quickForm) {
       renderDreamResultCardMount(quickResultCard, rawDreamText, quickDecode, savedRecord);
       renderDreamJournal(saveResult.records);
       if (status) {
-        status.textContent = getSaveStatusMessage(saveResult.syncStatus, statusPrefix);
+        status.textContent = [getSaveStatusMessage(saveResult.syncStatus, statusPrefix), formatRemainingUsage(quickDecode.usage)]
+          .filter(Boolean)
+          .join("\n");
       }
     } catch (error) {
       if (status) {
@@ -1186,6 +1209,15 @@ if (guidedForm) {
       updateGuidedStatus("正在整理几个适合这次梦境的问题……");
       guidedDraftState.questions = await requestGuidedQuestions(rawDreamText);
     } catch (error) {
+      if (error.isAccessControlledError) {
+        renderGuidedQuestions([]);
+        if (guidedActions) {
+          guidedActions.hidden = true;
+        }
+        updateGuidedStatus(getAccessControlledErrorMessage(error));
+        return;
+      }
+
       if (error.isValidationError) {
         updateGuidedStatus("梦境内容暂时无法提交，可以检查文字长度后再试。");
         guidedDream.focus();

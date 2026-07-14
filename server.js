@@ -3,6 +3,9 @@ require("dotenv").config();
 const express = require("express");
 const path = require("path");
 const DreamResultCard = require("./src/dreamResultCard");
+const { createAiAccessControl } = require("./server/aiAccessControl");
+const { createAiAuthResolver } = require("./server/aiAuth");
+const { createApiError, formatApiError } = require("./server/aiErrors");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -10,9 +13,60 @@ const deepSeekBaseUrl = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.c
 const deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const maxDreamTextLength = 5000;
 const quickPromptVersion = "quick-analysis-v2";
+const defaultRequestTimeoutMs = parsePositiveInteger(process.env.AI_REQUEST_TIMEOUT_MS, 45000);
 
+app.set("trust proxy", "loopback");
 app.use(express.json({ limit: "32kb" }));
 app.use(express.static(path.join(__dirname, "src")));
+
+const defaultAiAuthResolver = createAiAuthResolver();
+const defaultAiAccessControl = createAiAccessControl({
+  guestDailyLimit: process.env.AI_GUEST_DAILY_LIMIT,
+  userDailyLimit: process.env.AI_USER_DAILY_LIMIT,
+  guestRequestsPerMinute: process.env.AI_GUEST_REQUESTS_PER_MINUTE,
+  userRequestsPerMinute: process.env.AI_USER_REQUESTS_PER_MINUTE,
+  maxConcurrentPerPrincipal: process.env.AI_MAX_CONCURRENT_PER_PRINCIPAL
+});
+
+function parsePositiveInteger(value, fallback) {
+  const number = Number(value);
+  return Number.isFinite(number) && number > 0 ? Math.floor(number) : fallback;
+}
+
+function getAiAuthResolver() {
+  return app.locals.aiAuthResolver || defaultAiAuthResolver;
+}
+
+function getAiAccessControl() {
+  return app.locals.aiAccessControl || defaultAiAccessControl;
+}
+
+function getAiRequestTimeoutMs() {
+  return parsePositiveInteger(app.locals.aiRequestTimeoutMs, defaultRequestTimeoutMs);
+}
+
+function isDeepGuidanceEnabled() {
+  if (typeof app.locals.deepGuidanceEnabled === "boolean") {
+    return app.locals.deepGuidanceEnabled;
+  }
+
+  return process.env.DEEP_GUIDANCE_ENABLED === "true";
+}
+
+function sendApiError(response, error, usage) {
+  const status = error.status || error.statusCode || 500;
+  const payload = formatApiError(error, usage);
+
+  if (error.generationMeta) {
+    payload.generationMeta = error.generationMeta;
+  }
+
+  response.set("Cache-Control", "no-store");
+  if (error.retryAfter) {
+    response.set("Retry-After", String(error.retryAfter));
+  }
+  response.status(status).json(payload);
+}
 
 function buildSystemPrompt() {
   return [
@@ -704,34 +758,44 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
   const apiKey = process.env.DEEPSEEK_API_KEY;
 
   if (!apiKey) {
-    const missingKeyError = new Error("DeepSeek API key is not configured.");
+    const missingKeyError = createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
     missingKeyError.statusCode = 502;
     throw missingKeyError;
   }
 
-  const response = await fetch(`${deepSeekBaseUrl}/chat/completions`, {
-    method: "POST",
-    headers: {
-      Authorization: `Bearer ${apiKey}`,
-      "Content-Type": "application/json"
-    },
-    body: JSON.stringify({
-      model: deepSeekModel,
-      temperature: 0.55,
-      messages: [
-        { role: "system", content: buildSystemPrompt() },
-        {
-          role: "user",
-          content: options.retryIssues && options.retryIssues.length
-            ? buildQuickRetryUserPrompt(dreamText, options.retryIssues)
-            : getUserPrompt(dreamText, analysisType, options)
-        }
-      ]
-    })
-  });
+  let response;
+  try {
+    response = await fetch(`${deepSeekBaseUrl}/chat/completions`, {
+      method: "POST",
+      signal: options.signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: deepSeekModel,
+        temperature: 0.55,
+        messages: [
+          { role: "system", content: buildSystemPrompt() },
+          {
+            role: "user",
+            content: options.retryIssues && options.retryIssues.length
+              ? buildQuickRetryUserPrompt(dreamText, options.retryIssues)
+              : getUserPrompt(dreamText, analysisType, options)
+          }
+        ]
+      })
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504);
+    }
+
+    throw createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+  }
 
   if (!response.ok) {
-    const upstreamError = new Error("DeepSeek request failed.");
+    const upstreamError = createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
     upstreamError.statusCode = 502;
     throw upstreamError;
   }
@@ -768,7 +832,9 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
 
       if (!normalized) {
         const incompleteError = new Error("Dream analysis result was incomplete.");
+        incompleteError.code = "GENERATION_INCOMPLETE";
         incompleteError.statusCode = 422;
+        incompleteError.status = 422;
         incompleteError.generationMeta = {
           source: "generation_failed",
           promptVersion: quickPromptVersion,
@@ -782,7 +848,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
   }
 
   if (!normalized) {
-    const invalidJsonError = new Error("DeepSeek response was not valid JSON.");
+    const invalidJsonError = createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
     invalidJsonError.statusCode = 502;
     throw invalidJsonError;
   }
@@ -790,42 +856,88 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
   return normalized;
 }
 
-app.post("/api/dream-analysis", async (request, response) => {
+async function handleDreamAnalysisRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
   const validation = validateDreamAnalysisRequest(request.body || {});
 
   if (validation.error) {
-    response.status(400).json({ error: validation.error });
+    sendApiError(response, createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400));
     return;
   }
 
+  const accessControl = getAiAccessControl();
+  let identity;
   try {
-    const analysis = await requestDeepSeekAnalysis(validation.dreamText, request.body.analysisType, {
-      guidedAnswers: validation.guidedAnswers
-    });
-    response.json(request.body.analysisType === "result_card" ? { analysis } : analysis);
+    identity = await getAiAuthResolver().resolveIdentity(request);
   } catch (error) {
-    const statusCode = error.statusCode || 502;
-    if (statusCode === 422) {
-      response.status(statusCode).json({
-        error: "Dream analysis result was incomplete.",
-        generationMeta: error.generationMeta || {
-          source: "generation_failed",
-          promptVersion: quickPromptVersion,
-          qualityStatus: "incomplete"
-        }
-      });
-      return;
+    sendApiError(response, error);
+    return;
+  }
+
+  if (["guided_questions", "guided_final"].includes(request.body.analysisType) && !isDeepGuidanceEnabled()) {
+    sendApiError(
+      response,
+      createApiError("FEATURE_DISABLED", "深度引导正在开发中。", 403),
+      accessControl.getUsage(identity)
+    );
+    return;
+  }
+
+  let reservation;
+  let timeout;
+  try {
+    reservation = accessControl.start(identity, request.body.analysisType);
+    const abortController = new AbortController();
+    timeout = setTimeout(() => abortController.abort(), getAiRequestTimeoutMs());
+    if (typeof timeout.unref === "function") {
+      timeout.unref();
     }
 
-    response.status(statusCode).json({
-      error: "Dream analysis service is temporarily unavailable."
+    const analysis = await requestDeepSeekAnalysis(validation.dreamText, request.body.analysisType, {
+      guidedAnswers: validation.guidedAnswers,
+      signal: abortController.signal
     });
+    clearTimeout(timeout);
+    timeout = null;
+    accessControl.finish(reservation, { refundDaily: false });
+    reservation = null;
+
+    const usage = accessControl.getUsage(identity);
+    response.json({
+      ...(request.body.analysisType === "result_card" ? { analysis } : analysis),
+      usage
+    });
+  } catch (error) {
+    if (timeout) {
+      clearTimeout(timeout);
+    }
+
+    const code = error.code || (error.statusCode === 422 ? "GENERATION_INCOMPLETE" : "UPSTREAM_UNAVAILABLE");
+    const apiError = error.code
+      ? error
+      : createApiError(code, code === "GENERATION_INCOMPLETE" ? "AI 结果暂时不够完整，请稍后再试。" : "梦境解析服务暂时不可用，请稍后再试。", error.statusCode || 502);
+
+    if (error.generationMeta && !apiError.generationMeta) {
+      apiError.generationMeta = error.generationMeta;
+    }
+
+    if (reservation) {
+      accessControl.finish(reservation, {
+        refundDaily: ["UPSTREAM_TIMEOUT", "UPSTREAM_UNAVAILABLE"].includes(apiError.code)
+      });
+    }
+
+    sendApiError(response, apiError, identity ? accessControl.getUsage(identity) : null);
   }
-});
+}
+
+app.post("/api/v1/dream-analysis", handleDreamAnalysisRequest);
+app.post("/api/dream-analysis", handleDreamAnalysisRequest);
 
 app.use((error, request, response, next) => {
   if (error instanceof SyntaxError && "body" in error) {
-    response.status(400).json({ error: "Request body must be valid JSON." });
+    sendApiError(response, createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400));
     return;
   }
 

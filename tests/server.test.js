@@ -2,8 +2,18 @@ const assert = require("node:assert/strict");
 const test = require("node:test");
 
 process.env.DEEPSEEK_API_KEY = "test-key";
+process.env.SUPABASE_URL = "https://example.supabase.co";
+process.env.SUPABASE_ANON_KEY = "anon-key";
+process.env.AI_GUEST_DAILY_LIMIT = "100";
+process.env.AI_USER_DAILY_LIMIT = "100";
+process.env.AI_GUEST_REQUESTS_PER_MINUTE = "100";
+process.env.AI_USER_REQUESTS_PER_MINUTE = "100";
+process.env.AI_MAX_CONCURRENT_PER_PRINCIPAL = "1";
+process.env.AI_REQUEST_TIMEOUT_MS = "45000";
+process.env.DEEP_GUIDANCE_ENABLED = "false";
 
 const { app } = require("../server");
+const { createAiAccessControl } = require("../server/aiAccessControl");
 
 function createResultCardPayload() {
   return {
@@ -91,7 +101,21 @@ function createDeepAnalysisPayload() {
   };
 }
 
-async function withServer(run) {
+async function withServer(run, options = {}) {
+  app.locals.aiAccessControl = options.accessControl || createAiAccessControl({
+    guestDailyLimit: 100,
+    userDailyLimit: 100,
+    guestRequestsPerMinute: 100,
+    userRequestsPerMinute: 100,
+    maxConcurrentPerPrincipal: 1
+  });
+  if (options.authResolver) {
+    app.locals.aiAuthResolver = options.authResolver;
+  }
+  if (options.requestTimeoutMs !== undefined) {
+    app.locals.aiRequestTimeoutMs = options.requestTimeoutMs;
+  }
+
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
   const baseUrl = `http://127.0.0.1:${server.address().port}`;
@@ -100,13 +124,16 @@ async function withServer(run) {
     await run(baseUrl);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
+    delete app.locals.aiAccessControl;
+    delete app.locals.aiAuthResolver;
+    delete app.locals.aiRequestTimeoutMs;
   }
 }
 
-async function postDreamAnalysis(baseUrl, body) {
-  return fetch(`${baseUrl}/api/dream-analysis`, {
+async function postDreamAnalysis(baseUrl, body, options = {}) {
+  return fetch(`${baseUrl}${options.path || "/api/dream-analysis"}`, {
     method: "POST",
-    headers: { "Content-Type": "application/json" },
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     body: JSON.stringify(body)
   });
 }
@@ -169,6 +196,7 @@ test("returns quick analysis and result card from one final request", { concurre
       const payload = await response.json();
 
       assert.equal(response.status, 200);
+      assert.equal(response.headers.get("Cache-Control"), "no-store");
       assert.equal(upstreamCalls.length, 1);
       assert.match(JSON.parse(upstreamCalls[0][1].body).messages[1].content, /promptVersion/);
       assert.match(JSON.parse(upstreamCalls[0][1].body).messages[1].content, /dreamSummary/);
@@ -177,6 +205,9 @@ test("returns quick analysis and result card from one final request", { concurre
       assert.equal(payload.generationMeta.source, "ai_generated");
       assert.equal(payload.generationMeta.promptVersion, "quick-analysis-v2");
       assert.equal(payload.generationMeta.qualityStatus, "passed");
+      assert.equal(payload.usage.authenticated, false);
+      assert.equal(payload.usage.limit, 100);
+      assert.equal(payload.usage.remaining, 99);
       assert.equal(payload.analysis.dreamSummary, createQuickAnalysisPayload().dreamSummary);
       assert.equal(payload.analysis.coreTheme, createQuickAnalysisPayload().coreTheme);
       assert.equal(payload.analysis.evidence.length, 2);
@@ -184,6 +215,42 @@ test("returns quick analysis and result card from one final request", { concurre
       assert.equal(payload.analysis.symbolReading.length, 2);
       assert.equal(payload.dreamResultCard.archetype.nameZh, "寻路者");
       assert.deepEqual(payload.dreamResultCard.dimensions.map((dimension) => dimension.score), [100, 0, 42, 100]);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("v1 dream-analysis route uses the same protected handler as the legacy alias", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      }, { path: "/api/v1/dream-analysis" });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.analysis.coreTheme, createQuickAnalysisPayload().coreTheme);
+      assert.equal(payload.usage.remaining, 99);
     });
   } finally {
     global.fetch = nativeFetch;
@@ -234,6 +301,7 @@ test("retries quick analysis once when the first response is too short", { concu
       assert.match(upstreamBodies[1].messages[1].content, /上一次输出没有通过质量检查/);
       assert.equal(payload.analysis.evidence.length, 2);
       assert.equal(payload.generationMeta.qualityStatus, "passed");
+      assert.equal(payload.usage.remaining, 99);
     });
   } finally {
     global.fetch = nativeFetch;
@@ -275,19 +343,22 @@ test("returns an incomplete quick generation error after repeated quality failur
 
       assert.equal(response.status, 422);
       assert.equal(upstreamCalls, 2);
-      assert.equal(payload.error, "Dream analysis result was incomplete.");
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
       assert.equal(payload.generationMeta.source, "generation_failed");
       assert.equal(payload.generationMeta.qualityStatus, "incomplete");
+      assert.equal(payload.usage.remaining, 99);
     });
   } finally {
     global.fetch = nativeFetch;
   }
 });
 
-test("returns guided questions from dream-specific model output", { concurrency: false }, async () => {
+test("rejects guided questions while deep guidance is disabled before calling DeepSeek", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
   global.fetch = async (url, options) => {
     if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
     return {
       ok: true,
       json: async () => ({
@@ -314,16 +385,16 @@ test("returns guided questions from dream-specific model output", { concurrency:
       });
       const payload = await response.json();
 
-      assert.equal(response.status, 200);
-      assert.equal(payload.questions.length, 3);
-      assert.match(payload.questions[0].question, /教室/);
+      assert.equal(response.status, 403);
+      assert.equal(payload.error.code, "FEATURE_DISABLED");
+      assert.equal(upstreamCalls, 0);
     });
   } finally {
     global.fetch = nativeFetch;
   }
 });
 
-test("returns guided final analysis and result card using answer context", { concurrency: false }, async () => {
+test("rejects guided final while deep guidance is disabled before calling DeepSeek", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   const upstreamBodies = [];
   global.fetch = async (url, options) => {
@@ -356,11 +427,9 @@ test("returns guided final analysis and result card using answer context", { con
       });
       const payload = await response.json();
 
-      assert.equal(response.status, 200);
-      assert.match(upstreamBodies[0].messages[1].content, /最近有考试压力/);
-      assert.equal(payload.analysis.lifeConnection, createDeepAnalysisPayload().lifeConnection);
-      assert.equal(payload.dreamResultCardStatus, "ai_generated");
-      assert.equal(payload.dreamResultCard.emotionalProfile.primary, "好奇");
+      assert.equal(response.status, 403);
+      assert.equal(payload.error.code, "FEATURE_DISABLED");
+      assert.equal(upstreamBodies.length, 0);
     });
   } finally {
     global.fetch = nativeFetch;
@@ -398,10 +467,8 @@ test("rejects quick-shaped JSON for guided final analysis", { concurrency: false
         guidedAnswers: { emotion: "紧张" }
       });
 
-      assert.equal(response.status, 502);
-      assert.deepEqual(await response.json(), {
-        error: "Dream analysis service is temporarily unavailable."
-      });
+      assert.equal(response.status, 403);
+      assert.equal((await response.json()).error.code, "FEATURE_DISABLED");
     });
   } finally {
     global.fetch = nativeFetch;
@@ -506,9 +573,7 @@ test("returns only a safe error when result-card model JSON is invalid", { concu
         analysisType: "result_card"
       });
       assert.equal(response.status, 502);
-      assert.deepEqual(await response.json(), {
-        error: "Dream analysis service is temporarily unavailable."
-      });
+      assert.equal((await response.json()).error.code, "UPSTREAM_UNAVAILABLE");
     });
   } finally {
     global.fetch = nativeFetch;
@@ -529,9 +594,7 @@ test("returns only a safe error when result-card JSON has no result-card shape",
         analysisType: "result_card"
       });
       assert.equal(response.status, 502);
-      assert.deepEqual(await response.json(), {
-        error: "Dream analysis service is temporarily unavailable."
-      });
+      assert.equal((await response.json()).error.code, "UPSTREAM_UNAVAILABLE");
     });
   } finally {
     global.fetch = nativeFetch;
@@ -568,9 +631,7 @@ test("returns only a safe error when result-card JSON uses quick-analysis shape"
         analysisType: "result_card"
       });
       assert.equal(response.status, 502);
-      assert.deepEqual(await response.json(), {
-        error: "Dream analysis service is temporarily unavailable."
-      });
+      assert.equal((await response.json()).error.code, "UPSTREAM_UNAVAILABLE");
     });
   } finally {
     global.fetch = nativeFetch;
@@ -584,7 +645,7 @@ test("continues to reject unsupported deep analysis", { concurrency: false }, as
       analysisType: "deep"
     });
     assert.equal(response.status, 400);
-    assert.equal(typeof (await response.json()).error, "string");
+    assert.equal((await response.json()).error.code, "INVALID_REQUEST");
   });
 });
 
@@ -623,7 +684,368 @@ test("rejects legacy quick analysis shape after the quality retry", { concurrenc
       assert.equal(response.status, 422);
       assert.equal(upstreamCalls, 2);
       assert.equal(payload.generationMeta.qualityStatus, "incomplete");
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
     });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("invalid Authorization returns AUTH_INVALID and does not call DeepSeek", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    return { ok: true, json: async () => ({}) };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "学校走廊里的门",
+        analysisType: "quick"
+      }, {
+        headers: { Authorization: "Token bad" }
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 401);
+      assert.equal(payload.error.code, "AUTH_INVALID");
+      assert.equal(upstreamCalls, 0);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("successful authenticated request uses user quota metadata", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick",
+        userId: "forged-user"
+      }, {
+        headers: { Authorization: "Bearer valid-token" }
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.usage.authenticated, true);
+      assert.equal(payload.usage.limit, 5);
+      assert.equal(payload.usage.remaining, 4);
+    }, {
+      authResolver: {
+        resolveIdentity: async () => ({
+          type: "authenticated",
+          userId: "real-user",
+          rateLimitKey: "user:real-user"
+        })
+      },
+      accessControl: createAiAccessControl({
+        userDailyLimit: 5,
+        userRequestsPerMinute: 5,
+        guestDailyLimit: 1,
+        guestRequestsPerMinute: 1,
+        maxConcurrentPerPrincipal: 1
+      })
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("DeepSeek 5xx refunds daily quota but preserves stable UPSTREAM_UNAVAILABLE error", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    if (upstreamCalls === 1) {
+      return { ok: false, status: 503, json: async () => ({ upstream: "private" }) };
+    }
+
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+  const accessControl = createAiAccessControl({
+    guestDailyLimit: 1,
+    guestRequestsPerMinute: 5,
+    maxConcurrentPerPrincipal: 1
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const first = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const firstPayload = await first.json();
+      assert.equal(first.status, 502);
+      assert.equal(firstPayload.error.code, "UPSTREAM_UNAVAILABLE");
+      assert.equal(firstPayload.usage.remaining, 1);
+
+      const second = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      assert.equal(second.status, 200);
+      assert.equal((await second.json()).usage.remaining, 0);
+    }, { accessControl });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("route returns DAILY_LIMIT_REACHED with Retry-After when quota is exhausted", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+  const accessControl = createAiAccessControl({
+    guestDailyLimit: 1,
+    guestRequestsPerMinute: 5,
+    maxConcurrentPerPrincipal: 1
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const first = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      assert.equal(first.status, 200);
+
+      const second = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await second.json();
+
+      assert.equal(second.status, 429);
+      assert.equal(payload.error.code, "DAILY_LIMIT_REACHED");
+      assert.equal(payload.usage.remaining, 0);
+      assert.ok(Number(second.headers.get("Retry-After")) > 0);
+    }, { accessControl });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("route returns RATE_LIMITED with Retry-After for short-window bursts", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+  const accessControl = createAiAccessControl({
+    guestDailyLimit: 10,
+    guestRequestsPerMinute: 1,
+    maxConcurrentPerPrincipal: 1
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const first = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      assert.equal(first.status, 200);
+
+      const second = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await second.json();
+
+      assert.equal(second.status, 429);
+      assert.equal(payload.error.code, "RATE_LIMITED");
+      assert.ok(Number(second.headers.get("Retry-After")) > 0);
+    }, { accessControl });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("route returns REQUEST_IN_PROGRESS for duplicate concurrent principal", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let releaseFirst;
+  let firstStarted;
+  const firstStartedPromise = new Promise((resolve) => {
+    firstStarted = resolve;
+  });
+  const releaseFirstPromise = new Promise((resolve) => {
+    releaseFirst = resolve;
+  });
+  let upstreamCalls = 0;
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    if (upstreamCalls === 1) {
+      firstStarted();
+      await releaseFirstPromise;
+    }
+
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+  const accessControl = createAiAccessControl({
+    guestDailyLimit: 10,
+    guestRequestsPerMinute: 10,
+    maxConcurrentPerPrincipal: 1
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const firstRequest = postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      await firstStartedPromise;
+
+      const second = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const secondPayload = await second.json();
+
+      assert.equal(second.status, 429);
+      assert.equal(secondPayload.error.code, "REQUEST_IN_PROGRESS");
+      assert.equal(upstreamCalls, 1);
+
+      releaseFirst();
+      const first = await firstRequest;
+      assert.equal(first.status, 200);
+    }, { accessControl });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("DeepSeek timeout aborts request, releases lock, and refunds daily quota", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let aborted = false;
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    if (upstreamCalls === 1) {
+      return new Promise((resolve, reject) => {
+        options.signal.addEventListener("abort", () => {
+          aborted = true;
+          const error = new Error("aborted");
+          error.name = "AbortError";
+          reject(error);
+        });
+      });
+    }
+
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+  const accessControl = createAiAccessControl({
+    guestDailyLimit: 1,
+    guestRequestsPerMinute: 5,
+    maxConcurrentPerPrincipal: 1
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const first = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const firstPayload = await first.json();
+      assert.equal(first.status, 504);
+      assert.equal(firstPayload.error.code, "UPSTREAM_TIMEOUT");
+      assert.equal(firstPayload.usage.remaining, 1);
+      assert.equal(aborted, true);
+
+      const second = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      assert.equal(second.status, 200);
+      assert.equal((await second.json()).usage.remaining, 0);
+    }, { accessControl, requestTimeoutMs: 5 });
   } finally {
     global.fetch = nativeFetch;
   }
