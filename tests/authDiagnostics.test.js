@@ -203,6 +203,39 @@ test("logout publishes an immediate null session before signOut settles", async 
   await logoutRun;
 });
 
+test("publishes safe auth event types with session notifications", async () => {
+  const activeSession = { user: { id: "active-user", email: "active@example.com" } };
+  let authStateListener = null;
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: activeSession } }),
+      onAuthStateChange(callback) {
+        authStateListener = callback;
+      },
+      signOut: async () => ({ error: null })
+    }
+  };
+  const harness = createAuthHarness({
+    env: {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_ANON_KEY: "anon-test-value"
+    },
+    supabase: { createClient: () => client }
+  });
+
+  await harness.ready;
+
+  assert.equal(harness.dispatchedEvents.at(-1).detail.authEvent, "INITIAL_SESSION");
+  assert.equal(typeof authStateListener, "function");
+
+  harness.dispatchedEvents.length = 0;
+  authStateListener("TOKEN_REFRESHED", activeSession);
+
+  assert.equal(harness.dispatchedEvents.length, 1);
+  assert.equal(harness.dispatchedEvents[0].detail.user.id, "active-user");
+  assert.equal(harness.dispatchedEvents[0].detail.authEvent, "TOKEN_REFRESHED");
+});
+
 test("failed logout restores only the authoritative session from getSession", async () => {
   const activeSession = { user: { id: "active-user", email: "active@example.com" } };
   let getSessionCalls = 0;
