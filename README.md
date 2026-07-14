@@ -15,6 +15,7 @@
 - 点击入口后可以进入快速解析、Dream Journal 和 Dream Detail 等现有流程。
 - 深度引导入口目前保留展示，但通过 `src/featureFlags.js` 暂时标记为“正在开发中”，不能开始新的深度引导。
 - 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API；快速解析的一次最终请求会同时返回 V2 结构化分析正文和完整 `reportContent.dreamResultCard` 梦境画像。
+- AI 后端提供版本化接口 `POST /api/v1/dream-analysis`，旧的 `POST /api/dream-analysis` 暂时保留为兼容别名。接口会识别 Supabase Bearer token、应用 Beta 免费额度、短时限流、单用户并发限制和 DeepSeek 超时保护。
 - 快速解析 V2 会要求结果包含梦境摘要、核心主题、核心解析、梦境证据与解释、情绪画像、主要意象、自我思考、今日小行动和温和提醒，并在服务端做基础质量检查。
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果，AI 输出质量不完整时不会伪装成本地 mock。
 - 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
@@ -84,7 +85,8 @@
 - src/featureFlags.js: small browser feature flag module; `DEEP_GUIDANCE_ENABLED` currently keeps new deep guidance creation disabled.
 - src/runtime-env.js: browser runtime configuration generated for local or deployed Supabase public settings.
 - src/vendor/supabase.js: browser Supabase SDK asset used by the account UI.
-- server.js: Express server that serves src and proxies quick, guided-question, guided-final, and legacy manual result-card dream analysis requests.
+- server.js: Express server that serves src and exposes the protected shared AI analysis API for current Web Beta and future clients.
+- server/: server-only AI API helpers for Supabase token identity, stable API errors, Beta quota, short-window rate limiting, concurrent request locking, and cleanup.
 - scripts/writeRuntimeEnv.js: writes `src/runtime-env.js` from environment variables before startup.
 - lib/supabaseClient.js: helper for creating a Supabase client from environment variables.
 - supabase/migrations/: database migrations for cloud dream record storage and sync fields.
@@ -96,11 +98,32 @@
 - Install dependencies with `npm install`.
 - Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY` locally. The server loads this file automatically.
 - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` locally to enable the account UI. These are browser-safe Supabase project values, not service role secrets.
+- Optional AI protection settings are available in `.env.example`: `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_GUEST_REQUESTS_PER_MINUTE`, `AI_USER_REQUESTS_PER_MINUTE`, `AI_MAX_CONCURRENT_PER_PRINCIPAL`, `AI_REQUEST_TIMEOUT_MS`, and `DEEP_GUIDANCE_ENABLED`.
 - Start the app with `npm start`.
 - Open `http://localhost:3000` in your browser.
 - Without `DEEPSEEK_API_KEY`, the page can still open; analysis API requests will fail safely and the frontend will show clearly marked local fallback results.
 - Without Supabase values, the page can still open; account actions will show a configuration prompt.
 - Run unit tests with `npm test`.
+
+## AI API Protection
+
+The shared AI endpoint is `POST /api/v1/dream-analysis`. The legacy `POST /api/dream-analysis` route currently calls the same handler for Web compatibility.
+
+Logged-in Web users send `Authorization: Bearer <supabase_access_token>` from the browser session. The server validates that token with Supabase using only `SUPABASE_URL` and `SUPABASE_ANON_KEY`; it does not use or require a `service_role` key. Missing Authorization is treated as a guest request, while invalid or expired tokens return `AUTH_INVALID`.
+
+Default Beta limits:
+
+- `AI_GUEST_DAILY_LIMIT=3`
+- `AI_USER_DAILY_LIMIT=10`
+- `AI_GUEST_REQUESTS_PER_MINUTE=2`
+- `AI_USER_REQUESTS_PER_MINUTE=3`
+- `AI_MAX_CONCURRENT_PER_PRINCIPAL=1`
+- `AI_REQUEST_TIMEOUT_MS=45000`
+- `DEEP_GUIDANCE_ENABLED=false`
+
+These limits use an in-memory counter suitable for the current single-instance Beta. Render restarts reset the counters, and multiple instances would not share them. Before a larger public release, this should move to Redis or another shared persistent limiter.
+
+Deep guidance is still visible as “正在开发中”. When `DEEP_GUIDANCE_ENABLED=false`, `guided_questions` and `guided_final` are rejected by the server before quota usage or DeepSeek calls.
 
 ## Editing the App
 

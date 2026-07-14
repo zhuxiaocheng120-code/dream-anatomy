@@ -345,6 +345,20 @@ function createAppIntegrationHarness(options = {}) {
   windowRef.document = documentRef;
   windowRef.localStorage = localStorage;
 
+  if (options.authSession !== undefined) {
+    windowRef.DreamAnatomyAuth = {
+      getClient() {
+        return {
+          auth: {
+            async getSession() {
+              return { data: { session: options.authSession }, error: null };
+            }
+          }
+        };
+      }
+    };
+  }
+
   const context = {
     document: documentRef,
     fetch: options.fetch || (async () => {
@@ -719,6 +733,8 @@ test("quick decode renders Dream Result Card on the current result page and save
   await harness.quickForm.trigger("submit");
 
   assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0][0], "/api/v1/dream-analysis");
+  assert.equal(fetchCalls[0][1].headers.Authorization, undefined);
   assert.deepEqual(JSON.parse(fetchCalls[0][1].body), {
     dreamText: harness.quickDream.value,
     analysisType: "quick"
@@ -738,6 +754,80 @@ test("quick decode renders Dream Result Card on the current result page and save
   assert.equal(savedRecords[0].reportContent.evidence.length, 2);
   assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
   assert.equal(savedRecords[0].reportContent.dreamResultCardStatus, "ai_generated");
+});
+
+test("quick decode sends Bearer token for logged-in users", async () => {
+  const fetchCalls = [];
+  const harness = createAppIntegrationHarness({
+    authSession: { access_token: "session-token", user: { id: "user-one" } },
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      fetchCalls.push([url, options]);
+      return {
+        ok: true,
+        json: async () => ({
+          analysis: createQuickAnalysisFixture(),
+          dreamResultCard: createResultCardFixture(),
+          dreamResultCardStatus: "ai_generated",
+          usage: { authenticated: true, limit: 10, remaining: 9, resetAt: "2026-07-15T00:00:00.000Z" }
+        })
+      };
+    }
+  });
+
+  harness.quickDream.value = "我在学校走廊里一直找不到教室，门发着光。";
+  await harness.quickForm.trigger("submit");
+
+  assert.equal(fetchCalls.length, 1);
+  assert.equal(fetchCalls[0][0], "/api/v1/dream-analysis");
+  assert.equal(fetchCalls[0][1].headers.Authorization, "Bearer session-token");
+});
+
+test("quick decode shows stable API auth and quota errors without saving fallback records", async () => {
+  const authHarness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({
+        error: { code: "AUTH_INVALID", message: "登录状态已失效，请重新登录。" },
+        usage: { authenticated: false, limit: null, remaining: null, resetAt: null }
+      })
+    })
+  });
+
+  authHarness.quickDream.value = "我梦见一条黑狗被困住。";
+  await authHarness.quickForm.trigger("submit");
+
+  assert.equal(authHarness.quickResult.hidden, true);
+  assert.match(authHarness.quickFormStatus.textContent, /登录状态已失效/);
+  assert.equal(authHarness.getSavedRecords().length, 0);
+
+  const quotaHarness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: false,
+      status: 429,
+      json: async () => ({
+        error: { code: "DAILY_LIMIT_REACHED", message: "今天的免费解析次数已经用完，稍后再来继续记录梦境。" },
+        usage: { authenticated: false, limit: 3, remaining: 0, resetAt: "2026-07-15T00:00:00.000Z" }
+      })
+    })
+  });
+
+  quotaHarness.quickDream.value = "我梦见自己在雨里迷路。";
+  await quotaHarness.quickForm.trigger("submit");
+
+  assert.equal(quotaHarness.quickResult.hidden, true);
+  assert.match(quotaHarness.quickFormStatus.textContent, /今天的免费解析次数已经用完/);
+  assert.match(quotaHarness.quickFormStatus.textContent, /登录后可获得更多免费解析次数/);
+  assert.equal(quotaHarness.getSavedRecords().length, 0);
 });
 
 test("quick decode shows an incomplete generation message without mock fallback", async () => {
@@ -806,6 +896,30 @@ test("deep guidance entry can navigate when feature flag is enabled", () => {
 
   assert.equal(harness.viewPanels.find((panel) => panel.dataset.view === "guided").hidden, false);
   assert.doesNotMatch(html, /data-feature-flag="deep-guidance"[^>]*disabled/);
+});
+
+test("server-disabled guided questions do not fall back to local mock questions", async () => {
+  const harness = createAppIntegrationHarness({
+    deepGuidanceEnabled: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: { code: "FEATURE_DISABLED", message: "深度引导正在开发中。" },
+        usage: { authenticated: false, limit: 3, remaining: 3, resetAt: null }
+      })
+    })
+  });
+
+  harness.guidedDream.value = "我梦见一条长走廊。";
+  await harness.guidedForm.trigger("submit");
+
+  assert.equal(harness.guidedQuestions.hidden, true);
+  assert.equal(harness.guidedActions.hidden, true);
+  assert.match(harness.guidedStatus.textContent, /深度引导正在开发中/);
+  assert.doesNotMatch(harness.guidedStatus.textContent, /本地示例问题/);
 });
 
 test("quick decode keeps analysis readable when result card generation failed", async () => {
@@ -1196,6 +1310,7 @@ test("Dream Detail generates, saves, and re-renders a missing dream result card"
   });
   const fetchCalls = [];
   const harness = createAppIntegrationHarness({
+    authSession: { access_token: "detail-token", user: { id: "user-one" } },
     realDreamResultCard: true,
     records: [record],
     fetch: async (url, options) => {
@@ -1218,7 +1333,8 @@ test("Dream Detail generates, saves, and re-renders a missing dream result card"
   await generationButton.trigger("click");
 
   assert.equal(fetchCalls.length, 1);
-  assert.equal(fetchCalls[0][0], "/api/dream-analysis");
+  assert.equal(fetchCalls[0][0], "/api/v1/dream-analysis");
+  assert.equal(fetchCalls[0][1].headers.Authorization, "Bearer detail-token");
   assert.deepEqual(JSON.parse(fetchCalls[0][1].body), {
     dreamText: record.rawDreamText,
     analysisType: "result_card"
