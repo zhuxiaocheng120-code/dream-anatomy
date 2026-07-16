@@ -41,6 +41,7 @@ function createFakeSupabase(options = {}) {
   const state = {
     rows: options.rows ? [...options.rows] : [],
     upserts: [],
+    upsertOptions: [],
     failUpsert: Boolean(options.failUpsert),
     failSelect: Boolean(options.failSelect)
   };
@@ -51,9 +52,10 @@ function createFakeSupabase(options = {}) {
       assert.equal(tableName, "dream_records");
 
       return {
-        upsert(payload) {
+        upsert(payload, upsertOptions) {
           const rows = Array.isArray(payload) ? payload : [payload];
           state.upserts.push(...rows);
+          state.upsertOptions.push(upsertOptions || {});
 
           return {
             async select() {
@@ -129,6 +131,15 @@ test("maps a local dream record to the Supabase row shape for the current user",
   assert.equal(row.sync_status, "synced");
 });
 
+test("ignores a forged local user id when mapping rows for the current session user", () => {
+  const record = createRecord({ userId: "attacker-supplied-user", user_id: "attacker-snake-user" });
+  const row = DreamSync.mapLocalRecordToSupabaseRow(record, user);
+
+  assert.equal(row.user_id, "user-1");
+  assert.notEqual(row.user_id, record.userId);
+  assert.notEqual(row.user_id, record.user_id);
+});
+
 test("migrates existing local records once and marks local copies as synced", async () => {
   const storage = createMemoryStorage([createRecord()]);
   const client = createFakeSupabase();
@@ -146,10 +157,26 @@ test("migrates existing local records once and marks local copies as synced", as
   assert.equal(firstResult.migratedCount, 1);
   assert.equal(secondResult.migratedCount, 0);
   assert.equal(client.state.upserts.length, 1);
+  assert.deepEqual(client.state.upsertOptions[0], { onConflict: "user_id,local_record_id" });
   assert.equal(readStoredRecords(storage)[0].syncStatus, "synced");
   assert.equal(readStoredRecords(storage)[0].userId, "user-1");
   assert.ok(statuses.includes("正在整理你的梦境档案……"));
   assert.ok(statuses.includes("已同步 1 条本地梦境。"));
+});
+
+test("does not migrate pending records owned by another account", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "foreign-pending", userId: "user-2", syncStatus: "pending_sync" }),
+    createRecord({ id: "current-pending", userId: "user-1", syncStatus: "pending_sync" })
+  ]);
+  const client = createFakeSupabase();
+  const controller = DreamSync.createDreamSyncController({ client, storage, storageKey });
+
+  const result = await controller.setSession({ user });
+
+  assert.equal(result.migratedCount, 1);
+  assert.deepEqual(client.state.upserts.map((row) => row.local_record_id), ["current-pending"]);
+  assert.deepEqual(client.state.upserts.map((row) => row.user_id), ["user-1"]);
 });
 
 test("saves a new logged-in record to Supabase before updating the local cache", async () => {
@@ -199,4 +226,53 @@ test("hides a previous user's synced cloud and migrated local records after logo
   await controller.setSession(null);
 
   assert.deepEqual(controller.getVisibleRecords().map((record) => record.id), []);
+});
+
+test("switching accounts shows only the next account's records", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "user-one-local", userId: "user-1", syncStatus: "synced" }),
+    createRecord({ id: "user-two-local", userId: "user-2", syncStatus: "pending_sync" })
+  ]);
+  const client = createFakeSupabase({
+    rows: [
+      {
+        id: "cloud-one",
+        user_id: "user-1",
+        local_record_id: "user-one-cloud",
+        created_at: "2026-07-12T08:00:00.000Z",
+        raw_dream_text: "账号一的梦",
+        dream_summary: "账号一",
+        emotions: ["平静"],
+        symbols: ["门"],
+        sleep_quality: "未记录",
+        analysis_type: "快速解析",
+        report_content: {}
+      },
+      {
+        id: "cloud-two",
+        user_id: "user-2",
+        local_record_id: "user-two-cloud",
+        created_at: "2026-07-12T09:00:00.000Z",
+        raw_dream_text: "账号二的梦",
+        dream_summary: "账号二",
+        emotions: ["好奇"],
+        symbols: ["桥"],
+        sleep_quality: "未记录",
+        analysis_type: "快速解析",
+        report_content: {}
+      }
+    ]
+  });
+  const controller = DreamSync.createDreamSyncController({ client, storage, storageKey });
+
+  await controller.setSession({ user });
+  assert.deepEqual(controller.getVisibleRecords().map((record) => record.userId), ["user-1"]);
+
+  await controller.setSession({ user: { id: "user-2", email: "two@example.com" } });
+
+  assert.deepEqual(
+    controller.getVisibleRecords().map((record) => record.userId),
+    ["user-2", "user-2"]
+  );
+  assert.ok(controller.getVisibleRecords().every((record) => !String(record.rawDreamText).includes("账号一")));
 });

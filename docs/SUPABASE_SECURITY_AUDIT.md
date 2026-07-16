@@ -1,0 +1,40 @@
+# Supabase Security Audit Matrix
+
+This audit covers the current Dream Anatomy Web Beta data path for `public.dream_records`.
+
+## Matrix
+
+| Area | Current state | Risk | Evidence | Fix | Verification | Remaining limitation |
+| --- | --- | --- | --- | --- | --- | --- |
+| RLS boundary | `dream_records` has RLS enabled and forced. Four policies restrict SELECT, INSERT, UPDATE, and DELETE to `auth.uid() = user_id`. | Low. RLS is the server-side isolation boundary. | `supabase/migrations/20260711000000_create_dream_records.sql` enables and forces RLS, then creates authenticated-only policies. | No RLS migration change needed. | `tests/supabaseSecurity.test.js` checks RLS and policy SQL. | Must still verify the migrations are applied in the live Supabase project. |
+| Table ownership | `user_id` is `not null`, references `auth.users(id)`, and cascades on user delete. | Low. Records cannot exist without an owner. | Base migration defines `user_id uuid not null references auth.users(id) on delete cascade`. | No schema change needed. | `tests/supabaseSecurity.test.js`. | Live database schema should be checked in Supabase SQL Editor. |
+| Sync de-duplication | `local_record_id` is unique within each `user_id`. | Low. Cross-user local ID collisions should not overwrite another account. | Sync migration creates unique index on `(user_id, local_record_id)`. `src/dreamSync.js` uses `onConflict: "user_id,local_record_id"`. | No schema change needed. | `tests/supabaseSecurity.test.js` and `tests/dreamSync.test.js`. | Unique index must exist in production before cloud sync is trusted. |
+| Cloud reads | Dream Sync and Dream Home explicitly filter by current session user id. | Low. Explicit filters provide defense in depth over RLS. | `src/dreamSync.js` and `src/dreamHome.js` call `.eq("user_id", user.id)`. | No code change needed. | Existing Dream Home tests and new Dream Sync tests cover user filtering. | Dream Detail reads the already-visible record cache rather than querying Supabase directly. |
+| Cloud writes | Cloud writes are centralized through `dreamSync.saveRecord()` and map `user_id` from the active session. | Low. Caller-supplied `userId` is ignored for cloud row ownership. | `mapLocalRecordToSupabaseRow(record, user)` assigns `user_id: user.id`. | Added regression tests for forged local user id and conflict key. | `tests/dreamSync.test.js`. | RLS remains required because frontend code is not a trust boundary. |
+| Update and delete operations | There are no direct cloud `update()` or `delete()` calls for `dream_records` in current app code. | Low now; future edit/delete features will need explicit user filters and RLS tests. | Search found no direct `dream_records` update/delete call sites outside migrations. | No code change needed. | Static audit via `rg`; summarized here. | Future features must add tests before enabling edit/delete. |
+| Guest cloud access | Guests have no Supabase session and the app does not query cloud records. | Low. Anon users are also excluded by RLS policies scoped to `authenticated`. | Auth event handling passes null session to Dream Sync, which shows only local guest records. RLS policies use `to authenticated`. | No code change needed. | Existing and new Dream Sync tests. | Real Supabase anon API calls should still be manually checked online. |
+| Account switching | Logging out clears cloud records; switching users reloads only the next user's cloud/local records. | Medium if regressed, because stale in-memory records could leak UI data. | `dreamSync.setSession(null)` clears `cloudRecords`; Dream Home clears render state before load. | Added switch-account regression coverage. | `tests/dreamSync.test.js` plus existing Dream Home tests. | Browser manual testing should confirm visible UI clears instantly on real logout/login. |
+| Anonymous local migration | Anonymous local records migrate to the first account that signs in on that browser. | Medium privacy/product limitation on shared browsers, not an RLS bypass. | `getMigrationCandidates()` accepts records without `userId`. | No behavioral change in this PR; documented limitation. | Manual review and matrix entry. | Consider a future confirmation step before migrating guest records. |
+| SQL injection | App uses Supabase SDK query builders; no raw SQL, RPC, dynamic table names, or user-controlled columns were found. | Low. | Code search for `rpc(`, raw SQL, `execute`, and dynamic `dream_records` operations. | No code change needed. | Static audit. | Future RPC/raw SQL must include separate security review. |
+| Runtime environment | Browser runtime config contains only Supabase URL and anon/publishable key, and `/runtime-env.js` is served with `Cache-Control: no-store`. | Low. Supabase anon key is intended to be public when protected by RLS; stale config is now less likely after deploys. | `scripts/writeRuntimeEnv.js` writes only `SUPABASE_URL` and `SUPABASE_ANON_KEY`; `server.js` handles `/runtime-env.js` before static middleware. | Added explicit no-store route and regression tests. | `tests/supabaseSecurity.test.js` and `tests/server.test.js`. | Render env values should be checked without printing full keys. |
+| Secret handling | DeepSeek key is read server-side; `.env`, generated runtime env, and vendored SDK are ignored. No service role key is used. | Low in current tree. | `.gitignore`, `.env.example`, `server.js`, `server/aiAuth.js`, and history scan did not show real key-like values. | Hardened unused Supabase helper to avoid persisted server sessions. | `tests/supabaseSecurity.test.js`; redacted history scan. | If a real key is ever found in history, rotate it instead of only deleting it. |
+| Logging and privacy | The app does not log dream text, full AI responses, tokens, or emails. The server logs only the startup URL. | Low. | Searches for `console.log` / `console.error` outside tests and vendor. | No logging platform added. | Static audit; server startup log remains non-sensitive. | Production observability, if added later, must use request ids and content length only. |
+| Local browser storage | Guest and pending records intentionally store full dream text in browser `localStorage`. | Medium on shared devices or if a browser extension/XSS can read local storage. This is not a Supabase RLS bypass. | `src/app.js` and `src/dreamSync.js` keep local records for offline/guest use and sync retry. | No behavioral change in this PR; documented limitation. | Manual review and existing local journal tests. | Future privacy work should consider user-facing copy, local delete controls, and optional migration confirmation. |
+| Dynamic API caching | AI API responses set `Cache-Control: no-store`; no wildcard CORS is configured. | Low. | `server.js` sets `Cache-Control: no-store` in API handler and error responses. | Added static regression test. | `tests/supabaseSecurity.test.js`. | Supabase REST caching behavior is controlled by Supabase; browser should not cache auth tokens in URLs. |
+
+## Manual Production Checks
+
+These checks require a real Supabase project and cannot be honestly proven by local mocks alone:
+
+1. In Supabase SQL Editor, confirm both migrations are applied:
+   - `supabase/migrations/20260711000000_create_dream_records.sql`
+   - `supabase/migrations/20260711001000_add_dream_record_sync_fields.sql`
+2. Confirm `public.dream_records` has RLS enabled and forced.
+3. Confirm policies are authenticated-only and match `auth.uid() = user_id`.
+4. Create two synthetic test accounts and verify account A cannot read, update, delete, or insert records for account B.
+5. Verify anonymous requests cannot select any `dream_records` rows.
+6. Log out of account A, log into account B on the same browser, and confirm Dream Home, Dream Journal, and Dream Detail no longer show account A records.
+
+## Migration Status
+
+No new Supabase migration is required by this audit. The existing migrations already contain the required RLS and uniqueness protections. If production Supabase is missing either migration, apply them in timestamp order before relying on cloud sync.
