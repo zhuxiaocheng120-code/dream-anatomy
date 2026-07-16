@@ -17,6 +17,10 @@ const defaultRequestTimeoutMs = parsePositiveInteger(process.env.AI_REQUEST_TIME
 
 app.set("trust proxy", "loopback");
 app.use(express.json({ limit: "32kb" }));
+app.get("/runtime-env.js", (request, response) => {
+  response.set("Cache-Control", "no-store");
+  response.sendFile(path.join(__dirname, "src", "runtime-env.js"));
+});
 app.use(express.static(path.join(__dirname, "src")));
 
 const defaultAiAuthResolver = createAiAuthResolver();

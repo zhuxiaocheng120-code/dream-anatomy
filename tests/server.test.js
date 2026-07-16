@@ -138,6 +138,15 @@ async function postDreamAnalysis(baseUrl, body, options = {}) {
   });
 }
 
+test("runtime environment response is not cached", { concurrency: false }, async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/runtime-env.js`);
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+  });
+});
+
 test("returns a normalized result card from strict DeepSeek JSON", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   global.fetch = async (url, options) => {

@@ -90,6 +90,7 @@
 - scripts/writeRuntimeEnv.js: writes `src/runtime-env.js` from environment variables before startup.
 - lib/supabaseClient.js: helper for creating a Supabase client from environment variables.
 - supabase/migrations/: database migrations for cloud dream record storage and sync fields.
+- docs/SUPABASE_SECURITY_AUDIT.md: Supabase RLS, account isolation, key exposure, and manual production verification matrix.
 - .env.example: example environment variables for local backend configuration.
 - AGENTS.md: contributor guidelines for this repository.
 
@@ -124,6 +125,10 @@ Default Beta limits:
 These limits use an in-memory counter suitable for the current single-instance Beta. Render restarts reset the counters, and multiple instances would not share them. Before a larger public release, this should move to Redis or another shared persistent limiter.
 
 Deep guidance is still visible as “正在开发中”. When `DEEP_GUIDANCE_ENABLED=false`, `guided_questions` and `guided_final` are rejected by the server before quota usage or DeepSeek calls.
+
+## Supabase Security
+
+The current `dream_records` cloud storage path is covered by [docs/SUPABASE_SECURITY_AUDIT.md](docs/SUPABASE_SECURITY_AUDIT.md). The audit records the RLS policies, current-user query filters, sync de-duplication key, key exposure boundaries, and manual production checks that still require a real Supabase project.
 
 ## Editing the App
 
