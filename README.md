@@ -16,6 +16,7 @@
 - 深度引导入口目前保留展示，但通过 `src/featureFlags.js` 暂时标记为“正在开发中”，不能开始新的深度引导。
 - 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API；快速解析的一次最终请求会同时返回 V2 结构化分析正文和完整 `reportContent.dreamResultCard` 梦境画像。
 - AI 后端提供版本化接口 `POST /api/v1/dream-analysis`，旧的 `POST /api/dream-analysis` 暂时保留为兼容别名。接口会识别 Supabase Bearer token、应用 Beta 免费额度、短时限流、单用户并发限制和 DeepSeek 超时保护。
+- 服务器会把 AI 使用统计以隐私保护形式写入 Supabase `ai_usage_events`，用于运营分析和服务改进；管理员可在只读运营后台查看聚合数据。
 - 快速解析 V2 会要求结果包含梦境摘要、核心主题、核心解析、梦境证据与解释、情绪画像、主要意象、自我思考、今日小行动和温和提醒，并在服务端做基础质量检查。
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果，AI 输出质量不完整时不会伪装成本地 mock。
 - 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
@@ -57,7 +58,9 @@
 ├── scripts/
 │   └── writeRuntimeEnv.js
 ├── server.js
+├── server/
 ├── src/
+│   ├── adminAnalytics.js
 │   ├── app.js
 │   ├── auth.js
 │   ├── dreamHome.js
@@ -77,6 +80,7 @@
 - src/index.html: page content and structure.
 - src/style.css: colors, layout, spacing, and responsive styles.
 - src/app.js: interactions for the dream analysis, local journal, and view switching flows.
+- src/adminAnalytics.js: read-only admin analytics controller, permission probing, aggregate rendering, and session cleanup.
 - src/auth.js: Supabase Auth interactions for account registration, login, logout, password reset, and persistent session display.
 - src/dreamHome.js: authenticated Dream Home session handling, current-user cloud-record loading, statistics, recent dreams, and reuse of existing navigation/detail flows.
 - src/dreamJournal.js: Dream Journal archive grouping, realtime search, filters, empty state, record rendering, and existing detail navigation.
@@ -86,7 +90,7 @@
 - src/runtime-env.js: browser runtime configuration generated for local or deployed Supabase public settings.
 - src/vendor/supabase.js: browser Supabase SDK asset used by the account UI.
 - server.js: Express server that serves src and exposes the protected shared AI analysis API for current Web Beta and future clients.
-- server/: server-only AI API helpers for Supabase token identity, stable API errors, Beta quota, short-window rate limiting, concurrent request locking, and cleanup.
+- server/: server-only AI API helpers for Supabase token identity, stable API errors, Beta quota, short-window rate limiting, concurrent request locking, analytics writing, service-role admin access, and in-memory limiter housekeeping.
 - scripts/writeRuntimeEnv.js: writes `src/runtime-env.js` from environment variables before startup.
 - lib/supabaseClient.js: helper for creating a Supabase client from environment variables.
 - supabase/migrations/: database migrations for cloud dream record storage and sync fields.
@@ -100,6 +104,7 @@
 - Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY` locally. The server loads this file automatically.
 - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` locally to enable the account UI. These are browser-safe Supabase project values, not service role secrets.
 - Optional AI protection settings are available in `.env.example`: `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_GUEST_REQUESTS_PER_MINUTE`, `AI_USER_REQUESTS_PER_MINUTE`, `AI_MAX_CONCURRENT_PER_PRINCIPAL`, `AI_REQUEST_TIMEOUT_MS`, and `DEEP_GUIDANCE_ENABLED`.
+- Optional admin analytics settings are available in `.env.example`: `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER_IDS`, `ANALYTICS_HASH_SECRET`, `AI_INPUT_COST_PER_1M_TOKENS`, and `AI_OUTPUT_COST_PER_1M_TOKENS`. These are server-only values and must not be exposed in browser runtime config.
 - Start the app with `npm start`.
 - Open `http://localhost:3000` in your browser.
 - Without `DEEPSEEK_API_KEY`, the page can still open; analysis API requests will fail safely and the frontend will show clearly marked local fallback results.
@@ -129,6 +134,12 @@ Deep guidance is still visible as “正在开发中”. When `DEEP_GUIDANCE_ENA
 ## Supabase Security
 
 The current `dream_records` cloud storage path is covered by [docs/SUPABASE_SECURITY_AUDIT.md](docs/SUPABASE_SECURITY_AUDIT.md). The audit records the RLS policies, current-user query filters, sync de-duplication key, key exposure boundaries, and manual production checks that still require a real Supabase project.
+
+## Admin Analytics
+
+Admin analytics setup is documented in [docs/ADMIN_ANALYTICS_SETUP.md](docs/ADMIN_ANALYTICS_SETUP.md). The feature stores only AI usage metadata, hashed principals, token usage, estimated cost when configured, outcomes, and timing information. It does not store dream text, full AI responses, raw IP addresses, email, access tokens, refresh tokens, Authorization headers, or full Supabase user ids.
+
+The `public.ai_usage_events` migration must be applied manually in Supabase. The browser runtime continues to expose only `SUPABASE_URL` and `SUPABASE_ANON_KEY`; service role and analytics secrets stay server-side. The admin dashboard is read-only and relies on server-side admin checks for every request.
 
 ## Editing the App
 

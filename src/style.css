@@ -121,6 +121,114 @@ button {
   display: none;
 }
 
+.admin-panel {
+  display: grid;
+  gap: 24px;
+}
+
+.admin-range-tabs {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 14px;
+}
+
+.admin-range-tabs .text-button {
+  min-height: 36px;
+  padding: 7px 12px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 250, 241, 0.64);
+}
+
+.admin-card-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(160px, 1fr));
+  gap: 14px;
+}
+
+.admin-stat-card,
+.admin-section,
+.admin-recent-row {
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 250, 241, 0.76);
+  box-shadow: 0 18px 42px rgba(32, 36, 43, 0.06);
+}
+
+.admin-stat-card {
+  display: grid;
+  gap: 8px;
+  min-height: 128px;
+  padding: 18px;
+}
+
+.admin-stat-card span,
+.admin-stat-card small,
+.admin-recent-row span {
+  color: var(--muted);
+  font-size: 0.88rem;
+}
+
+.admin-stat-card strong {
+  font-size: clamp(1.35rem, 4vw, 2rem);
+  line-height: 1.1;
+}
+
+.admin-section {
+  display: grid;
+  gap: 14px;
+  padding: 18px;
+}
+
+.admin-section h3,
+.admin-distribution h3 {
+  margin: 0;
+  font-size: 1rem;
+}
+
+.admin-chart,
+.admin-distribution-list,
+.admin-recent-list {
+  display: grid;
+  gap: 10px;
+}
+
+.admin-trend-row,
+.admin-distribution-list p {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  min-height: 36px;
+  margin: 0;
+  padding: 8px 0;
+  border-bottom: 1px solid rgba(32, 36, 43, 0.08);
+}
+
+.admin-trend-row:last-child,
+.admin-distribution-list p:last-child {
+  border-bottom: 0;
+}
+
+.admin-distribution-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.admin-recent-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(132px, 1fr));
+  gap: 10px;
+  align-items: center;
+  padding: 14px;
+}
+
+.admin-recent-row strong {
+  font-family: ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+  font-size: 0.92rem;
+}
+
 .auth-session span {
   max-width: 220px;
   overflow: hidden;
@@ -1527,6 +1635,15 @@ input:focus-visible {
 
   .dream-journal-filters .text-button {
     flex: 1 1 calc(50% - 10px);
+  }
+
+  .admin-card-grid,
+  .admin-distribution-grid {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .admin-recent-row {
+    grid-template-columns: minmax(0, 1fr);
   }
 
   .dream-card,

@@ -1,10 +1,15 @@
 require("dotenv").config();
 
 const express = require("express");
+const crypto = require("node:crypto");
 const path = require("path");
 const DreamResultCard = require("./src/dreamResultCard");
+const { createAdminAuth } = require("./server/adminAuth");
+const { getAnalyticsSummary, getRecentAnalyticsEvents } = require("./server/adminAnalytics");
+const { createAdminSupabaseClient } = require("./server/adminSupabase");
 const { createAiAccessControl } = require("./server/aiAccessControl");
 const { createAiAuthResolver } = require("./server/aiAuth");
+const { buildUsageEvent, createPrincipalHash, recordUsageEventSafely } = require("./server/aiAnalytics");
 const { createApiError, formatApiError } = require("./server/aiErrors");
 
 const app = express();
@@ -47,6 +52,37 @@ function getAiAccessControl() {
 
 function getAiRequestTimeoutMs() {
   return parsePositiveInteger(app.locals.aiRequestTimeoutMs, defaultRequestTimeoutMs);
+}
+
+function getAnalyticsClient() {
+  if (Object.prototype.hasOwnProperty.call(app.locals, "analyticsClient")) {
+    return app.locals.analyticsClient;
+  }
+
+  return createAdminSupabaseClient();
+}
+
+function getAnalyticsEnv() {
+  return app.locals.analyticsEnv || process.env;
+}
+
+function getAdminEnv() {
+  return app.locals.adminEnv || process.env;
+}
+
+function getAnalyticsLogger() {
+  return app.locals.analyticsLogger || console;
+}
+
+function shouldAwaitAnalyticsWrites() {
+  return app.locals.awaitAnalyticsWrites === true;
+}
+
+function getAdminAuth() {
+  return createAdminAuth({
+    aiAuthResolver: getAiAuthResolver(),
+    env: getAdminEnv()
+  });
 }
 
 function isDeepGuidanceEnabled() {
@@ -742,6 +778,87 @@ function normalizeQuickCombinedOutput(parsed, dreamText) {
   };
 }
 
+function getAnalyticsOutcome(errorCode) {
+  if (errorCode === "UPSTREAM_TIMEOUT") {
+    return "timeout";
+  }
+
+  if (errorCode === "GENERATION_INCOMPLETE") {
+    return "generation_incomplete";
+  }
+
+  return "upstream_error";
+}
+
+function readUsageNumber(usage, key) {
+  if (!usage || usage[key] === null || usage[key] === undefined || (typeof usage[key] === "string" && !usage[key].trim())) {
+    return null;
+  }
+
+  const number = Number(usage[key]);
+  return Number.isFinite(number) && number >= 0 ? Math.floor(number) : null;
+}
+
+function combineUpstreamUsage(left, right) {
+  const keys = ["prompt_tokens", "completion_tokens", "total_tokens"];
+  const combined = {};
+  let hasAnyValue = false;
+
+  keys.forEach((key) => {
+    const leftValue = readUsageNumber(left, key);
+    const rightValue = readUsageNumber(right, key);
+
+    if (leftValue === null && rightValue === null) {
+      combined[key] = null;
+      return;
+    }
+
+    combined[key] = (leftValue || 0) + (rightValue || 0);
+    hasAnyValue = true;
+  });
+
+  return hasAnyValue ? combined : null;
+}
+
+async function recordAiUsageEvent(context) {
+  const analyticsEnv = getAnalyticsEnv();
+  const principalHash = createPrincipalHash(context.identity, context.request, analyticsEnv.ANALYTICS_HASH_SECRET);
+
+  if (!principalHash) {
+    return { ok: false, skipped: true };
+  }
+
+  const event = buildUsageEvent({
+    requestId: context.requestId,
+    occurredAt: context.occurredAt,
+    identity: context.identity,
+    principalHash,
+    analysisType: context.analysisType,
+    outcome: context.outcome,
+    errorCode: context.errorCode,
+    httpStatus: context.httpStatus,
+    durationMs: Date.now() - context.startedAt,
+    qualityRetryCount: context.analyticsMeta && context.analyticsMeta.qualityRetryCount,
+    promptVersion: context.analyticsMeta && context.analyticsMeta.promptVersion,
+    model: context.analyticsMeta && context.analyticsMeta.model,
+    upstreamUsage: context.analyticsMeta && context.analyticsMeta.upstreamUsage,
+    env: analyticsEnv
+  });
+
+  return recordUsageEventSafely(getAnalyticsClient(), event, getAnalyticsLogger());
+}
+
+function dispatchAiUsageEvent(context) {
+  const promise = recordAiUsageEvent(context);
+
+  if (shouldAwaitAnalyticsWrites()) {
+    return promise;
+  }
+
+  promise.catch(() => {});
+  return Promise.resolve({ ok: false, detached: true });
+}
+
 function getUserPrompt(dreamText, analysisType, options = {}) {
   if (analysisType === "result_card") {
     return buildResultCardUserPrompt(dreamText);
@@ -809,11 +926,22 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
     ? data.choices[0].message.content
     : "";
 
-  return typeof content === "string" ? parseJsonObject(content) : null;
+  return {
+    parsed: typeof content === "string" ? parseJsonObject(content) : null,
+    usage: data && data.usage ? data.usage : null
+  };
 }
 
 async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
-  const parsed = await requestDeepSeekCompletion(dreamText, analysisType, options);
+  const analyticsMeta = {
+    upstreamUsage: null,
+    qualityRetryCount: 0,
+    promptVersion: quickPromptVersion,
+    model: deepSeekModel
+  };
+  const completion = await requestDeepSeekCompletion(dreamText, analysisType, options);
+  const parsed = completion.parsed;
+  analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, completion.usage);
   let normalized = null;
 
   if (parsed && analysisType === "result_card") {
@@ -827,10 +955,13 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
     normalized = result.output;
 
     if (!normalized) {
-      const retryParsed = await requestDeepSeekCompletion(dreamText, analysisType, {
+      const retryCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
         ...options,
         retryIssues: result.issues
       });
+      analyticsMeta.qualityRetryCount += 1;
+      analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, retryCompletion.usage);
+      const retryParsed = retryCompletion.parsed;
       result = retryParsed ? normalizeQuickCombinedOutput(retryParsed, dreamText) : { output: null, issues: ["重试后仍不是合法 JSON。"] };
       normalized = result.output;
 
@@ -844,6 +975,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
           promptVersion: quickPromptVersion,
           qualityStatus: "incomplete"
         };
+        incompleteError.analyticsMeta = analyticsMeta;
         throw incompleteError;
       }
     }
@@ -857,11 +989,18 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
     throw invalidJsonError;
   }
 
+  if (normalized && typeof normalized === "object") {
+    normalized.__analyticsMeta = analyticsMeta;
+  }
+
   return normalized;
 }
 
 async function handleDreamAnalysisRequest(request, response) {
   response.set("Cache-Control", "no-store");
+  const requestId = crypto.randomUUID();
+  const occurredAt = new Date();
+  const startedAt = Date.now();
 
   const validation = validateDreamAnalysisRequest(request.body || {});
 
@@ -890,6 +1029,7 @@ async function handleDreamAnalysisRequest(request, response) {
 
   let reservation;
   let timeout;
+  let analyticsMeta = null;
   try {
     reservation = accessControl.start(identity, request.body.analysisType);
     const abortController = new AbortController();
@@ -902,12 +1042,27 @@ async function handleDreamAnalysisRequest(request, response) {
       guidedAnswers: validation.guidedAnswers,
       signal: abortController.signal
     });
+    analyticsMeta = analysis && analysis.__analyticsMeta ? analysis.__analyticsMeta : null;
+    if (analysis && typeof analysis === "object") {
+      delete analysis.__analyticsMeta;
+    }
     clearTimeout(timeout);
     timeout = null;
     accessControl.finish(reservation, { refundDaily: false });
     reservation = null;
 
     const usage = accessControl.getUsage(identity);
+    await dispatchAiUsageEvent({
+      request,
+      requestId,
+      occurredAt,
+      startedAt,
+      identity,
+      analysisType: request.body.analysisType,
+      outcome: "success",
+      httpStatus: 200,
+      analyticsMeta
+    });
     response.json({
       ...(request.body.analysisType === "result_card" ? { analysis } : analysis),
       usage
@@ -925,6 +1080,7 @@ async function handleDreamAnalysisRequest(request, response) {
     if (error.generationMeta && !apiError.generationMeta) {
       apiError.generationMeta = error.generationMeta;
     }
+    analyticsMeta = error.analyticsMeta || analyticsMeta;
 
     if (reservation) {
       accessControl.finish(reservation, {
@@ -932,12 +1088,77 @@ async function handleDreamAnalysisRequest(request, response) {
       });
     }
 
+    if (identity && reservation) {
+      await dispatchAiUsageEvent({
+        request,
+        requestId,
+        occurredAt,
+        startedAt,
+        identity,
+        analysisType: request.body.analysisType,
+        outcome: getAnalyticsOutcome(apiError.code),
+        errorCode: apiError.code,
+        httpStatus: apiError.status || apiError.statusCode || 500,
+        analyticsMeta
+      });
+    }
+
     sendApiError(response, apiError, identity ? accessControl.getUsage(identity) : null);
+  }
+}
+
+async function requireAdminAndAnalyticsClient(request) {
+  await getAdminAuth().requireAdminIdentity(request);
+  const client = getAnalyticsClient();
+
+  if (!client) {
+    throw createApiError("ANALYTICS_UNAVAILABLE", "运营统计暂时不可用，请检查服务端配置。", 503);
+  }
+
+  return client;
+}
+
+async function handleAdminSummaryRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const client = await requireAdminAndAnalyticsClient(request);
+    const summary = await getAnalyticsSummary(client, {
+      range: request.query ? request.query.range : "",
+      now: new Date()
+    });
+
+    response.json(summary);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "运营统计暂时不可用，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleAdminRecentRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const client = await requireAdminAndAnalyticsClient(request);
+    const recent = await getRecentAnalyticsEvents(client, {
+      limit: request.query ? request.query.limit : ""
+    });
+
+    response.json(recent);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "运营统计暂时不可用，请稍后再试。", 500);
+    sendApiError(response, apiError);
   }
 }
 
 app.post("/api/v1/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/dream-analysis", handleDreamAnalysisRequest);
+app.get("/api/v1/admin/analytics/summary", handleAdminSummaryRequest);
+app.get("/api/v1/admin/analytics/recent", handleAdminRecentRequest);
 
 app.use((error, request, response, next) => {
   if (error instanceof SyntaxError && "body" in error) {

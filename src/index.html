@@ -19,6 +19,7 @@
             <span class="feature-status-badge" data-feature-status>正在开发中</span>
           </button>
           <button type="button" class="text-button" data-view-target="diary">梦境日记</button>
+          <button type="button" class="text-button" data-view-target="admin" data-admin-entry hidden>运营后台</button>
         </nav>
 
         <div class="auth-shell" aria-label="账户">
@@ -359,6 +360,42 @@
           <div class="dream-detail-content" data-dream-detail-content></div>
         </section>
       </section>
+
+      <section class="view-panel work-panel admin-panel" data-view="admin" aria-labelledby="admin-title" hidden>
+        <div class="panel-copy">
+          <p class="eyebrow">运营概览</p>
+          <h2 id="admin-title">运营后台</h2>
+          <p class="summary">
+            查看 AI 使用趋势、成功率、耗时、Token 和预估成本。这里不会显示梦境正文、邮箱或真实用户身份。
+          </p>
+          <p class="status" data-admin-status aria-live="polite"></p>
+          <p class="status" data-admin-cost-note></p>
+        </div>
+
+        <div class="admin-range-tabs" aria-label="运营统计时间范围">
+          <button class="text-button is-current" type="button" data-admin-range="7d">最近 7 天</button>
+          <button class="text-button" type="button" data-admin-range="30d">最近 30 天</button>
+          <button class="text-button" type="button" data-admin-range="90d">最近 90 天</button>
+        </div>
+
+        <div class="admin-card-grid" data-admin-cards></div>
+
+        <section class="admin-section" aria-labelledby="admin-trend-title">
+          <h3 id="admin-trend-title">每日调用趋势</h3>
+          <div class="admin-chart" data-admin-trend></div>
+        </section>
+
+        <div class="admin-distribution-grid">
+          <section class="admin-section" data-admin-principal-distribution aria-label="用户类型分布"></section>
+          <section class="admin-section" data-admin-analysis-distribution aria-label="分析类型分布"></section>
+          <section class="admin-section" data-admin-error-distribution aria-label="错误类型分布"></section>
+        </div>
+
+        <section class="admin-section" aria-labelledby="admin-recent-title">
+          <h3 id="admin-recent-title">最近请求</h3>
+          <div class="admin-recent-list" data-admin-recent></div>
+        </section>
+      </section>
     </main>
 
     <section class="auth-modal" data-auth-modal aria-labelledby="auth-title" aria-modal="true" role="dialog" hidden>
@@ -420,6 +457,7 @@
     <script src="dreamJournal.js"></script>
     <script src="dreamArchetypes.js"></script>
     <script src="dreamResultCard.js"></script>
+    <script src="adminAnalytics.js"></script>
     <script src="app.js"></script>
   </body>
 </html>
