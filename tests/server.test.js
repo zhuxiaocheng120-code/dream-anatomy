@@ -115,6 +115,21 @@ async function withServer(run, options = {}) {
   if (options.requestTimeoutMs !== undefined) {
     app.locals.aiRequestTimeoutMs = options.requestTimeoutMs;
   }
+  if (Object.prototype.hasOwnProperty.call(options, "analyticsClient")) {
+    app.locals.analyticsClient = options.analyticsClient;
+  }
+  if (options.analyticsEnv) {
+    app.locals.analyticsEnv = options.analyticsEnv;
+  }
+  if (options.adminEnv) {
+    app.locals.adminEnv = options.adminEnv;
+  }
+  if (options.analyticsLogger) {
+    app.locals.analyticsLogger = options.analyticsLogger;
+  }
+  if (options.awaitAnalyticsWrites !== undefined) {
+    app.locals.awaitAnalyticsWrites = options.awaitAnalyticsWrites;
+  }
 
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
@@ -127,6 +142,11 @@ async function withServer(run, options = {}) {
     delete app.locals.aiAccessControl;
     delete app.locals.aiAuthResolver;
     delete app.locals.aiRequestTimeoutMs;
+    delete app.locals.analyticsClient;
+    delete app.locals.analyticsEnv;
+    delete app.locals.adminEnv;
+    delete app.locals.analyticsLogger;
+    delete app.locals.awaitAnalyticsWrites;
   }
 }
 
@@ -269,6 +289,7 @@ test("v1 dream-analysis route uses the same protected handler as the legacy alia
 test("retries quick analysis once when the first response is too short", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   const upstreamBodies = [];
+  const inserted = [];
   global.fetch = async (url, options) => {
     if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
     upstreamBodies.push(JSON.parse(options.body));
@@ -276,6 +297,9 @@ test("retries quick analysis once when the first response is too short", { concu
     return {
       ok: true,
       json: async () => ({
+        usage: firstAttempt
+          ? { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 }
+          : { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
         choices: [{
           message: {
             content: JSON.stringify(firstAttempt
@@ -311,6 +335,22 @@ test("retries quick analysis once when the first response is too short", { concu
       assert.equal(payload.analysis.evidence.length, 2);
       assert.equal(payload.generationMeta.qualityStatus, "passed");
       assert.equal(payload.usage.remaining, 99);
+      assert.equal(inserted.length, 1);
+      assert.equal(inserted[0].quality_retry_count, 1);
+      assert.equal(inserted[0].prompt_tokens, 110);
+      assert.equal(inserted[0].completion_tokens, 220);
+      assert.equal(inserted[0].total_tokens, 330);
+    }, {
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true
     });
   } finally {
     global.fetch = nativeFetch;
@@ -783,6 +823,138 @@ test("successful authenticated request uses user quota metadata", { concurrency:
   }
 });
 
+test("successful quick analysis records one analytics event", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const inserted = [];
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    return {
+      ok: true,
+      json: async () => ({
+        usage: { prompt_tokens: 1000, completion_tokens: 2000, total_tokens: 3000 },
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.analysis.coreTheme, createQuickAnalysisPayload().coreTheme);
+      assert.equal(inserted.length, 1);
+      assert.equal(inserted[0].analysis_type, "quick");
+      assert.equal(inserted[0].outcome, "success");
+      assert.equal(inserted[0].prompt_tokens, 1000);
+      assert.equal(inserted[0].completion_tokens, 2000);
+      assert.equal(inserted[0].total_tokens, 3000);
+      assert.equal(inserted[0].estimated_cost_usd, 0.005);
+      assert.match(inserted[0].principal_hash, /^[a-f0-9]{64}$/);
+      assert.doesNotMatch(JSON.stringify(inserted[0]), /学校走廊|test-key|Bearer/);
+    }, {
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: {
+        ANALYTICS_HASH_SECRET: "analytics-secret",
+        AI_INPUT_COST_PER_1M_TOKENS: "1",
+        AI_OUTPUT_COST_PER_1M_TOKENS: "2"
+      },
+      awaitAnalyticsWrites: true
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("analytics insert failure does not affect quick analysis", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.analysis.coreTheme, createQuickAnalysisPayload().coreTheme);
+    }, {
+      analyticsClient: {
+        from: () => ({
+          insert: async () => ({ error: new Error("db unavailable") })
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true,
+      analyticsLogger: { warn() {} }
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("disabled guided analysis does not record normal analytics event", { concurrency: false }, async () => {
+  const inserted = [];
+
+  await withServer(async (baseUrl) => {
+    const response = await postDreamAnalysis(baseUrl, {
+      dreamText: "学校走廊里的门",
+      analysisType: "guided_questions"
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 403);
+    assert.equal(payload.error.code, "FEATURE_DISABLED");
+    assert.equal(inserted.length, 0);
+  }, {
+    analyticsClient: {
+      from: () => ({
+        insert: async (event) => {
+          inserted.push(event);
+          return { error: null };
+        }
+      })
+    },
+    analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+    awaitAnalyticsWrites: true
+  });
+});
+
 test("DeepSeek 5xx refunds daily quota but preserves stable UPSTREAM_UNAVAILABLE error", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   let upstreamCalls = 0;
@@ -1058,4 +1230,178 @@ test("DeepSeek timeout aborts request, releases lock, and refunds daily quota", 
   } finally {
     global.fetch = nativeFetch;
   }
+});
+
+function createAnalyticsQueryClient(rows = []) {
+  return {
+    from(tableName) {
+      assert.equal(tableName, "ai_usage_events");
+      let limitValue = rows.length;
+      const builder = {
+        select() {
+          return builder;
+        },
+        gte() {
+          return builder;
+        },
+        order() {
+          return builder;
+        },
+        limit(limit) {
+          limitValue = limit;
+          return builder;
+        },
+        then(resolve, reject) {
+          return Promise.resolve({ data: rows.slice(0, limitValue), error: null }).then(resolve, reject);
+        }
+      };
+
+      return builder;
+    }
+  };
+}
+
+test("admin summary requires authenticated admin", { concurrency: false }, async () => {
+  await withServer(async (baseUrl) => {
+    const guest = await fetch(`${baseUrl}/api/v1/admin/analytics/summary`);
+    const guestPayload = await guest.json();
+
+    assert.equal(guest.status, 401);
+    assert.equal(guestPayload.error.code, "AUTH_INVALID");
+
+    const user = await fetch(`${baseUrl}/api/v1/admin/analytics/summary`, {
+      headers: { Authorization: "Bearer user-token" }
+    });
+    const userPayload = await user.json();
+
+    assert.equal(user.status, 403);
+    assert.equal(userPayload.error.code, "AUTH_FORBIDDEN");
+  }, {
+    authResolver: {
+      resolveIdentity: async (request) => {
+        const header = request.headers.authorization || "";
+        if (!header) return { type: "guest", userId: "", rateLimitKey: "guest:127.0.0.1" };
+        return { type: "authenticated", userId: "normal-user", rateLimitKey: "user:normal-user" };
+      }
+    },
+    adminEnv: {
+      ADMIN_USER_IDS: "admin-user",
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service"
+    },
+    analyticsClient: createAnalyticsQueryClient([])
+  });
+});
+
+test("admin summary returns analytics for configured admin only", { concurrency: false }, async () => {
+  const rows = [{
+    request_id: "00000000-0000-4000-8000-000000000001",
+    occurred_at: new Date().toISOString(),
+    principal_type: "guest",
+    principal_hash: "private-hash",
+    analysis_type: "quick",
+    outcome: "success",
+    duration_ms: 120,
+    quality_retry_count: 1,
+    prompt_tokens: 10,
+    completion_tokens: 20,
+    total_tokens: 30,
+    estimated_cost_usd: 0.001
+  }];
+
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/v1/admin/analytics/summary?range=30d`, {
+      headers: { Authorization: "Bearer admin-token" }
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("Cache-Control"), "no-store");
+    assert.equal(payload.range.key, "30d");
+    assert.equal(payload.totalRequests, 1);
+    assert.equal(payload.todayRequests, 1);
+    assert.equal(payload.approximatePrincipals, 1);
+    assert.doesNotMatch(JSON.stringify(payload), /private-hash/);
+  }, {
+    authResolver: {
+      resolveIdentity: async () => ({
+        type: "authenticated",
+        userId: "admin-user",
+        rateLimitKey: "user:admin-user"
+      })
+    },
+    adminEnv: {
+      ADMIN_USER_IDS: "admin-user",
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service"
+    },
+    analyticsClient: createAnalyticsQueryClient(rows)
+  });
+});
+
+test("admin analytics returns ANALYTICS_UNAVAILABLE when service role config is missing", { concurrency: false }, async () => {
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/v1/admin/analytics/summary`, {
+      headers: { Authorization: "Bearer admin-token" }
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 503);
+    assert.equal(payload.error.code, "ANALYTICS_UNAVAILABLE");
+  }, {
+    authResolver: {
+      resolveIdentity: async () => ({
+        type: "authenticated",
+        userId: "admin-user",
+        rateLimitKey: "user:admin-user"
+      })
+    },
+    adminEnv: {
+      ADMIN_USER_IDS: "admin-user",
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: ""
+    },
+    analyticsClient: null
+  });
+});
+
+test("admin recent returns redacted events with max limit", { concurrency: false }, async () => {
+  const rows = [{
+    request_id: "00000000-0000-4000-8000-000000000001",
+    occurred_at: "2026-07-17T01:00:00.000Z",
+    principal_hash: "private-hash",
+    principal_type: "authenticated",
+    analysis_type: "quick",
+    outcome: "success",
+    duration_ms: 120,
+    total_tokens: 30,
+    estimated_cost_usd: 0.001
+  }];
+
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/v1/admin/analytics/recent?limit=200`, {
+      headers: { Authorization: "Bearer admin-token" }
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(payload.limit, 100);
+    assert.equal(payload.events[0].requestId, "00000000");
+    assert.equal(payload.events[0].principalType, "authenticated");
+    assert.doesNotMatch(JSON.stringify(payload), /private-hash/);
+  }, {
+    authResolver: {
+      resolveIdentity: async () => ({
+        type: "authenticated",
+        userId: "admin-user",
+        rateLimitKey: "user:admin-user"
+      })
+    },
+    adminEnv: {
+      ADMIN_USER_IDS: "admin-user",
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_SERVICE_ROLE_KEY: "service"
+    },
+    analyticsClient: createAnalyticsQueryClient(rows)
+  });
 });

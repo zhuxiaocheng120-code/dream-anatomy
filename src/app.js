@@ -17,6 +17,16 @@ const dreamDetail = document.querySelector("[data-dream-detail]");
 const dreamDetailContent = document.querySelector("[data-dream-detail-content]");
 const backToJournalButton = document.querySelector("[data-back-to-journal]");
 const journalSyncStatus = document.querySelector("[data-journal-sync-status]");
+const adminEntry = document.querySelector("[data-admin-entry]");
+const adminStatus = document.querySelector("[data-admin-status]");
+const adminCostNote = document.querySelector("[data-admin-cost-note]");
+const adminCards = document.querySelector("[data-admin-cards]");
+const adminTrend = document.querySelector("[data-admin-trend]");
+const adminPrincipalDistribution = document.querySelector("[data-admin-principal-distribution]");
+const adminAnalysisDistribution = document.querySelector("[data-admin-analysis-distribution]");
+const adminErrorDistribution = document.querySelector("[data-admin-error-distribution]");
+const adminRecent = document.querySelector("[data-admin-recent]");
+const adminRangeButtons = Array.from(document.querySelectorAll("[data-admin-range]"));
 const guidedForm = document.querySelector("[data-guided-form]");
 const guidedDream = document.querySelector("#guidedDream");
 const guidedQuestionsContainer = document.querySelector("[data-guided-questions]");
@@ -78,6 +88,28 @@ const dreamResultCardController = canUseDreamResultCard
       saveResultCard: saveDreamResultCard
     })
   : null;
+const adminAnalyticsController = window.AdminAnalytics
+  && typeof window.AdminAnalytics.createAdminAnalyticsController === "function"
+  ? window.AdminAnalytics.createAdminAnalyticsController({
+      app: {
+        getCurrentView,
+        showView
+      },
+      document,
+      elements: {
+        analysisDistribution: adminAnalysisDistribution,
+        cards: adminCards,
+        costNote: adminCostNote,
+        entry: adminEntry,
+        errorDistribution: adminErrorDistribution,
+        principalDistribution: adminPrincipalDistribution,
+        rangeButtons: adminRangeButtons,
+        recent: adminRecent,
+        status: adminStatus,
+        trend: adminTrend
+      }
+    })
+  : null;
 
 function updateJournalSyncStatus(message) {
   if (journalSyncStatus) {
@@ -101,6 +133,21 @@ if (dreamSyncController) {
   });
 }
 
+if (adminAnalyticsController) {
+  window.addEventListener("dream-anatomy-auth-session", (event) => {
+    const detail = event.detail || {};
+    adminAnalyticsController.handleSession({
+      authEvent: detail.authEvent || "",
+      user: detail.user || null
+    });
+  });
+}
+
+function getCurrentView() {
+  const activePanel = document.querySelector("[data-view].is-active");
+  return activePanel ? activePanel.dataset.view : "";
+}
+
 function showView(viewName) {
   if (viewName === "guided" && !deepGuidanceEnabled) {
     updateGuidedStatus("深度引导正在开发中。");
@@ -109,6 +156,10 @@ function showView(viewName) {
 
   if (viewName === "diary") {
     showDreamJournalList();
+  }
+
+  if (viewName === "admin" && adminAnalyticsController) {
+    adminAnalyticsController.enterAdminView();
   }
 
   viewPanels.forEach((panel) => {
@@ -999,6 +1050,7 @@ function openDreamDetail(recordId, fallbackRow) {
 }
 
 window.DreamAnatomyApp = {
+  getCurrentView,
   openDreamDetail,
   renderDreamJournal,
   showView
