@@ -264,6 +264,10 @@ function createAppIntegrationHarness(options = {}) {
     windowRef.DreamResultCard = DreamResultCard;
   }
 
+  if (options.privacyData) {
+    windowRef.DreamPrivacyData = options.privacyData;
+  }
+
   if (options.fakeDreamJournal !== false && !options.realDreamJournal && !options.noDreamJournal) {
     windowRef.DreamJournal = {
       createDreamJournalController(options) {
@@ -1417,6 +1421,41 @@ test("old records without result cards still show manual generation fallback", (
     findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "生成梦境画像").length,
     1
   );
+});
+
+test("guest manual Dream Result Card generation requires legal consent before API request", async () => {
+  let fetchCount = 0;
+  const record = createRecord({
+    id: "guest-old-record-without-card",
+    reportContent: { summary: "旧记录" }
+  });
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    records: [record],
+    fetch: async () => {
+      fetchCount += 1;
+      throw new Error("AI request should be gated");
+    },
+    privacyData: {
+      createPrivacyDataController: () => ({
+        deleteDreamRecord: async () => ({}),
+        ensureGuestAiConsent: async () => false,
+        handleSession() {},
+        openLegalDocument() {},
+        render() {}
+      })
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const generationButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "生成梦境画像"
+  )[0];
+
+  await generationButton.trigger("click");
+
+  assert.equal(fetchCount, 0);
 });
 
 test("documents unified result-card flow boundaries", () => {

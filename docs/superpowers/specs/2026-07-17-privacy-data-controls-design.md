@@ -321,9 +321,9 @@ Rules:
 2. Delete `public.ai_usage_events` rows where:
    - `principal_type = 'authenticated'`
    - `principal_hash = recomputedHash`
-3. Delete `public.legal_consents` where `user_id = verifiedUserId`.
-4. Delete `public.dream_records` where `user_id = verifiedUserId`.
-5. Delete the Supabase Auth user with the server-only service role client.
+3. Delete the Supabase Auth user with the server-only service role client.
+4. Perform scoped cleanup for `public.legal_consents` where `user_id = verifiedUserId`.
+5. Perform scoped cleanup for `public.dream_records` where `user_id = verifiedUserId`.
 
 Guest analytics are not deleted because historical guest IP signals cannot be reliably proven to belong to the account.
 
@@ -332,7 +332,7 @@ If one step fails:
 - do not claim full success
 - return a safe error with request id
 - do not attempt to restore already deleted data
-- allow the user to retry
+- if Supabase Auth deletion fails, dream records and legal consent have not been deleted first, so the user can retry
 
 If analytics deletion succeeds but Auth deletion fails, retrying is valid.
 

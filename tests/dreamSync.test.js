@@ -42,8 +42,10 @@ function createFakeSupabase(options = {}) {
     rows: options.rows ? [...options.rows] : [],
     upserts: [],
     upsertOptions: [],
+    deletes: [],
     failUpsert: Boolean(options.failUpsert),
-    failSelect: Boolean(options.failSelect)
+    failSelect: Boolean(options.failSelect),
+    failDelete: Boolean(options.failDelete)
   };
 
   return {
@@ -105,6 +107,33 @@ function createFakeSupabase(options = {}) {
                   };
                 }
               };
+            }
+          };
+        },
+        delete() {
+          const filters = [];
+          return {
+            eq(column, value) {
+              filters.push({ column, value });
+              return this;
+            },
+            async then(resolve) {
+              state.deletes.push(filters);
+
+              if (state.failDelete) {
+                return resolve({ data: null, error: new Error("delete failed") });
+              }
+
+              const idFilter = filters.find((filter) => filter.column === "id");
+              const userFilter = filters.find((filter) => filter.column === "user_id");
+
+              if (idFilter && userFilter) {
+                state.rows = state.rows.filter((row) => !(row.id === idFilter.value && row.user_id === userFilter.value));
+              } else if (userFilter) {
+                state.rows = state.rows.filter((row) => row.user_id !== userFilter.value);
+              }
+
+              return resolve({ data: null, error: null });
             }
           };
         }
@@ -275,4 +304,200 @@ test("switching accounts shows only the next account's records", async () => {
     ["user-2", "user-2"]
   );
   assert.ok(controller.getVisibleRecords().every((record) => !String(record.rawDreamText).includes("账号一")));
+});
+
+test("deletes an authenticated cloud record with both id and user_id filters", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "local-one", cloudId: "cloud-one", userId: "user-1", syncStatus: "synced" }),
+    createRecord({ id: "local-two", cloudId: "cloud-two", userId: "user-2", syncStatus: "synced" })
+  ]);
+  const client = createFakeSupabase({
+    rows: [
+      {
+        id: "cloud-one",
+        user_id: "user-1",
+        local_record_id: "local-one",
+        created_at: "2026-07-12T08:00:00.000Z",
+        raw_dream_text: "账号一",
+        dream_summary: "账号一",
+        emotions: ["平静"],
+        symbols: ["门"],
+        sleep_quality: "未记录",
+        analysis_type: "快速解析",
+        report_content: {}
+      },
+      {
+        id: "cloud-two",
+        user_id: "user-2",
+        local_record_id: "local-two",
+        created_at: "2026-07-12T09:00:00.000Z",
+        raw_dream_text: "账号二",
+        dream_summary: "账号二",
+        emotions: ["好奇"],
+        symbols: ["桥"],
+        sleep_quality: "未记录",
+        analysis_type: "快速解析",
+        report_content: {}
+      }
+    ]
+  });
+  const controller = DreamSync.createDreamSyncController({ client, storage, storageKey });
+
+  await controller.setSession({ user });
+  const result = await controller.deleteRecord("local-one");
+
+  assert.equal(result.deletedCount, 1);
+  assert.deepEqual(client.state.deletes[0], [
+    { column: "id", value: "cloud-one" },
+    { column: "user_id", value: "user-1" }
+  ]);
+  assert.equal(readStoredRecords(storage).some((record) => record.id === "local-one"), false);
+  assert.equal(readStoredRecords(storage).some((record) => record.id === "local-two"), true);
+});
+
+test("failed authenticated delete keeps local and visible records", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "local-one", cloudId: "cloud-one", userId: "user-1", syncStatus: "synced" })
+  ]);
+  const client = createFakeSupabase({
+    failDelete: true,
+    rows: [{
+      id: "cloud-one",
+      user_id: "user-1",
+      local_record_id: "local-one",
+      created_at: "2026-07-12T08:00:00.000Z",
+      raw_dream_text: "账号一",
+      dream_summary: "账号一",
+      emotions: ["平静"],
+      symbols: ["门"],
+      sleep_quality: "未记录",
+      analysis_type: "快速解析",
+      report_content: {}
+    }]
+  });
+  const controller = DreamSync.createDreamSyncController({ client, storage, storageKey });
+
+  await controller.setSession({ user });
+  await assert.rejects(() => controller.deleteRecord("local-one"));
+
+  assert.equal(readStoredRecords(storage).some((record) => record.id === "local-one"), true);
+});
+
+test("authenticated delete does not treat a local id as a cloud id", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "local-only-synced", userId: "user-1", syncStatus: "synced" })
+  ]);
+  const client = createFakeSupabase({ failSelect: true });
+  const controller = DreamSync.createDreamSyncController({ client, storage, storageKey });
+
+  await controller.setSession({ user });
+  await assert.rejects(() => controller.deleteRecord("local-only-synced"), /select failed/);
+
+  assert.equal(client.state.deletes.length, 0);
+  assert.equal(readStoredRecords(storage).some((record) => record.id === "local-only-synced"), true);
+});
+
+test("authenticated delete removes local cache rows matched by the deleted cloud row local id", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "local-one", userId: "user-1", syncStatus: "synced" })
+  ]);
+  const client = createFakeSupabase({
+    rows: [{
+      id: "cloud-one",
+      user_id: "user-1",
+      local_record_id: "local-one",
+      created_at: "2026-07-12T08:00:00.000Z",
+      raw_dream_text: "账号一",
+      dream_summary: "账号一",
+      emotions: ["平静"],
+      symbols: ["门"],
+      sleep_quality: "未记录",
+      analysis_type: "快速解析",
+      report_content: {}
+    }]
+  });
+  const controller = DreamSync.createDreamSyncController({ client, storage, storageKey });
+
+  await controller.setSession({ user });
+  await controller.deleteRecord("cloud-one");
+
+  assert.equal(readStoredRecords(storage).some((record) => record.id === "local-one"), false);
+  assert.deepEqual(client.state.deletes.at(-1), [
+    { column: "id", value: "cloud-one" },
+    { column: "user_id", value: "user-1" }
+  ]);
+});
+
+test("guest delete and clear affect only local guest records", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "guest-one" }),
+    createRecord({ id: "user-one", userId: "user-1", syncStatus: "synced" }),
+    createRecord({ id: "user-two", userId: "user-2", syncStatus: "synced" })
+  ]);
+  const controller = DreamSync.createDreamSyncController({ storage, storageKey });
+
+  await controller.deleteRecord("guest-one");
+  assert.deepEqual(readStoredRecords(storage).map((record) => record.id), ["user-one", "user-two"]);
+
+  await controller.clearCurrentRecords();
+  assert.deepEqual(readStoredRecords(storage).map((record) => record.id), ["user-one", "user-two"]);
+});
+
+test("clearCurrentRecords deletes only current authenticated user's cloud and local rows", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "user-one", userId: "user-1", syncStatus: "synced" }),
+    createRecord({ id: "user-two", userId: "user-2", syncStatus: "synced" })
+  ]);
+  const client = createFakeSupabase({
+    rows: [
+      {
+        id: "cloud-one",
+        user_id: "user-1",
+        local_record_id: "user-one",
+        created_at: "2026-07-12T08:00:00.000Z",
+        raw_dream_text: "账号一",
+        dream_summary: "账号一",
+        emotions: ["平静"],
+        symbols: ["门"],
+        sleep_quality: "未记录",
+        analysis_type: "快速解析",
+        report_content: {}
+      },
+      {
+        id: "cloud-two",
+        user_id: "user-2",
+        local_record_id: "user-two",
+        created_at: "2026-07-12T09:00:00.000Z",
+        raw_dream_text: "账号二",
+        dream_summary: "账号二",
+        emotions: ["好奇"],
+        symbols: ["桥"],
+        sleep_quality: "未记录",
+        analysis_type: "快速解析",
+        report_content: {}
+      }
+    ]
+  });
+  const controller = DreamSync.createDreamSyncController({ client, storage, storageKey });
+
+  await controller.setSession({ user });
+  const result = await controller.clearCurrentRecords();
+
+  assert.equal(result.deletedCount, 1);
+  assert.deepEqual(client.state.deletes.at(-1), [{ column: "user_id", value: "user-1" }]);
+  assert.deepEqual(readStoredRecords(storage).map((record) => record.id), ["user-two"]);
+});
+
+test("clearCurrentLocalCache removes only current user's local cache rows", async () => {
+  const storage = createMemoryStorage([
+    createRecord({ id: "guest-one", syncStatus: "synced" }),
+    createRecord({ id: "user-one", userId: "user-1", syncStatus: "synced" }),
+    createRecord({ id: "user-two", userId: "user-2", syncStatus: "synced" })
+  ]);
+  const controller = DreamSync.createDreamSyncController({ client: createFakeSupabase(), storage, storageKey });
+
+  await controller.setSession({ user });
+  controller.clearCurrentLocalCache();
+
+  assert.deepEqual(readStoredRecords(storage).map((record) => record.id), ["guest-one", "user-two"]);
 });

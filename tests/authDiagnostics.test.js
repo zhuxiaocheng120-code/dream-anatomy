@@ -31,7 +31,7 @@ function createNode() {
   };
 }
 
-function createAuthHarness({ env, supabase }) {
+function createAuthHarness({ env, supabase, privacyData }) {
   const nodes = new Map();
   const dispatchedEvents = [];
   let initPromise = Promise.resolve();
@@ -61,6 +61,7 @@ function createAuthHarness({ env, supabase }) {
     },
     window: {
       DREAM_ANATOMY_ENV: env,
+      DreamPrivacyData: privacyData,
       dispatchEvent(event) {
         dispatchedEvents.push(event);
       },
@@ -170,6 +171,36 @@ test("register submit still shows the environment variable prompt when config is
   assert.match(statusText, /请先配置 Supabase 环境变量。/);
   assert.match(statusText, /SUPABASE_URL 是否已设置：否/);
   assert.match(statusText, /SUPABASE_ANON_KEY 是否已设置：否/);
+});
+
+test("register submit requires explicit legal consent before Supabase signUp", async () => {
+  let signUpCalls = 0;
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: null } }),
+      onAuthStateChange() {},
+      signUp: async () => {
+        signUpCalls += 1;
+        return { data: {}, error: null };
+      }
+    }
+  };
+  const harness = createAuthHarness({
+    env: {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_ANON_KEY: "anon-test-value"
+    },
+    privacyData: {
+      validateRegistrationConsent: () => false
+    },
+    supabase: { createClient: () => client }
+  });
+
+  await harness.ready;
+  const statusText = await submitRegisterForm(harness);
+
+  assert.equal(signUpCalls, 0);
+  assert.match(statusText, /请先阅读并勾选同意用户协议、隐私政策和 AI 使用说明。/);
 });
 
 test("logout publishes an immediate null session before signOut settles", async () => {

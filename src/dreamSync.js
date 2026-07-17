@@ -59,6 +59,14 @@
     return String(record.localRecordId || record.local_record_id || record.id);
   }
 
+  function getCloudRecordId(record) {
+    if (!record) {
+      return "";
+    }
+
+    return String(record.cloudId || record.cloud_id || "");
+  }
+
   function mapLocalRecordToSupabaseRow(record, user, options = {}) {
     const createdAt = record.createdAt || record.created_at || new Date().toISOString();
 
@@ -178,6 +186,43 @@
 
     function saveAllRecords(records) {
       writeRecords(storage, storageKey, records);
+    }
+
+    function recordMatchesId(record, recordId) {
+      const id = String(recordId || "");
+      return Boolean(id) && [
+        record.id,
+        record.localRecordId,
+        record.local_record_id,
+        record.cloudId,
+        record.cloud_id
+      ].some((value) => String(value || "") === id);
+    }
+
+    function recordMatchesRecord(record, targetRecord) {
+      const recordIds = [
+        record.id,
+        record.localRecordId,
+        record.local_record_id,
+        record.cloudId,
+        record.cloud_id
+      ].map((value) => String(value || "")).filter(Boolean);
+      const targetIds = [
+        targetRecord.id,
+        targetRecord.localRecordId,
+        targetRecord.local_record_id,
+        targetRecord.cloudId,
+        targetRecord.cloud_id
+      ].map((value) => String(value || "")).filter(Boolean);
+
+      return recordIds.some((id) => targetIds.includes(id));
+    }
+
+    function removeLocalRecords(predicate) {
+      const existingRecords = loadAllRecords();
+      const nextRecords = existingRecords.filter((record) => !predicate(record));
+      saveAllRecords(nextRecords);
+      return existingRecords.length - nextRecords.length;
     }
 
     function upsertLocalRecord(record) {
@@ -404,11 +449,105 @@
       }
     }
 
+    async function deleteRecord(recordId) {
+      const user = getUser();
+      let visibleRecord = getVisibleRecords().find((record) => recordMatchesId(record, recordId));
+
+      if (!visibleRecord) {
+        return { deletedCount: 0, records: getVisibleRecords() };
+      }
+
+      if (!client || !user) {
+        const deletedCount = removeLocalRecords((record) => !record.userId && recordMatchesId(record, recordId));
+        emitRecords();
+        return { deletedCount, records: getVisibleRecords(), syncStatus: "local" };
+      }
+
+      let cloudRecordId = getCloudRecordId(visibleRecord);
+
+      if (!cloudRecordId && visibleRecord.syncStatus === pendingStatus) {
+        const deletedCount = removeLocalRecords((record) => {
+          return record.userId === user.id && recordMatchesRecord(record, visibleRecord);
+        });
+        emitRecords();
+        return { deletedCount, records: getVisibleRecords(), syncStatus: "local" };
+      }
+
+      if (!cloudRecordId && !cloudLoaded) {
+        await loadCloudRecords();
+        visibleRecord = getVisibleRecords().find((record) => recordMatchesId(record, recordId));
+        cloudRecordId = getCloudRecordId(visibleRecord);
+      }
+
+      if (!cloudRecordId) {
+        throw new Error("Missing cloud record id");
+      }
+
+      const response = await client
+        .from(tableName)
+        .delete()
+        .eq("id", cloudRecordId)
+        .eq("user_id", user.id);
+
+      if (response.error) {
+        throw response.error;
+      }
+
+      const deletedCount = removeLocalRecords((record) => {
+        return record.userId === user.id && recordMatchesRecord(record, visibleRecord);
+      });
+      cloudRecords = cloudRecords.filter((record) => !recordMatchesRecord(record, visibleRecord));
+      emitRecords();
+      return { deletedCount: Math.max(1, deletedCount), records: getVisibleRecords(), syncStatus: syncedStatus };
+    }
+
+    async function clearCurrentRecords() {
+      const user = getUser();
+
+      if (!client || !user) {
+        const deletedCount = removeLocalRecords((record) => !record.userId);
+        emitRecords();
+        return { deletedCount, records: getVisibleRecords(), syncStatus: "local" };
+      }
+
+      const response = await client
+        .from(tableName)
+        .delete()
+        .eq("user_id", user.id);
+
+      if (response.error) {
+        throw response.error;
+      }
+
+      const deletedCount = removeLocalRecords((record) => record.userId === user.id);
+      cloudRecords = [];
+      cloudLoaded = true;
+      emitRecords();
+      return { deletedCount, records: getVisibleRecords(), syncStatus: syncedStatus };
+    }
+
+    function clearCurrentLocalCache() {
+      const user = getUser();
+      const deletedCount = removeLocalRecords((record) => {
+        return user ? record.userId === user.id : !record.userId;
+      });
+      emitRecords();
+      return { deletedCount, records: getVisibleRecords() };
+    }
+
+    function getCurrentUser() {
+      return getUser();
+    }
+
     function setClient(nextClient) {
       client = nextClient;
     }
 
     return {
+      clearCurrentLocalCache,
+      clearCurrentRecords,
+      deleteRecord,
+      getCurrentUser,
       getVisibleRecords,
       loadAllRecords,
       loadCloudRecords,

@@ -96,3 +96,42 @@ test("admin analytics setup document explains secrets and long-term retention", 
   assert.match(docs, /不要随意轮换 ANALYTICS_HASH_SECRET/);
   assert.doesNotMatch(docs, /180 天|永久保存|永不删除/);
 });
+
+test("legal consent migration creates current-user RLS policies", () => {
+  const migration = readProjectFile("supabase/migrations/20260717001000_create_legal_consents.sql");
+
+  assert.match(migration, /create table if not exists public\.legal_consents/);
+  assert.match(migration, /user_id uuid primary key references auth\.users\(id\) on delete cascade/);
+  assert.match(migration, /privacy_policy_version text not null/);
+  assert.match(migration, /terms_version text not null/);
+  assert.match(migration, /ai_disclaimer_version text not null/);
+  assert.match(migration, /alter table public\.legal_consents enable row level security/);
+  assert.match(migration, /alter table public\.legal_consents force row level security/);
+  assert.match(migration, /for select\s+to authenticated\s+using \(auth\.uid\(\) = user_id\)/s);
+  assert.match(migration, /for insert\s+to authenticated\s+with check \(auth\.uid\(\) = user_id\)/s);
+  assert.match(migration, /for update\s+to authenticated\s+using \(auth\.uid\(\) = user_id\)\s+with check \(auth\.uid\(\) = user_id\)/s);
+  assert.doesNotMatch(migration, /to anon/);
+});
+
+test("public support email is exposed without exposing secrets", () => {
+  const runtimeWriter = readProjectFile("scripts/writeRuntimeEnv.js");
+  const envExample = readProjectFile(".env.example");
+
+  assert.match(runtimeWriter, /PUBLIC_SUPPORT_EMAIL: process\.env\.PUBLIC_SUPPORT_EMAIL \|\| ""/);
+  assert.doesNotMatch(runtimeWriter, /SUPABASE_SERVICE_ROLE_KEY|ANALYTICS_HASH_SECRET|DEEPSEEK_API_KEY/);
+  assert.match(envExample, /^PUBLIC_SUPPORT_EMAIL=$/m);
+});
+
+test("privacy data controls setup documents deletion and legal boundaries", () => {
+  const docs = readProjectFile("docs/PRIVACY_DATA_CONTROLS_SETUP.md");
+
+  assert.match(docs, /20260717001000_create_legal_consents\.sql/);
+  assert.match(docs, /PUBLIC_SUPPORT_EMAIL/);
+  assert.match(docs, /正式发布前.*专业法律/);
+  assert.match(docs, /authenticated AI 使用统计/);
+  assert.match(docs, /guest AI 使用统计不会被删除/);
+  assert.match(docs, /SUPABASE_SERVICE_ROLE_KEY/);
+  assert.match(docs, /ANALYTICS_HASH_SECRET/);
+  assert.match(docs, /注销账户/);
+  assert.doesNotMatch(docs, /永久保存|永不删除|完全匿名|已通过律师审核/);
+});

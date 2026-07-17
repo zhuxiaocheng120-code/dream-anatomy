@@ -130,6 +130,9 @@ async function withServer(run, options = {}) {
   if (options.awaitAnalyticsWrites !== undefined) {
     app.locals.awaitAnalyticsWrites = options.awaitAnalyticsWrites;
   }
+  if (options.accountDeletionService) {
+    app.locals.accountDeletionService = options.accountDeletionService;
+  }
 
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
@@ -147,6 +150,7 @@ async function withServer(run, options = {}) {
     delete app.locals.adminEnv;
     delete app.locals.analyticsLogger;
     delete app.locals.awaitAnalyticsWrites;
+    delete app.locals.accountDeletionService;
   }
 }
 
@@ -158,12 +162,71 @@ async function postDreamAnalysis(baseUrl, body, options = {}) {
   });
 }
 
+async function deleteAccount(baseUrl, body, options = {}) {
+  return fetch(`${baseUrl}/api/v1/account`, {
+    method: "DELETE",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    body: JSON.stringify(body)
+  });
+}
+
 test("runtime environment response is not cached", { concurrency: false }, async () => {
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/runtime-env.js`);
 
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
+  });
+});
+
+test("account deletion route returns no-store success responses", { concurrency: false }, async () => {
+  const calls = [];
+  await withServer(async (baseUrl) => {
+    const response = await deleteAccount(baseUrl, { confirmation: "注销账户" }, {
+      headers: { Authorization: "Bearer token" }
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.deepEqual(payload, { ok: true, requestId: "request-1" });
+    assert.equal(calls.length, 1);
+  }, {
+    accountDeletionService: {
+      deleteAccount: async (request) => {
+        calls.push({
+          authorization: request.headers.authorization,
+          body: request.body
+        });
+        return { ok: true, requestId: "request-1" };
+      }
+    }
+  });
+});
+
+test("account deletion route formats safe stable errors", { concurrency: false }, async () => {
+  await withServer(async (baseUrl) => {
+    const response = await deleteAccount(baseUrl, { confirmation: "bad" });
+    const payload = await response.json();
+
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.deepEqual(payload.error, {
+      code: "INVALID_REQUEST",
+      message: "请输入正确确认文字后再注销账户。"
+    });
+    assert.equal(payload.requestId, "request-1");
+    assert.doesNotMatch(JSON.stringify(payload), /stack|token|service_role/i);
+  }, {
+    accountDeletionService: {
+      deleteAccount: async () => {
+        const error = new Error("请输入正确确认文字后再注销账户。");
+        error.code = "INVALID_REQUEST";
+        error.status = 400;
+        error.requestId = "request-1";
+        throw error;
+      }
+    }
   });
 });
 

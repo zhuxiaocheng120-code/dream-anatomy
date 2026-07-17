@@ -19,6 +19,7 @@
             <span class="feature-status-badge" data-feature-status>正在开发中</span>
           </button>
           <button type="button" class="text-button" data-view-target="diary">梦境日记</button>
+          <button type="button" class="text-button" data-view-target="privacy-data">隐私与数据</button>
           <button type="button" class="text-button" data-view-target="admin" data-admin-entry hidden>运营后台</button>
         </nav>
 
@@ -344,7 +345,7 @@
           <div id="dreamJournalList" class="journal-list" aria-live="polite"></div>
 
           <div class="button-row">
-            <button class="secondary-button" type="button" data-clear-journal>清空本地记录</button>
+            <button class="secondary-button" type="button" data-clear-journal>管理隐私与数据</button>
             <button class="secondary-button" type="button" data-view-target="home">返回首页</button>
           </div>
         </div>
@@ -396,6 +397,18 @@
           <div class="admin-recent-list" data-admin-recent></div>
         </section>
       </section>
+
+      <section class="view-panel work-panel privacy-data-panel" data-view="privacy-data" aria-labelledby="privacy-data-title" hidden>
+        <div data-privacy-data-view>
+          <div class="panel-copy">
+            <p class="eyebrow">Privacy & Data</p>
+            <h2 id="privacy-data-title">隐私与数据</h2>
+            <p class="summary">管理法律文件确认、梦境导出、梦境删除和账户数据。</p>
+            <p class="status" data-privacy-status aria-live="polite"></p>
+          </div>
+          <div data-legal-document-view></div>
+        </div>
+      </section>
     </main>
 
     <section class="auth-modal" data-auth-modal aria-labelledby="auth-title" aria-modal="true" role="dialog" hidden>
@@ -430,6 +443,16 @@
           <input id="registerEmail" name="email" type="email" autocomplete="email" required>
           <label for="registerPassword">密码</label>
           <input id="registerPassword" name="password" type="password" autocomplete="new-password" minlength="6" required>
+          <label class="legal-consent-row" for="registerLegalConsent">
+            <input id="registerLegalConsent" type="checkbox" data-legal-consent-checkbox>
+            <span>
+              我已阅读并同意
+              <button class="text-button inline-link" type="button" data-auth-legal-link="terms">《用户协议》</button>
+              <button class="text-button inline-link" type="button" data-auth-legal-link="privacy">《隐私政策》</button>
+              和
+              <button class="text-button inline-link" type="button" data-auth-legal-link="ai">《AI 使用说明》</button>
+            </span>
+          </label>
           <button type="submit">发送验证邮件</button>
         </form>
 
@@ -447,9 +470,23 @@
       </div>
     </section>
 
+    <section class="privacy-confirm-modal" data-privacy-confirm hidden aria-modal="true" role="dialog" aria-labelledby="privacy-confirm-title">
+      <div class="privacy-confirm-dialog">
+        <h2 id="privacy-confirm-title" data-privacy-confirm-title>请确认</h2>
+        <p data-privacy-confirm-body></p>
+        <input type="text" data-privacy-confirm-input hidden>
+        <div class="button-row">
+          <button class="secondary-button" type="button" data-privacy-confirm-cancel>取消</button>
+          <button class="danger-button" type="button" data-privacy-confirm-submit>确认</button>
+        </div>
+      </div>
+    </section>
+
     <script src="vendor/supabase.js"></script>
     <script src="runtime-env.js"></script>
     <script src="featureFlags.js"></script>
+    <script src="legalDocuments.js"></script>
+    <script src="privacyData.js"></script>
     <script src="dreamSync.js"></script>
     <script src="auth.js"></script>
     <script src="dreamQuotes.js"></script>

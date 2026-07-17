@@ -702,6 +702,25 @@ button:disabled:hover {
   background: #ffffff;
 }
 
+.danger-button {
+  min-height: 46px;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 18px;
+  border: 1px solid rgba(137, 72, 72, 0.28);
+  border-radius: 8px;
+  background: rgba(137, 72, 72, 0.12);
+  color: #7c3f3f;
+  cursor: pointer;
+  font: inherit;
+  font-weight: 800;
+}
+
+.danger-button:hover {
+  background: rgba(137, 72, 72, 0.18);
+}
+
 button:focus-visible,
 textarea:focus-visible,
 input:focus-visible {
@@ -773,6 +792,133 @@ input:focus-visible {
 
 .wide-report-card {
   grid-column: 1 / -1;
+}
+
+.privacy-data-panel {
+  display: grid;
+  gap: 28px;
+}
+
+.privacy-legal-links,
+.privacy-action-grid {
+  display: grid;
+  gap: 14px;
+}
+
+.privacy-legal-links {
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  margin-top: 18px;
+}
+
+.privacy-action-grid {
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  margin-top: 24px;
+}
+
+.privacy-action-card,
+.legal-document {
+  padding: 22px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 255, 255, 0.48);
+}
+
+.privacy-action-card h3,
+.legal-document h3,
+.legal-section h4 {
+  margin: 0 0 10px;
+}
+
+.privacy-action-card p,
+.legal-document p {
+  color: var(--muted);
+}
+
+.privacy-action-card button {
+  margin-top: 14px;
+}
+
+.danger-zone {
+  border-color: rgba(137, 72, 72, 0.2);
+}
+
+.legal-document {
+  display: grid;
+  gap: 18px;
+  margin-top: 24px;
+}
+
+.legal-section {
+  display: grid;
+  gap: 8px;
+}
+
+.legal-version,
+.legal-note {
+  margin: 0;
+}
+
+.legal-consent-row {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: var(--muted);
+  font-size: 0.92rem;
+  line-height: 1.7;
+}
+
+.legal-consent-row input {
+  width: auto;
+  margin-top: 7px;
+}
+
+.inline-link {
+  display: inline;
+  min-height: auto;
+  padding: 0;
+  vertical-align: baseline;
+}
+
+.privacy-confirm-modal {
+  position: fixed;
+  inset: 0;
+  z-index: 60;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(23, 21, 33, 0.5);
+}
+
+.privacy-confirm-modal[hidden] {
+  display: none;
+}
+
+.privacy-confirm-dialog {
+  width: min(100%, 460px);
+  padding: 26px;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: rgba(255, 250, 241, 0.98);
+  box-shadow: 0 28px 70px rgba(50, 43, 77, 0.22);
+}
+
+.privacy-confirm-dialog h2 {
+  margin: 0 0 10px;
+  font-size: 1.3rem;
+}
+
+.privacy-confirm-dialog p {
+  color: var(--muted);
+}
+
+.privacy-confirm-dialog input {
+  width: 100%;
+  margin: 14px 0 4px;
+}
+
+.detail-actions {
+  display: flex;
+  justify-content: flex-end;
 }
 
 .journal-list {
@@ -1643,6 +1789,11 @@ input:focus-visible {
   }
 
   .admin-recent-row {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .privacy-legal-links,
+  .privacy-action-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 

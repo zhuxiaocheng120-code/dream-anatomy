@@ -4,6 +4,7 @@ const express = require("express");
 const crypto = require("node:crypto");
 const path = require("path");
 const DreamResultCard = require("./src/dreamResultCard");
+const { createAccountDeletionService } = require("./server/accountDeletion");
 const { createAdminAuth } = require("./server/adminAuth");
 const { getAnalyticsSummary, getRecentAnalyticsEvents } = require("./server/adminAnalytics");
 const { createAdminSupabaseClient } = require("./server/adminSupabase");
@@ -85,6 +86,18 @@ function getAdminAuth() {
   });
 }
 
+function getAccountDeletionService() {
+  if (app.locals.accountDeletionService) {
+    return app.locals.accountDeletionService;
+  }
+
+  return createAccountDeletionService({
+    aiAuthResolver: getAiAuthResolver(),
+    env: getAnalyticsEnv(),
+    getAdminClient: () => createAdminSupabaseClient()
+  });
+}
+
 function isDeepGuidanceEnabled() {
   if (typeof app.locals.deepGuidanceEnabled === "boolean") {
     return app.locals.deepGuidanceEnabled;
@@ -99,6 +112,9 @@ function sendApiError(response, error, usage) {
 
   if (error.generationMeta) {
     payload.generationMeta = error.generationMeta;
+  }
+  if (error.requestId) {
+    payload.requestId = error.requestId;
   }
 
   response.set("Cache-Control", "no-store");
@@ -1155,10 +1171,25 @@ async function handleAdminRecentRequest(request, response) {
   }
 }
 
+async function handleAccountDeletionRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getAccountDeletionService().deleteAccount(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "账户注销暂时没有完成，请稍后重试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
 app.post("/api/v1/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/dream-analysis", handleDreamAnalysisRequest);
 app.get("/api/v1/admin/analytics/summary", handleAdminSummaryRequest);
 app.get("/api/v1/admin/analytics/recent", handleAdminRecentRequest);
+app.delete("/api/v1/account", handleAccountDeletionRequest);
 
 app.use((error, request, response, next) => {
   if (error instanceof SyntaxError && "body" in error) {

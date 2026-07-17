@@ -15,7 +15,7 @@
 - Create `src/privacyData.js` for privacy-data view, legal display, consent, export, dream deletion, clear-all, guest local cleanup, and account deletion interaction.
 - Create `server/accountDeletion.js` for `DELETE /api/v1/account`; it must use verified Supabase token identity and service-role cleanup.
 - `app.js` only wires modules, SPA navigation, and events.
-- Account deletion order: authenticated analytics events, legal consents, dream records, Supabase Auth user, current account local cache, local sign-out, public home.
+- Account deletion order: authenticated analytics events, Supabase Auth user, scoped legal consent and dream record cleanup, current account local cache, local sign-out, public home.
 - Do not delete guest analytics.
 - Do not expose `SUPABASE_SERVICE_ROLE_KEY` or `ANALYTICS_HASH_SECRET` to the browser.
 - Add only public runtime config `PUBLIC_SUPPORT_EMAIL`.
@@ -437,9 +437,8 @@ Test:
 - body `userId` and `email` are ignored
 - deletes authenticated `ai_usage_events` hash only
 - does not delete guest analytics
-- deletes `legal_consents`
-- deletes `dream_records`
 - deletes Auth user
+- deletes `legal_consents` and `dream_records` only after Auth deletion succeeds
 - service role missing returns safe unavailable error
 - partial failure returns safe error with request id
 - `Cache-Control: no-store`
