@@ -128,6 +128,21 @@
     }
   }
 
+  async function loadAnalyticsPreferenceForSession(session, authEvent) {
+    const analytics = window.DreamProductAnalytics && window.DreamProductAnalytics.controller;
+    const user = session && session.user ? session.user : null;
+    const client = getSupabaseClient();
+    if (!analytics || !user || !client || typeof analytics.loadPreferenceForSession !== "function") {
+      return false;
+    }
+
+    try {
+      return await analytics.loadPreferenceForSession({ authEvent, client, user });
+    } catch (error) {
+      return false;
+    }
+  }
+
   function showAuthPanel(mode) {
     authPanels.forEach((panel) => {
       const isActive = panel.dataset.authPanel === mode;
@@ -265,7 +280,10 @@
 
     renderSession(data ? data.session : null);
     notifyAuthUser(data ? data.session : null, "SIGNED_IN");
-    trackProductEvent("login_completed", { method: "email" });
+    const analyticsEnabled = await loadAnalyticsPreferenceForSession(data ? data.session : null, "SIGNED_IN");
+    if (analyticsEnabled) {
+      trackProductEvent("login_completed", { method: "email" });
+    }
     loginForm.reset();
     setStatus("欢迎回来，继续探索你的梦境。", "success");
   }

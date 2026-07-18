@@ -9,6 +9,7 @@ const DreamResultCard = require("../src/dreamResultCard");
 const LegalDocuments = require("../src/legalDocuments");
 const PrivacyData = require("../src/privacyData");
 const ProductAnalytics = require("../src/productAnalytics");
+const ServerProductAnalytics = require("../server/productAnalytics");
 
 function createRecord(overrides = {}) {
   return {
@@ -347,7 +348,7 @@ function createAppIntegrationHarness(options = {}) {
       return [];
     }
   };
-  const storageItems = new Map();
+  const storageItems = new Map(Object.entries(options.localStorage || {}));
   const localStorage = {
     getItem(key) {
       return storageItems.has(key) ? storageItems.get(key) : null;
@@ -827,19 +828,24 @@ test("tracks a failed quick analysis without completion", async () => {
   assert.equal(names.includes("analysis_completed"), false);
 });
 
-test("records app_opened after an authenticated analytics preference loads", async () => {
+test("deployed app analytics waits for account preference and sends a server-valid authenticated app_opened", async () => {
   const requests = [];
+  const accessToken = "member-token";
+  const user = { id: "00000000-0000-4000-8000-000000000104" };
   const harness = createAppIntegrationHarness({
     fakeDreamJournal: false,
     noDreamJournal: true,
     privacyData: PrivacyData,
     realProductAnalytics: true,
+    authSession: { access_token: accessToken, user },
+    localStorage: { "dreamAnatomy.productAnalytics.guestPreference": "true" },
     fetch: async (url, options) => {
-      requests.push({ url, body: JSON.parse(options.body) });
+      requests.push({ url, options, body: JSON.parse(options.body) });
       return { ok: true, json: async () => ({}) };
     }
   });
   assert.equal(typeof harness.windowRef.DreamProductAnalytics.controller.trackEvent, "function");
+  assert.equal(requests.length, 0);
   const client = {
     from(tableName) {
       if (tableName === "product_analytics_preferences") {
@@ -859,11 +865,60 @@ test("records app_opened after an authenticated analytics preference loads", asy
   await harness.dispatchAuthSession({
     authEvent: "INITIAL_SESSION",
     client,
-    user: { id: "user-1" }
+    user
   });
+  await harness.dispatchAuthSession({ authEvent: "TOKEN_REFRESHED", client, user });
 
   assert.equal(requests.filter((request) => request.url === "/api/v1/product-events").length, 1);
   assert.deepEqual(requests[0].body.events.map((event) => event.eventName), ["app_opened"]);
+  assert.equal(requests[0].options.headers.Authorization, `Bearer ${accessToken}`);
+
+  const identity = requests[0].options.headers.Authorization === `Bearer ${accessToken}`
+    ? { type: "authenticated", userId: user.id }
+    : { type: "guest" };
+  const normalized = ServerProductAnalytics.normalizeProductEventBatch(requests[0].body, {
+    appVersion: "test",
+    identity,
+    secret: "analytics-secret"
+  });
+  assert.equal(normalized.events.length, 1);
+  assert.equal(normalized.rejected.length, 0);
+});
+
+test("authenticated app startup does not inherit an enabled guest analytics preference", async () => {
+  const requests = [];
+  const harness = createAppIntegrationHarness({
+    fakeDreamJournal: false,
+    noDreamJournal: true,
+    privacyData: PrivacyData,
+    realProductAnalytics: true,
+    authSession: { access_token: "member-token", user: { id: "00000000-0000-4000-8000-000000000104" } },
+    localStorage: { "dreamAnatomy.productAnalytics.guestPreference": "true" },
+    fetch: async (url, options) => {
+      requests.push({ url, options, body: JSON.parse(options.body) });
+      return { ok: true, json: async () => ({}) };
+    }
+  });
+  const user = { id: "00000000-0000-4000-8000-000000000104" };
+  const client = {
+    from(tableName) {
+      if (tableName === "product_analytics_preferences") {
+        return {
+          select() { return this; },
+          eq() { return { maybeSingle: async () => ({ data: { enabled: false }, error: null }) }; }
+        };
+      }
+
+      return {
+        select() { return this; },
+        eq() { return { maybeSingle: async () => ({ data: null, error: null }) }; }
+      };
+    }
+  };
+
+  assert.equal(requests.length, 0);
+  await harness.dispatchAuthSession({ authEvent: "INITIAL_SESSION", client, user });
+  assert.equal(requests.length, 0);
 });
 
 test("quick decode renders Dream Result Card on the current result page and saves it", async () => {

@@ -295,7 +295,12 @@ test("explicit auth submits track conversion events but session restoration does
     },
     window: {
       DREAM_ANATOMY_ENV: { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "anon" },
-      DreamProductAnalytics: { controller: { trackEvent(name, properties) { events.push({ name, properties }); } } },
+      DreamProductAnalytics: {
+        controller: {
+          loadPreferenceForSession: async () => true,
+          trackEvent(name, properties) { events.push({ name, properties }); }
+        }
+      },
       dispatchEvent() {},
       location: { origin: "https://example.test" },
       supabase: { createClient: () => client }
@@ -314,17 +319,19 @@ test("explicit auth submits track conversion events but session restoration does
   ]);
 });
 
-test("auth conversion events use the app-exposed real analytics controller", async () => {
+test("login conversion waits for the authenticated preference before using the app-exposed analytics controller", async () => {
   const code = fs.readFileSync("src/auth.js", "utf8");
   const requests = [];
+  let activeSession = null;
   const controller = ProductAnalytics.createProductAnalyticsController({
     createUuid: createUuidFactory(),
     fetch: async (url, options) => {
-      requests.push({ url, body: JSON.parse(options.body) });
+      requests.push({ url, headers: options.headers, body: JSON.parse(options.body) });
       return { ok: true };
     },
     localStorage: createStorage({ "dreamAnatomy.productAnalytics.guestPreference": "true" }),
-    sessionStorage: createStorage()
+    sessionStorage: createStorage(),
+    getSession: async () => ({ data: { session: activeSession } })
   });
   const nodes = new Map();
   const email = { value: "person@example.com" };
@@ -344,13 +351,20 @@ test("auth conversion events use the app-exposed real analytics controller", asy
     return nodes.get(selector);
   };
   const client = {
+    from(tableName) {
+      assert.equal(tableName, "product_analytics_preferences");
+      return {
+        select() { return this; },
+        eq() { return { maybeSingle: async () => ({ data: { enabled: true }, error: null }) }; }
+      };
+    },
     auth: {
       getSession: async () => ({ data: { session: null } }),
       onAuthStateChange() {},
-      signInWithPassword: async () => ({
-        data: { session: { user: { id: "user-1", email_confirmed_at: "yes" } }, user: { email_confirmed_at: "yes" } },
-        error: null
-      }),
+      signInWithPassword: async () => {
+        activeSession = { access_token: "member-token", user: { id: "user-1", email_confirmed_at: "yes" } };
+        return { data: { session: activeSession, user: { email_confirmed_at: "yes" } }, error: null };
+      },
       signUp: async () => ({ data: {}, error: null })
     }
   };
@@ -365,7 +379,11 @@ test("auth conversion events use the app-exposed real analytics controller", asy
     window: {
       DREAM_ANATOMY_ENV: { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "anon" },
       DreamProductAnalytics: { ...ProductAnalytics, controller },
-      dispatchEvent() {},
+      dispatchEvent(event) {
+        if (event.detail && event.detail.user) {
+          controller.loadPreferenceForSession(event.detail);
+        }
+      },
       location: { origin: "https://example.test" },
       supabase: { createClient: () => client }
     }
@@ -379,5 +397,6 @@ test("auth conversion events use the app-exposed real analytics controller", asy
 
   const events = requests.flatMap((request) => request.body.events);
   assert.deepEqual(events.map((event) => event.eventName), ["signup_started", "signup_completed", "login_completed"]);
+  assert.equal(requests.at(-1).headers.Authorization, "Bearer member-token");
   assert.doesNotMatch(JSON.stringify(events), /person@example\.com|safe-password/);
 });

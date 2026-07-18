@@ -57,3 +57,15 @@ The scope update explicitly authorized the narrowly scoped `src/privacyData.js` 
 - Added real-factory integration coverage for auth conversion events and delayed authenticated opt-in startup.
 
 Verification: 81 focused Task 4 tests passed, all required syntax checks passed, and `git diff --check` passed.
+
+---
+
+## Reviewer Re-review Fix: Session-Aware Tracking
+
+### RED Evidence
+
+`npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js` reported 79 passed and 3 failed: the deployed controller omitted the Bearer token, authenticated startup inherited guest consent, and `login_completed` was dropped before the remote preference resolved.
+
+### GREEN Evidence
+
+The same focused command reported 82 passed. The deployed-controller test now verifies the Bearer header and validates the emitted payload with the server product-event batch normalizer. Required syntax checks and `git diff --check` also passed.

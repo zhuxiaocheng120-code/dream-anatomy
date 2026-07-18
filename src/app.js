@@ -124,8 +124,8 @@ const adminAnalyticsController = window.AdminAnalytics
 const productAnalyticsController = window.DreamProductAnalytics
   && typeof window.DreamProductAnalytics.createProductAnalyticsController === "function"
   ? window.DreamProductAnalytics.createProductAnalyticsController({
-      auth: window.DreamAnatomyAuth || {},
       fetch,
+      getSession: getAuthenticatedSession,
       localStorage,
       sessionStorage
     })
@@ -234,7 +234,30 @@ function trackAppOpenedOnce() {
   return false;
 }
 
-trackAppOpenedOnce();
+function getAuthenticatedSession() {
+  const auth = window.DreamAnatomyAuth;
+  const client = auth && typeof auth.getClient === "function" ? auth.getClient() : null;
+  if (!client || !client.auth || typeof client.auth.getSession !== "function") {
+    return Promise.resolve(null);
+  }
+
+  return client.auth.getSession();
+}
+
+function trackInitialAppOpened() {
+  Promise.resolve(getAuthenticatedSession())
+    .then((result) => {
+      const activeSession = result && result.data ? result.data.session : result;
+      if (!activeSession || !activeSession.user) {
+        trackAppOpenedOnce();
+      }
+    })
+    .catch(() => {
+      trackAppOpenedOnce();
+    });
+}
+
+trackInitialAppOpened();
 
 function updateJournalSyncStatus(message) {
   if (journalSyncStatus) {
