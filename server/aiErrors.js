@@ -3,6 +3,8 @@ const defaultMessages = {
   AUTH_INVALID: "登录状态已失效，请重新登录。",
   AUTH_FORBIDDEN: "你没有访问这个页面的权限。",
   ANALYTICS_UNAVAILABLE: "运营统计暂时不可用，请检查服务端配置。",
+  PRODUCT_ANALYTICS_DISABLED: "产品分析尚未启用，未记录本次事件。",
+  PRODUCT_ANALYTICS_WRITE_FAILED: "产品分析暂时无法记录，请稍后再试。",
   ACCOUNT_DELETION_FAILED: "账户注销暂时没有完成，请稍后重试。",
   FEATURE_DISABLED: "这个功能正在开发中。",
   RATE_LIMITED: "请求太频繁了，请稍后再试。",
