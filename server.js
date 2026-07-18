@@ -13,7 +13,7 @@ const { createAiAccessControl } = require("./server/aiAccessControl");
 const { createAiAuthResolver } = require("./server/aiAuth");
 const { buildUsageEvent, createPrincipalHash, recordUsageEventSafely } = require("./server/aiAnalytics");
 const { createApiError, formatApiError } = require("./server/aiErrors");
-const { normalizeProductEventBatch, recordProductEventsSafely } = require("./server/productAnalytics");
+const { deleteProductEventsForIdentity, normalizeProductEventBatch, recordProductEventsSafely } = require("./server/productAnalytics");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -1223,6 +1223,36 @@ async function handleProductEventsRequest(request, response) {
   }
 }
 
+async function handleProductAnalyticsDeletionRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const identity = await getAiAuthResolver().resolveIdentity(request);
+    const client = getProductAnalyticsClient();
+    const analyticsEnv = getAnalyticsEnv();
+    if (!client || !analyticsEnv.ANALYTICS_HASH_SECRET) {
+      throw createApiError("ANALYTICS_UNAVAILABLE", "运营统计暂时不可用，请检查服务端配置。", 503);
+    }
+
+    const result = await deleteProductEventsForIdentity(
+      client,
+      identity,
+      request.body && request.body.installationId,
+      analyticsEnv.ANALYTICS_HASH_SECRET
+    );
+    if (!result.deleted) {
+      throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);
+    }
+
+    response.json({ ok: true });
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "产品分析数据暂时无法删除，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
 async function handleAdminProductAnalyticsRequest(request, response, getReport) {
   response.set("Cache-Control", "no-store");
 
@@ -1270,6 +1300,7 @@ async function handleAccountDeletionRequest(request, response) {
 app.post("/api/v1/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/v1/product-events", handleProductEventsRequest);
+app.delete("/api/v1/product-analytics", handleProductAnalyticsDeletionRequest);
 app.get("/api/v1/admin/analytics/summary", handleAdminSummaryRequest);
 app.get("/api/v1/admin/analytics/recent", handleAdminRecentRequest);
 app.get("/api/v1/admin/product-analytics/summary", handleAdminProductSummaryRequest);

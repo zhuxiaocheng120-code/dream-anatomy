@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const LegalDocuments = require("../src/legalDocuments");
 const PrivacyData = require("../src/privacyData");
+const ProductAnalytics = require("../src/productAnalytics");
 
 function createFakeElement(tagName = "div") {
   const listeners = new Map();
@@ -208,6 +209,46 @@ function createLegalConsentClient(options = {}) {
   };
 }
 
+function createAnalyticsPreferenceClient(enabledByUser = {}) {
+  const state = { reads: [], upserts: [] };
+  return {
+    state,
+    from(tableName) {
+      if (tableName === "legal_consents") {
+        return {
+          select() { return { eq() { return { maybeSingle: async () => ({ data: null, error: null }) }; } }; }
+        };
+      }
+      assert.equal(tableName, "product_analytics_preferences");
+      return {
+        select() {
+          return {
+            eq(column, userId) {
+              state.reads.push({ column, userId });
+              return { maybeSingle: async () => ({ data: { enabled: Boolean(enabledByUser[userId]) }, error: null }) };
+            }
+          };
+        },
+        upsert(row, options) {
+          state.upserts.push({ row, options });
+          enabledByUser[row.user_id] = row.enabled;
+          return Promise.resolve({ error: null });
+        }
+      };
+    }
+  };
+}
+
+function createRealAnalyticsController(storage) {
+  let id = 0;
+  return ProductAnalytics.createProductAnalyticsController({
+    localStorage: storage,
+    sessionStorage: createStorage(),
+    createUuid: () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}`,
+    fetch: async () => ({ ok: true })
+  });
+}
+
 test("renders privacy center entry and legal documents with Chinese text", () => {
   const { controller, elements } = createHarness();
 
@@ -265,6 +306,45 @@ test("turning off analytics clears the queue and deletion uses the analytics con
 
   assert.deepEqual(calls, [{ type: "set", enabled: false }, { type: "delete" }]);
   assert.match(elements.status.textContent, /产品分析数据/);
+});
+
+test("privacy controller upserts authenticated analytics preference through the dedicated table", async () => {
+  const storage = createStorage();
+  const client = createAnalyticsPreferenceClient({ "user-1": false });
+  const productAnalytics = createRealAnalyticsController(storage);
+  const { controller, elements } = createHarness({ productAnalytics, storage });
+
+  controller.render();
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
+  const toggle = elements.view.children[1].children[5].children[2].children[0];
+  await toggle.trigger("change", { target: { checked: true } });
+
+  assert.deepEqual(client.state.upserts, [{
+    row: { user_id: "user-1", enabled: true },
+    options: { onConflict: "user_id" }
+  }]);
+  assert.equal(storage.getItem("dreamAnatomy.productAnalytics.guestPreference"), null);
+});
+
+test("privacy controller keeps guest preference local and reloads preference on account switch", async () => {
+  const storage = createStorage();
+  const client = createAnalyticsPreferenceClient({ "user-1": true, "user-2": false });
+  const productAnalytics = createRealAnalyticsController(storage);
+  const { controller } = createHarness({ productAnalytics, storage });
+
+  await productAnalytics.setAnalyticsConsent(true);
+  assert.equal(storage.getItem("dreamAnatomy.productAnalytics.guestPreference"), "true");
+  assert.equal(client.state.upserts.length, 0);
+
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
+  assert.equal(productAnalytics.getAnalyticsConsent(), true);
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-2" }, client });
+
+  assert.deepEqual(client.state.reads, [
+    { column: "user_id", userId: "user-1" },
+    { column: "user_id", userId: "user-2" }
+  ]);
+  assert.equal(productAnalytics.getAnalyticsConsent(), false);
 });
 
 test("guest AI consent stores only current local legal versions after explicit confirmation", async () => {

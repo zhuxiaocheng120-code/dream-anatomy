@@ -143,6 +143,20 @@ test("trackEvent strips private properties before sending", async () => {
   assert.doesNotMatch(payload, /private dream|private@example\.com|private-token/);
 });
 
+test("flush sends consent and request-level identifiers without raw ids in events", async () => {
+  const { controller, requests } = createHarness();
+  await controller.setAnalyticsConsent(true);
+  controller.trackEvent("app_opened");
+  await controller.flushEvents();
+
+  const payload = JSON.parse(requests[0].request.body);
+  assert.equal(payload.analyticsConsent, true);
+  assert.match(payload.sessionId, /^[0-9a-f-]{36}$/i);
+  assert.match(payload.installationId, /^[0-9a-f-]{36}$/i);
+  assert.equal(Object.hasOwn(payload.events[0], "sessionId"), false);
+  assert.equal(Object.hasOwn(payload.events[0], "installationId"), false);
+});
+
 test("flush adds a Bearer token only for an active session", async () => {
   const withSession = createHarness({ getSession: async () => ({ access_token: "safe-token" }) });
   await withSession.controller.setAnalyticsConsent(true);
@@ -167,4 +181,26 @@ test("TOKEN_REFRESHED does not emit a login event", async () => {
   await controller.flushEvents();
 
   assert.equal(requests.length, 0);
+});
+
+test("deleting analytics rejects a failed request without clearing the local identity", async () => {
+  const requests = [];
+  const localStorage = createStorage();
+  const sessionStorage = createStorage();
+  const controller = ProductAnalytics.createProductAnalyticsController({
+    fetch: async (url, request) => {
+      requests.push({ url, request });
+      return { ok: false };
+    },
+    localStorage,
+    sessionStorage,
+    createUuid: createUuidFactory()
+  });
+  await controller.setAnalyticsConsent(true);
+
+  await assert.rejects(() => controller.deleteProductAnalyticsData());
+
+  assert.equal(requests[0].url, "/api/v1/product-analytics");
+  assert.match(localStorage.getItem("dreamAnatomy.productAnalytics.installationId"), /^[0-9a-f-]{36}$/i);
+  assert.match(sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId"), /^[0-9a-f-]{36}$/i);
 });

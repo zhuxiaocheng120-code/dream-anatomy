@@ -54,7 +54,7 @@ function sanitizeProductEvent(rawEvent) {
   if (!Object.prototype.hasOwnProperty.call(EVENT_PROPERTIES, rawEvent.eventName)) {
     return { ok: false, errorCode: "EVENT_INVALID" };
   }
-  if (!isUuid(rawEvent.eventId) || !isUuid(rawEvent.sessionId)) {
+  if (!isUuid(rawEvent.eventId)) {
     return { ok: false, errorCode: "EVENT_INVALID" };
   }
   const occurredAt = new Date(rawEvent.occurredAt);
@@ -68,8 +68,6 @@ function sanitizeProductEvent(rawEvent) {
       eventId: rawEvent.eventId,
       eventName: rawEvent.eventName,
       occurredAt: occurredAt.toISOString(),
-      sessionId: rawEvent.sessionId,
-      installationId: isUuid(rawEvent.installationId) ? rawEvent.installationId : null,
       properties: sanitizeProperties(rawEvent.eventName, rawEvent.properties)
     }
   };
@@ -100,6 +98,8 @@ function normalizeProductEventBatch(body, context = {}) {
   const identity = context.identity && context.identity.type === "authenticated"
     ? context.identity
     : { type: "guest" };
+  const sessionId = body && body.sessionId;
+  const installationId = body && body.installationId;
 
   rawEvents.forEach((rawEvent, index) => {
     if (index >= 20) {
@@ -108,13 +108,13 @@ function normalizeProductEventBatch(body, context = {}) {
     }
 
     const sanitized = sanitizeProductEvent(rawEvent);
-    if (!sanitized.ok) {
+    if (!sanitized.ok || Object.hasOwn(rawEvent, "sessionId") || Object.hasOwn(rawEvent, "installationId")) {
       rejected.push({ errorCode: sanitized.errorCode });
       return;
     }
 
-    const principalHash = createProductPrincipalHash(identity, sanitized.event.installationId, context.secret);
-    const sessionHash = createProductSessionHash(sanitized.event.sessionId, context.secret);
+    const principalHash = createProductPrincipalHash(identity, installationId, context.secret);
+    const sessionHash = createProductSessionHash(sessionId, context.secret);
     if (!principalHash || !sessionHash) {
       rejected.push({ errorCode: "EVENT_INVALID" });
       return;

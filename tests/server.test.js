@@ -1496,8 +1496,6 @@ function createProductEvent(overrides = {}) {
     eventId: "00000000-0000-4000-8000-000000000101",
     eventName: "app_opened",
     occurredAt: "2026-07-19T08:00:00.000Z",
-    sessionId: "00000000-0000-4000-8000-000000000102",
-    installationId: "00000000-0000-4000-8000-000000000103",
     properties: {},
     ...overrides
   };
@@ -1509,12 +1507,13 @@ test("product events accept opted-in guest events without caching", { concurrenc
     const response = await fetch(`${baseUrl}/api/v1/product-events`, {
       method: "POST",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ analyticsConsent: true, events: [createProductEvent()] })
+      body: JSON.stringify({ analyticsConsent: true, sessionId: "00000000-0000-4000-8000-000000000102", installationId: "00000000-0000-4000-8000-000000000103", events: [createProductEvent()] })
     });
     assert.equal(response.status, 200);
     assert.equal(response.headers.get("cache-control"), "no-store");
     assert.equal((await response.json()).insertedCount, 1);
     assert.equal(inserted.length, 1);
+    assert.doesNotMatch(JSON.stringify(inserted), /00000000-0000-4000-8000-000000000102|00000000-0000-4000-8000-000000000103/);
   }, {
     analyticsClient: createProductAnalyticsQueryClient([], inserted),
     analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" }
@@ -1527,7 +1526,7 @@ test("product events derive logged-in identity from a valid Bearer token", { con
     const response = await fetch(`${baseUrl}/api/v1/product-events`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: "Bearer member-token" },
-      body: JSON.stringify({ analyticsConsent: true, events: [createProductEvent({ userId: "attacker-id" })] })
+      body: JSON.stringify({ analyticsConsent: true, sessionId: "00000000-0000-4000-8000-000000000102", events: [createProductEvent({ userId: "attacker-id" })] })
     });
     assert.equal(response.status, 200);
     assert.equal(inserted[0].principal_type, "authenticated");
@@ -1544,17 +1543,17 @@ test("product events derive logged-in identity from a valid Bearer token", { con
 test("product events return stable request errors", { concurrency: false }, async () => {
   await withServer(async (baseUrl) => {
     const invalidAuth = await fetch(`${baseUrl}/api/v1/product-events`, {
-      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer bad" }, body: JSON.stringify({ analyticsConsent: true, events: [createProductEvent()] })
+      method: "POST", headers: { "Content-Type": "application/json", Authorization: "Bearer bad" }, body: JSON.stringify({ analyticsConsent: true, sessionId: "00000000-0000-4000-8000-000000000102", installationId: "00000000-0000-4000-8000-000000000103", events: [createProductEvent()] })
     });
     assert.equal((await invalidAuth.json()).error.code, "AUTH_INVALID");
 
     const unknownEvent = await fetch(`${baseUrl}/api/v1/product-events`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analyticsConsent: true, events: [createProductEvent({ eventName: "unknown" })] })
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analyticsConsent: true, sessionId: "00000000-0000-4000-8000-000000000102", installationId: "00000000-0000-4000-8000-000000000103", events: [createProductEvent({ eventName: "unknown" })] })
     });
     assert.equal((await unknownEvent.json()).error.code, "INVALID_REQUEST");
 
     const tooMany = await fetch(`${baseUrl}/api/v1/product-events`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analyticsConsent: true, events: Array.from({ length: 21 }, (_, index) => createProductEvent({ eventId: `00000000-0000-4000-8000-${String(index + 200).padStart(12, "0")}` })) })
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analyticsConsent: true, sessionId: "00000000-0000-4000-8000-000000000102", installationId: "00000000-0000-4000-8000-000000000103", events: Array.from({ length: 21 }, (_, index) => createProductEvent({ eventId: `00000000-0000-4000-8000-${String(index + 200).padStart(12, "0")}` })) })
     });
     assert.equal((await tooMany.json()).error.code, "INVALID_REQUEST");
   }, {
@@ -1570,7 +1569,7 @@ test("product events return stable request errors", { concurrency: false }, asyn
 test("product events require analytics configuration", { concurrency: false }, async () => {
   await withServer(async (baseUrl) => {
     const unavailable = await fetch(`${baseUrl}/api/v1/product-events`, {
-      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analyticsConsent: true, events: [createProductEvent()] })
+      method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ analyticsConsent: true, sessionId: "00000000-0000-4000-8000-000000000102", installationId: "00000000-0000-4000-8000-000000000103", events: [createProductEvent()] })
     });
     assert.equal((await unavailable.json()).error.code, "ANALYTICS_UNAVAILABLE");
   }, { analyticsClient: null, analyticsEnv: {} });
@@ -1592,13 +1591,56 @@ test("product events accept duplicate event ids without a second insertion", { c
   };
 
   await withServer(async (baseUrl) => {
-    const body = JSON.stringify({ analyticsConsent: true, events: [createProductEvent()] });
+    const body = JSON.stringify({ analyticsConsent: true, sessionId: "00000000-0000-4000-8000-000000000102", installationId: "00000000-0000-4000-8000-000000000103", events: [createProductEvent()] });
     const first = await fetch(`${baseUrl}/api/v1/product-events`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
     const second = await fetch(`${baseUrl}/api/v1/product-events`, { method: "POST", headers: { "Content-Type": "application/json" }, body });
     assert.equal((await first.json()).insertedCount, 1);
     assert.equal((await second.json()).duplicateCount, 1);
     assert.equal(inserted.length, 1);
   }, { analyticsClient: client, analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" } });
+});
+
+test("product analytics deletion verifies identity and deletes only the matching hashed principal", { concurrency: false }, async () => {
+  const deletedHashes = [];
+  const client = {
+    from(tableName) {
+      assert.equal(tableName, "product_events");
+      return {
+        delete() { return this; },
+        eq(column, value) {
+          assert.equal(column, "principal_hash");
+          deletedHashes.push(value);
+          return Promise.resolve({ error: null });
+        }
+      };
+    }
+  };
+  await withServer(async (baseUrl) => {
+    const guest = await fetch(`${baseUrl}/api/v1/product-analytics`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ installationId: "00000000-0000-4000-8000-000000000103" })
+    });
+    assert.equal(guest.status, 200);
+    assert.equal(guest.headers.get("cache-control"), "no-store");
+
+    const authenticated = await fetch(`${baseUrl}/api/v1/product-analytics`, {
+      method: "DELETE",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer member-token" },
+      body: JSON.stringify({ installationId: "attacker-controlled-installation" })
+    });
+    assert.equal(authenticated.status, 200);
+  }, {
+    authResolver: {
+      resolveIdentity: async (request) => request.headers.authorization
+        ? { type: "authenticated", userId: "00000000-0000-4000-8000-000000000104" }
+        : { type: "guest" }
+    },
+    analyticsClient: client,
+    analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" }
+  });
+  assert.equal(deletedHashes.length, 2);
+  assert.doesNotMatch(JSON.stringify(deletedHashes), /00000000-0000-4000-8000-000000000103|00000000-0000-4000-8000-000000000104/);
 });
 
 test("admin product analytics endpoints require admin auth and return sample-ready payloads", { concurrency: false }, async () => {

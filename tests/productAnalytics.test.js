@@ -21,7 +21,6 @@ function createEvent(overrides = {}) {
     eventId,
     eventName: "analysis_completed",
     occurredAt: "2026-07-19T00:00:00.000Z",
-    sessionId,
     properties: {
       analysis_type: "quick",
       source: "ai_generated",
@@ -40,7 +39,6 @@ test("sanitizes allowlisted properties and strips private fields", () => {
     eventId,
     eventName: "analysis_completed",
     occurredAt: "2026-07-19T00:00:00.000Z",
-    sessionId,
     properties: {
       analysis_type: "quick",
       source: "ai_generated",
@@ -58,6 +56,8 @@ test("sanitizes allowlisted properties and strips private fields", () => {
     has_result_card: true
   });
   assert.doesNotMatch(JSON.stringify(event), /private dream|private@example\.com|drop me/);
+  assert.equal(Object.hasOwn(event.event, "sessionId"), false);
+  assert.equal(Object.hasOwn(event.event, "installationId"), false);
 });
 
 test("allows only known entry points and stable error codes", () => {
@@ -142,11 +142,10 @@ test("hashes guest installations and authenticated users with distinct HMAC pref
 test("normalizes at most 20 events and derives the authenticated principal from caller context", () => {
   const events = Array.from({ length: 21 }, (_, index) => createEvent({
     eventId: `00000000-0000-4000-8000-${String(index + 10).padStart(12, "0")}`,
-    installationId,
     userId: "attacker-controlled-user-id"
   }));
   const result = normalizeProductEventBatch(
-    { events },
+    { sessionId, events },
     {
       identity: { type: "authenticated", userId: "00000000-0000-4000-8000-000000000004" },
       secret: "analytics-secret",
@@ -162,12 +161,12 @@ test("normalizes at most 20 events and derives the authenticated principal from 
     crypto.createHmac("sha256", "analytics-secret").update("user:00000000-0000-4000-8000-000000000004").digest("hex")
   );
   assert.equal(result.events[0].app_version, "web-beta");
-  assert.doesNotMatch(JSON.stringify(result), /attacker-controlled-user-id/);
+  assert.doesNotMatch(JSON.stringify(result), /attacker-controlled-user-id|00000000-0000-4000-8000-000000000002/);
 });
 
 test("normalizes guest events with installation and session hashes only", () => {
   const result = normalizeProductEventBatch(
-    { events: [createEvent({ installationId })] },
+    { sessionId, installationId, events: [createEvent()] },
     { identity: { type: "guest" }, secret: "analytics-secret" }
   );
 
@@ -176,6 +175,16 @@ test("normalizes guest events with installation and session hashes only", () => 
   assert.match(result.events[0].principal_hash, /^[a-f0-9]{64}$/);
   assert.match(result.events[0].session_hash, /^[a-f0-9]{64}$/);
   assert.doesNotMatch(JSON.stringify(result.events[0]), new RegExp(`${installationId}|${sessionId}`));
+});
+
+test("rejects event-level identifiers and persists only HMAC identifiers", () => {
+  const result = normalizeProductEventBatch(
+    { sessionId, installationId, events: [createEvent({ sessionId, installationId })] },
+    { identity: { type: "guest" }, secret: "analytics-secret" }
+  );
+
+  assert.equal(result.events.length, 0);
+  assert.equal(result.rejected.length, 1);
 });
 
 test("records duplicate product events without treating them as failures", async () => {

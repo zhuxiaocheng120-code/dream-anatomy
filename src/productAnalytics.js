@@ -123,11 +123,9 @@
         eventId: makeUuid(),
         eventName,
         occurredAt: new Date().toISOString(),
-        sessionId,
         properties: sanitizeProperties(eventName, properties)
       };
-      if (!currentUser) event.installationId = getInstallationId();
-      if (!currentUser && !event.installationId) return false;
+      if (!currentUser && !getInstallationId()) return false;
       if (queue.length >= maxQueueSize) queue.shift();
       queue.push(event);
       return true;
@@ -153,10 +151,18 @@
         const headers = { "Content-Type": "application/json" };
         const token = await getAccessToken();
         if (token) headers.Authorization = `Bearer ${token}`;
+        const sessionId = getSessionId();
+        const installationId = !currentUser ? getInstallationId() : "";
+        if (!sessionId || (!currentUser && !installationId)) return false;
         const response = await request("/api/v1/product-events", {
           method: "POST",
           headers,
-          body: JSON.stringify({ events }),
+          body: JSON.stringify({
+            analyticsConsent: true,
+            sessionId,
+            ...(installationId ? { installationId } : {}),
+            events
+          }),
           keepalive: Boolean(flushOptions.keepalive)
         });
         if (!response || !response.ok) return false;
@@ -201,15 +207,16 @@
       const token = await getAccessToken();
       if (token) headers.Authorization = `Bearer ${token}`;
       try {
-        if (typeof request === "function") {
-          await request("/api/v1/product-analytics", {
-            method: "DELETE",
-            headers,
-            body: JSON.stringify(installationId ? { installationId } : {})
-          });
-        }
-      } finally {
+        if (typeof request !== "function") throw new Error("产品分析删除暂时无法完成。");
+        const response = await request("/api/v1/product-analytics", {
+          method: "DELETE",
+          headers,
+          body: JSON.stringify(installationId ? { installationId } : {})
+        });
+        if (!response || !response.ok) throw new Error("产品分析删除暂时无法完成。");
         clearAnalyticsIdentity();
+      } catch (error) {
+        throw error;
       }
     }
 
