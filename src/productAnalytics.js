@@ -101,18 +101,19 @@
 
     async function setAnalyticsConsent(enabled) {
       const nextEnabled = Boolean(enabled);
+      if (!nextEnabled) {
+        consentEnabled = false;
+        clearAnalyticsIdentity();
+      }
       if (currentUser) {
         await persistAuthenticatedPreference(nextEnabled);
       } else if (local) {
         local.setItem(guestPreferenceKey, String(nextEnabled));
       }
+      if (!nextEnabled) return consentEnabled;
       consentEnabled = nextEnabled;
-      if (nextEnabled) {
-        getSessionId();
-        if (!currentUser) getInstallationId();
-      } else {
-        clearAnalyticsIdentity();
-      }
+      getSessionId();
+      if (!currentUser) getInstallationId();
       return consentEnabled;
     }
 
@@ -181,7 +182,8 @@
       const nextUser = detail.user || null;
       const nextClient = detail.client || null;
       const changedAccount = Boolean(currentUser && (!nextUser || currentUser.id !== nextUser.id));
-      if (changedAccount) clearAnalyticsIdentity();
+      const guestToAuthenticated = Boolean(!currentUser && nextUser);
+      if (changedAccount || guestToAuthenticated) clearAnalyticsIdentity();
       currentUser = nextUser;
       currentClient = nextUser ? nextClient : null;
 

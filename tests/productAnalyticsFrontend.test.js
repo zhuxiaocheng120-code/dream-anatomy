@@ -70,6 +70,36 @@ test("disabling consent clears queued events and local identifiers", async () =>
   assert.equal(sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId"), null);
 });
 
+test("authenticated opt-out clears local analytics before a delayed preference write settles", async () => {
+  const { controller, localStorage, sessionStorage } = createHarness();
+  let rejectPreferenceWrite;
+  const client = {
+    from() {
+      return {
+        select() { return this; },
+        eq() { return { maybeSingle: async () => ({ data: { enabled: true }, error: null }) }; },
+        upsert() {
+          return new Promise((_resolve, reject) => { rejectPreferenceWrite = reject; });
+        }
+      };
+    }
+  };
+
+  await controller.loadPreferenceForSession({ user: { id: "user-1" }, client });
+  controller.trackEvent("analysis_completed", { analysis_type: "quick" });
+  const disable = controller.setAnalyticsConsent(false);
+
+  assert.equal(controller.getAnalyticsConsent(), false);
+  assert.equal(controller.getQueueLength(), 0);
+  assert.equal(controller.trackEvent("app_opened"), false);
+  assert.equal(localStorage.getItem("dreamAnatomy.productAnalytics.installationId"), null);
+  assert.equal(sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId"), null);
+
+  rejectPreferenceWrite(new Error("preference write failed"));
+  await assert.rejects(disable, /preference write failed/);
+  assert.equal(controller.getAnalyticsConsent(), false);
+});
+
 test("loads authenticated preferences from the dedicated table", async () => {
   const calls = [];
   const { controller } = createHarness();
@@ -115,6 +145,29 @@ test("account switches do not inherit analytics consent", async () => {
   await controller.loadPreferenceForSession({ user: { id: "user-2" }, client, authEvent: "SIGNED_IN" });
 
   assert.equal(controller.getAnalyticsConsent(), false);
+});
+
+test("guest events and identity are cleared before authenticated preference loading", async () => {
+  const { controller, localStorage, sessionStorage, requests } = createHarness();
+  await controller.setAnalyticsConsent(true);
+  controller.trackEvent("app_opened");
+  const guestSessionId = sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId");
+  const client = {
+    from() {
+      return {
+        select() { return this; },
+        eq() { return { maybeSingle: async () => ({ data: { enabled: true }, error: null }) }; }
+      };
+    }
+  };
+
+  await controller.loadPreferenceForSession({ user: { id: "user-1" }, client });
+  await controller.flushEvents();
+
+  assert.equal(controller.getQueueLength(), 0);
+  assert.equal(requests.length, 0);
+  assert.equal(localStorage.getItem("dreamAnatomy.productAnalytics.installationId"), null);
+  assert.notEqual(sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId"), guestSessionId);
 });
 
 test("stale account preference responses cannot overwrite the current account", async () => {
