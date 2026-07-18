@@ -130,6 +130,9 @@ const productAnalyticsController = window.DreamProductAnalytics
       sessionStorage
     })
   : null;
+if (productAnalyticsController) {
+  window.DreamProductAnalytics.controller = productAnalyticsController;
+}
 const privacyDataController = window.DreamPrivacyData
   && typeof window.DreamPrivacyData.createPrivacyDataController === "function"
   ? window.DreamPrivacyData.createPrivacyDataController({
@@ -154,6 +157,7 @@ const privacyDataController = window.DreamPrivacyData
         view: privacyDataView
       },
       legalDocuments: window.DreamLegalDocuments,
+      onAnalyticsPreferenceLoaded: trackAppOpenedOnce,
       productAnalytics: productAnalyticsController,
       runtimeEnv: window.DREAM_ANATOMY_ENV || {},
       storage: localStorage,
@@ -217,11 +221,20 @@ function getInputLengthBucket(length) {
   return "500+";
 }
 
-if (productAnalyticsController && sessionStorage.getItem("dreamAnatomy.productAnalytics.appOpened") !== "true") {
+function trackAppOpenedOnce() {
+  if (!productAnalyticsController || sessionStorage.getItem("dreamAnatomy.productAnalytics.appOpened") === "true") {
+    return false;
+  }
+
   if (trackProductEvent("app_opened")) {
     sessionStorage.setItem("dreamAnatomy.productAnalytics.appOpened", "true");
+    return true;
   }
+
+  return false;
 }
+
+trackAppOpenedOnce();
 
 function updateJournalSyncStatus(message) {
   if (journalSyncStatus) {
@@ -259,7 +272,7 @@ if (privacyDataController) {
   privacyDataController.render();
 
   window.addEventListener("dream-anatomy-auth-session", (event) => {
-    privacyDataController.handleSession(event.detail || {});
+    return privacyDataController.handleSession(event.detail || {});
   });
 
   authLegalLinks.forEach((button) => {

@@ -117,13 +117,14 @@
   }
 
   function trackProductEvent(eventName, properties) {
-    if (!window.DreamProductAnalytics || typeof window.DreamProductAnalytics.trackEvent !== "function") {
+    const analytics = window.DreamProductAnalytics && window.DreamProductAnalytics.controller;
+    if (!analytics || typeof analytics.trackEvent !== "function") {
       return;
     }
 
-    window.DreamProductAnalytics.trackEvent(eventName, properties);
-    if (typeof window.DreamProductAnalytics.flushEvents === "function") {
-      Promise.resolve(window.DreamProductAnalytics.flushEvents()).catch(() => {});
+    analytics.trackEvent(eventName, properties);
+    if (typeof analytics.flushEvents === "function") {
+      Promise.resolve(analytics.flushEvents()).catch(() => {});
     }
   }
 

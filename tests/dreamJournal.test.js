@@ -6,6 +6,9 @@ const vm = require("node:vm");
 
 const DreamJournal = require("../src/dreamJournal");
 const DreamResultCard = require("../src/dreamResultCard");
+const LegalDocuments = require("../src/legalDocuments");
+const PrivacyData = require("../src/privacyData");
+const ProductAnalytics = require("../src/productAnalytics");
 
 function createRecord(overrides = {}) {
   return {
@@ -251,8 +254,13 @@ function createAppIntegrationHarness(options = {}) {
     Object.assign(createFakeElement("button"), { dataset: { journalFilter: "全部" } })
   ];
   const dreamJournalCalls = [];
+  const eventListeners = new Map();
   const windowRef = {
-    addEventListener() {},
+    addEventListener(type, listener) {
+      const listeners = eventListeners.get(type) || [];
+      listeners.push(listener);
+      eventListeners.set(type, listeners);
+    },
     confirm: () => false,
     scrollTo() {}
   };
@@ -282,11 +290,13 @@ function createAppIntegrationHarness(options = {}) {
       return true;
     }
   };
-  windowRef.DreamProductAnalytics = {
-    createProductAnalyticsController() {
-      return productAnalytics;
-    }
-  };
+  windowRef.DreamProductAnalytics = options.realProductAnalytics
+    ? ProductAnalytics
+    : {
+        createProductAnalyticsController() {
+          return productAnalytics;
+        }
+      };
   windowRef.DreamAnatomyFeatureFlags = {
     DEEP_GUIDANCE_ENABLED: options.deepGuidanceEnabled !== false
   };
@@ -297,6 +307,7 @@ function createAppIntegrationHarness(options = {}) {
 
   if (options.privacyData) {
     windowRef.DreamPrivacyData = options.privacyData;
+    windowRef.DreamLegalDocuments = LegalDocuments;
   }
 
   if (options.fakeDreamJournal !== false && !options.realDreamJournal && !options.noDreamJournal) {
@@ -440,6 +451,10 @@ function createAppIntegrationHarness(options = {}) {
     saveDeepReportButton,
     viewPanels,
     windowRef,
+    async dispatchAuthSession(detail) {
+      const listeners = eventListeners.get("dream-anatomy-auth-session") || [];
+      await Promise.all(listeners.map((listener) => listener({ detail })));
+    },
     getSavedRecords() {
       const savedRecords = localStorage.getItem("dreamAnatomy.quickDecodeRecords");
       return savedRecords ? JSON.parse(savedRecords) : [];
@@ -810,6 +825,45 @@ test("tracks a failed quick analysis without completion", async () => {
   const names = harness.analyticsCalls.map((call) => call.name);
   assert.equal(names.includes("analysis_failed"), true);
   assert.equal(names.includes("analysis_completed"), false);
+});
+
+test("records app_opened after an authenticated analytics preference loads", async () => {
+  const requests = [];
+  const harness = createAppIntegrationHarness({
+    fakeDreamJournal: false,
+    noDreamJournal: true,
+    privacyData: PrivacyData,
+    realProductAnalytics: true,
+    fetch: async (url, options) => {
+      requests.push({ url, body: JSON.parse(options.body) });
+      return { ok: true, json: async () => ({}) };
+    }
+  });
+  assert.equal(typeof harness.windowRef.DreamProductAnalytics.controller.trackEvent, "function");
+  const client = {
+    from(tableName) {
+      if (tableName === "product_analytics_preferences") {
+        return {
+          select() { return this; },
+          eq() { return { maybeSingle: async () => ({ data: { enabled: true }, error: null }) }; }
+        };
+      }
+
+      return {
+        select() { return this; },
+        eq() { return { maybeSingle: async () => ({ data: null, error: null }) }; }
+      };
+    }
+  };
+
+  await harness.dispatchAuthSession({
+    authEvent: "INITIAL_SESSION",
+    client,
+    user: { id: "user-1" }
+  });
+
+  assert.equal(requests.filter((request) => request.url === "/api/v1/product-events").length, 1);
+  assert.deepEqual(requests[0].body.events.map((event) => event.eventName), ["app_opened"]);
 });
 
 test("quick decode renders Dream Result Card on the current result page and saves it", async () => {

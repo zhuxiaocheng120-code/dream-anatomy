@@ -148,6 +148,7 @@
     const storage = options.storage || localStorage;
     const dreamSync = options.dreamSync;
     const auth = options.auth || {};
+    const onAnalyticsPreferenceLoaded = options.onAnalyticsPreferenceLoaded || null;
     const productAnalytics = options.productAnalytics || null;
     const app = options.app || {};
     const confirmAction = options.confirmAction || createElementConfirmAction(elements);
@@ -586,6 +587,9 @@
       if (productAnalytics && typeof productAnalytics.loadPreferenceForSession === "function") {
         await productAnalytics.loadPreferenceForSession({ user: nextUser, client: currentClient, authEvent: detail.authEvent });
         if (analyticsToggle) analyticsToggle.checked = Boolean(productAnalytics.getAnalyticsConsent && productAnalytics.getAnalyticsConsent());
+        if (typeof onAnalyticsPreferenceLoaded === "function") {
+          onAnalyticsPreferenceLoaded();
+        }
       }
       updateGuestCleanupVisibility();
 
