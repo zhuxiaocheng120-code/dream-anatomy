@@ -64,6 +64,7 @@
     let flushInFlight = false;
     let lastViewName = "";
     let preferenceLoadGeneration = 0;
+    let identityGeneration = 0;
 
     function getInstallationId() {
       if (!local) return "";
@@ -86,6 +87,7 @@
     }
 
     function clearAnalyticsIdentity() {
+      identityGeneration += 1;
       queue = [];
       lastViewName = "";
       if (local) local.removeItem(installationIdKey);
@@ -101,6 +103,8 @@
 
     async function setAnalyticsConsent(enabled) {
       const nextEnabled = Boolean(enabled);
+      const preferenceUserId = currentUser && currentUser.id;
+      const preferenceGeneration = preferenceLoadGeneration;
       if (!nextEnabled) {
         consentEnabled = false;
         clearAnalyticsIdentity();
@@ -111,6 +115,9 @@
         local.setItem(guestPreferenceKey, String(nextEnabled));
       }
       if (!nextEnabled) return consentEnabled;
+      if (preferenceUserId && (preferenceGeneration !== preferenceLoadGeneration || !currentUser || currentUser.id !== preferenceUserId)) {
+        return consentEnabled;
+      }
       consentEnabled = nextEnabled;
       getSessionId();
       if (!currentUser) getInstallationId();
@@ -149,13 +156,19 @@
       if (!consentEnabled || flushInFlight || queue.length === 0 || typeof request !== "function") return false;
       flushInFlight = true;
       const events = queue.slice();
+      const flushIdentityGeneration = identityGeneration;
+      const flushUserId = currentUser ? currentUser.id : "";
+      const sessionId = getSessionId();
+      const installationId = !currentUser ? getInstallationId() : "";
       try {
         const headers = { "Content-Type": "application/json" };
         const token = await getAccessToken();
+        const identityIsCurrent = consentEnabled
+          && flushIdentityGeneration === identityGeneration
+          && (currentUser ? currentUser.id : "") === flushUserId;
+        if (!identityIsCurrent) return false;
         if (token) headers.Authorization = `Bearer ${token}`;
-        const sessionId = getSessionId();
-        const installationId = !currentUser ? getInstallationId() : "";
-        if (!sessionId || (!currentUser && !installationId)) return false;
+        if (!sessionId || (!flushUserId && !installationId)) return false;
         const response = await request("/api/v1/product-events", {
           method: "POST",
           headers,
@@ -168,6 +181,7 @@
           keepalive: Boolean(flushOptions.keepalive)
         });
         if (!response || !response.ok) return false;
+        if (flushIdentityGeneration !== identityGeneration || (currentUser ? currentUser.id : "") !== flushUserId) return false;
         queue.splice(0, events.length);
         return true;
       } catch (error) {

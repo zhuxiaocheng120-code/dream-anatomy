@@ -93,3 +93,15 @@ After adding a preference-load generation guard and moving quick-input abandonme
 ### GREEN Evidence
 
 `npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js` reported 86 passed and 0 failed. The authenticated opt-out test confirms new events are rejected and local queue/identifiers are cleared before a delayed or failed preference write settles. The guest-to-authenticated test confirms queued guest events and guest/session identity are cleared before an authenticated preference can enable tracking.
+
+---
+
+## Remaining Important Findings Fix
+
+### RED Evidence
+
+`npm test -- tests/productAnalyticsFrontend.test.js` reported 18 passed and 2 failed. A delayed enabled-preference write for account A re-enabled account B after B had loaded a disabled preference. A guest flush that began before session resolution sent its queued guest event after account B became authenticated and enabled.
+
+### GREEN Evidence
+
+`npm test -- tests/productAnalyticsFrontend.test.js` reported 20 passed and 0 failed. The required regression suite, `npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js`, reported 88 passed and 0 failed. `node --check src/productAnalytics.js && node --check src/app.js && node --check src/auth.js && node --check src/privacyData.js` and `git diff --check` also passed.

@@ -201,6 +201,68 @@ test("stale account preference responses cannot overwrite the current account", 
   assert.equal(controller.getAnalyticsConsent(), false);
 });
 
+test("a delayed authenticated preference write cannot re-enable a different account", async () => {
+  let resolveAccountAWrite;
+  const { controller } = createHarness();
+  const client = {
+    from() {
+      return {
+        select() { return this; },
+        eq(_column, userId) {
+          return { maybeSingle: async () => ({ data: { enabled: userId === "account-a" }, error: null }) };
+        },
+        upsert(row) {
+          if (row.user_id === "account-a") {
+            return new Promise((resolve) => { resolveAccountAWrite = resolve; });
+          }
+          return Promise.resolve({ error: null });
+        }
+      };
+    }
+  };
+
+  await controller.loadPreferenceForSession({ user: { id: "account-a" }, client });
+  const enableAccountA = controller.setAnalyticsConsent(true);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  await controller.loadPreferenceForSession({ user: { id: "account-b" }, client });
+  assert.equal(controller.getAnalyticsConsent(), false);
+
+  resolveAccountAWrite({ error: null });
+  await enableAccountA;
+
+  assert.equal(controller.getAnalyticsConsent(), false);
+});
+
+test("a guest flush is aborted when authentication starts before session resolution", async () => {
+  let resolveSession;
+  const { controller, requests, sessionStorage } = createHarness({
+    getSession: () => new Promise((resolve) => { resolveSession = resolve; })
+  });
+  const client = {
+    from() {
+      return {
+        select() { return this; },
+        eq() { return { maybeSingle: async () => ({ data: { enabled: true }, error: null }) }; }
+      };
+    }
+  };
+
+  await controller.setAnalyticsConsent(true);
+  controller.trackEvent("app_opened");
+  const guestSessionId = sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId");
+  const flush = controller.flushEvents();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  await controller.loadPreferenceForSession({ user: { id: "account-b" }, client });
+  resolveSession({ access_token: "account-b-token" });
+
+  assert.equal(await flush, false);
+  assert.equal(requests.length, 0);
+  assert.equal(controller.getQueueLength(), 0);
+  assert.notEqual(sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId"), guestSessionId);
+});
+
 test("trackView de-duplicates identical view names", async () => {
   const { controller, requests } = createHarness();
   await controller.setAnalyticsConsent(true);
