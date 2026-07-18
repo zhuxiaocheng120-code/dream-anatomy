@@ -60,6 +60,55 @@ test("sanitizes allowlisted properties and strips private fields", () => {
   assert.doesNotMatch(JSON.stringify(event), /private dream|private@example\.com|drop me/);
 });
 
+test("allows only known entry points and stable error codes", () => {
+  const started = sanitizeProductEvent(createEvent({
+    eventName: "dream_input_started",
+    properties: {
+      entry_point: "nav",
+      email: "private@example.com"
+    }
+  }));
+  const failed = sanitizeProductEvent(createEvent({
+    eventName: "analysis_failed",
+    properties: {
+      analysis_type: "quick",
+      error_code: "ANALYSIS_TIMEOUT"
+    }
+  }));
+
+  assert.deepEqual(started.event.properties, { entry_point: "nav" });
+  assert.deepEqual(failed.event.properties, {
+    analysis_type: "quick",
+    error_code: "ANALYSIS_TIMEOUT"
+  });
+});
+
+test("strips emails, tokens, and free text from entry point and error code", () => {
+  const started = sanitizeProductEvent(createEvent({
+    eventName: "signup_started",
+    properties: { entry_point: "private@example.com" }
+  }));
+  const failed = sanitizeProductEvent(createEvent({
+    eventName: "analysis_failed",
+    properties: {
+      analysis_type: "quick",
+      error_code: "Bearer eyJhbGciOiJIUzI1NiJ9.private-token"
+    }
+  }));
+  const freeText = sanitizeProductEvent(createEvent({
+    eventName: "analysis_failed",
+    properties: {
+      analysis_type: "quick",
+      error_code: "the service returned an unexpected response"
+    }
+  }));
+
+  assert.deepEqual(started.event.properties, {});
+  assert.deepEqual(failed.event.properties, { analysis_type: "quick" });
+  assert.deepEqual(freeText.event.properties, { analysis_type: "quick" });
+  assert.doesNotMatch(JSON.stringify([started, failed, freeText]), /private@example\.com|private-token|unexpected response/);
+});
+
 test("rejects unknown event names", () => {
   const result = sanitizeProductEvent(createEvent({ eventName: "dream_text_submitted" }));
 
@@ -199,4 +248,30 @@ test("deletes product events by authenticated and guest principals", async () =>
     principalHash: crypto.createHmac("sha256", secret).update(`installation:${installationId}`).digest("hex")
   });
   assert.deepEqual(deletedHashes, [authenticated.principalHash, guest.principalHash]);
+});
+
+test("does not delete guest events for a malformed authenticated identity", async () => {
+  let deleteCalled = false;
+  const result = await deleteProductEventsForIdentity(
+    {
+      from() {
+        return {
+          delete() {
+            deleteCalled = true;
+            return this;
+          }
+        };
+      }
+    },
+    { type: "authenticated", userId: "not-a-uuid" },
+    installationId,
+    "analytics-secret"
+  );
+
+  assert.deepEqual(result, { deleted: false, principalHash: null });
+  assert.equal(deleteCalled, false);
+  assert.equal(
+    createProductPrincipalHash({ type: "authenticated", userId: "not-a-uuid" }, installationId, "analytics-secret"),
+    null
+  );
 });

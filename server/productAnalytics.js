@@ -1,20 +1,22 @@
 const crypto = require("node:crypto");
 
 const PRODUCT_ANALYTICS_VERSION = "2026-07-19";
+const ENTRY_POINTS = new Set(["nav", "home", "journal", "auth", "privacy-data"]);
+const ERROR_CODE_PATTERN = /^[A-Z][A-Z_]{0,63}$/;
 
 const EVENT_PROPERTIES = {
   app_opened: {},
   view_opened: { view_name: new Set(["home", "quick", "quick-result", "journal", "dream-detail", "privacy-data", "auth"]) },
-  dream_input_started: { entry_point: null },
+  dream_input_started: { entry_point: ENTRY_POINTS },
   dream_input_abandoned: { length_bucket: new Set(["1-50", "51-150", "151-500", "500+"]), view_name: new Set(["home", "quick", "quick-result", "journal", "dream-detail", "privacy-data", "auth"]) },
   analysis_requested: { analysis_type: new Set(["quick", "deep", "result_card"]) },
   analysis_completed: { analysis_type: new Set(["quick", "deep", "result_card"]), source: new Set(["ai_generated", "fallback", "generation_failed", "mock_legacy"]), has_result_card: "boolean" },
-  analysis_failed: { analysis_type: new Set(["quick", "deep", "result_card"]), error_code: null },
+  analysis_failed: { analysis_type: new Set(["quick", "deep", "result_card"]), error_code: ERROR_CODE_PATTERN },
   result_viewed: { analysis_type: new Set(["quick", "deep", "result_card"]), source: new Set(["ai_generated", "fallback", "generation_failed", "mock_legacy"]) },
   dream_saved: { analysis_type: new Set(["quick", "deep", "result_card"]), sync_status: new Set(["synced", "pending_sync", "local_only"]) },
   journal_opened: { record_count_bucket: new Set(["0", "1", "2-5", "6-20", "21+"]) },
   dream_detail_opened: { analysis_type: new Set(["quick", "deep", "result_card"]) },
-  signup_started: { entry_point: null },
+  signup_started: { entry_point: ENTRY_POINTS },
   signup_completed: { method: new Set(["email"]) },
   login_completed: { method: new Set(["email"]) },
   data_export_completed: { record_count_bucket: new Set(["0", "1", "2-5", "6-20", "21+"]) },
@@ -39,7 +41,7 @@ function sanitizeProperties(eventName, properties) {
       sanitized[property] = value;
     } else if (requirement instanceof Set && requirement.has(value)) {
       sanitized[property] = value;
-    } else if (requirement === null && typeof value === "string" && value.length > 0 && value.length <= 64) {
+    } else if (requirement instanceof RegExp && typeof value === "string" && requirement.test(value)) {
       sanitized[property] = value;
     }
   }
@@ -79,10 +81,12 @@ function createHash(value, secret) {
 }
 
 function createProductPrincipalHash(identity, installationId, secret) {
-  if (identity && identity.type === "authenticated" && isUuid(identity.userId)) {
-    return createHash(`user:${identity.userId}`, secret);
+  if (!identity || identity.type === "authenticated") {
+    return identity && isUuid(identity.userId) ? createHash(`user:${identity.userId}`, secret) : null;
   }
-  return isUuid(installationId) ? createHash(`installation:${installationId}`, secret) : null;
+  return identity.type === "guest" && isUuid(installationId)
+    ? createHash(`installation:${installationId}`, secret)
+    : null;
 }
 
 function createProductSessionHash(sessionId, secret) {
