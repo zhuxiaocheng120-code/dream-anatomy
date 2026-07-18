@@ -129,3 +129,15 @@ After adding a preference-load generation guard and moving quick-input abandonme
 ### GREEN Evidence
 
 After adding an independent preference-write generation guard, `npm test -- tests/productAnalyticsFrontend.test.js` reported 22 passed and 0 failed. The required regression suite, `npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js tests/productAnalytics.test.js tests/server.test.js`, reported 142 passed and 0 failed when rerun with localhost listener permission for server tests. `node --check src/auth.js && node --check src/app.js && node --check src/privacyData.js && node --check src/productAnalytics.js` and `git diff --check` also passed.
+
+---
+
+## Same-Account Read And Durable Write Ordering Fix
+
+### RED Evidence
+
+`npm test -- tests/productAnalyticsFrontend.test.js` reported 21 passed and 2 failed. The stronger same-account rapid-toggle test showed authenticated enable and disable writes were started concurrently, so a delayed enable could be the final persisted preference. A pending preference-read test also showed an old enabled read could re-enable analytics after the same user had opted out.
+
+### GREEN Evidence
+
+After invalidating pending preference reads on explicit consent changes and serializing authenticated preference writes, `npm test -- tests/productAnalyticsFrontend.test.js` reported 23 passed and 0 failed. The required regression suite, `npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js tests/productAnalytics.test.js tests/server.test.js`, reported 143 passed and 0 failed with localhost listener permission for server tests. `node --check src/productAnalytics.js && node --check src/app.js && node --check src/auth.js && node --check src/privacyData.js` and `git diff --check` also passed.

@@ -65,6 +65,7 @@
     let lastViewName = "";
     let preferenceLoadGeneration = 0;
     let preferenceWriteGeneration = 0;
+    let preferenceWriteChain = Promise.resolve();
     let identityGeneration = 0;
     let currentPreferenceLoad = null;
 
@@ -96,24 +97,35 @@
       if (session) session.removeItem(sessionIdKey);
     }
 
-    async function persistAuthenticatedPreference(enabled) {
-      if (!currentUser || !currentClient || typeof currentClient.from !== "function") return;
-      const response = await currentClient.from("product_analytics_preferences")
-        .upsert({ user_id: currentUser.id, enabled }, { onConflict: "user_id" });
+    async function persistAuthenticatedPreference(user, client, enabled) {
+      if (!user || !client || typeof client.from !== "function") return;
+      const response = await client.from("product_analytics_preferences")
+        .upsert({ user_id: user.id, enabled }, { onConflict: "user_id" });
       if (response && response.error) throw response.error;
+    }
+
+    function queueAuthenticatedPreferenceWrite(user, client, enabled) {
+      const write = preferenceWriteChain
+        .catch(() => {})
+        .then(() => persistAuthenticatedPreference(user, client, enabled));
+      preferenceWriteChain = write.catch(() => {});
+      return write;
     }
 
     async function setAnalyticsConsent(enabled) {
       const nextEnabled = Boolean(enabled);
-      const preferenceUserId = currentUser && currentUser.id;
-      const preferenceGeneration = preferenceLoadGeneration;
+      const preferenceUser = currentUser;
+      const preferenceClient = currentClient;
+      const preferenceUserId = preferenceUser && preferenceUser.id;
+      const preferenceGeneration = ++preferenceLoadGeneration;
       const writeGeneration = ++preferenceWriteGeneration;
+      currentPreferenceLoad = null;
       if (!nextEnabled) {
         consentEnabled = false;
         clearAnalyticsIdentity();
       }
-      if (currentUser) {
-        await persistAuthenticatedPreference(nextEnabled);
+      if (preferenceUser) {
+        await queueAuthenticatedPreferenceWrite(preferenceUser, preferenceClient, nextEnabled);
       } else if (local) {
         local.setItem(guestPreferenceKey, String(nextEnabled));
       }

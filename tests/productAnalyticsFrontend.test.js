@@ -89,6 +89,7 @@ test("authenticated opt-out clears local analytics before a delayed preference w
   await controller.loadPreferenceForSession({ user: { id: "user-1" }, client });
   controller.trackEvent("analysis_completed", { analysis_type: "quick" });
   const disable = controller.setAnalyticsConsent(false);
+  await new Promise((resolve) => setImmediate(resolve));
 
   assert.equal(controller.getAnalyticsConsent(), false);
   assert.equal(controller.getQueueLength(), 0);
@@ -237,6 +238,8 @@ test("a delayed authenticated preference write cannot re-enable a different acco
 
 test("a stale authenticated opt-in write cannot override a later opt-out for the same account", async () => {
   const pendingWrites = new Map();
+  const persistedStates = [];
+  let persistedEnabled = null;
   const { controller } = createHarness();
   const client = {
     from() {
@@ -244,8 +247,12 @@ test("a stale authenticated opt-in write cannot override a later opt-out for the
         select() { return this; },
         eq() { return { maybeSingle: async () => ({ data: { enabled: false }, error: null }) }; },
         upsert(row) {
+          persistedStates.push(row.enabled);
           return new Promise((resolve) => {
-            pendingWrites.set(row.enabled ? "enable" : "disable", resolve);
+            pendingWrites.set(row.enabled ? "enable" : "disable", () => {
+              persistedEnabled = row.enabled;
+              resolve({ error: null });
+            });
           });
         }
       };
@@ -260,12 +267,46 @@ test("a stale authenticated opt-in write cannot override a later opt-out for the
 
   assert.equal(controller.getAnalyticsConsent(), false);
 
-  pendingWrites.get("disable")({ error: null });
+  assert.deepEqual(persistedStates, [true]);
+  pendingWrites.get("enable")();
+  await enableAccount;
+  await new Promise((resolve) => setImmediate(resolve));
+  assert.deepEqual(persistedStates, [true, false]);
+  pendingWrites.get("disable")();
   await disableAccount;
+
+  assert.equal(controller.getAnalyticsConsent(), false);
+  assert.equal(controller.trackEvent("app_opened"), false);
+  assert.equal(persistedEnabled, false);
+});
+
+test("a stale authenticated preference read cannot override a later opt-out for the same account", async () => {
+  let resolvePreferenceRead;
+  const { controller } = createHarness();
+  const client = {
+    from() {
+      return {
+        select() { return this; },
+        eq() {
+          return {
+            maybeSingle() {
+              return new Promise((resolve) => { resolvePreferenceRead = resolve; });
+            }
+          };
+        },
+        upsert: async () => ({ error: null })
+      };
+    }
+  };
+
+  const loadPreference = controller.loadPreferenceForSession({ user: { id: "account-a" }, client });
+  await new Promise((resolve) => setImmediate(resolve));
+  await controller.setAnalyticsConsent(false);
+
   assert.equal(controller.getAnalyticsConsent(), false);
 
-  pendingWrites.get("enable")({ error: null });
-  await enableAccount;
+  resolvePreferenceRead({ data: { enabled: true }, error: null });
+  await loadPreference;
 
   assert.equal(controller.getAnalyticsConsent(), false);
   assert.equal(controller.trackEvent("app_opened"), false);
