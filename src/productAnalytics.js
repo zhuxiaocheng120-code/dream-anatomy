@@ -64,6 +64,7 @@
     let flushInFlight = false;
     let lastViewName = "";
     let preferenceLoadGeneration = 0;
+    let preferenceWriteGeneration = 0;
     let identityGeneration = 0;
     let currentPreferenceLoad = null;
 
@@ -106,6 +107,7 @@
       const nextEnabled = Boolean(enabled);
       const preferenceUserId = currentUser && currentUser.id;
       const preferenceGeneration = preferenceLoadGeneration;
+      const writeGeneration = ++preferenceWriteGeneration;
       if (!nextEnabled) {
         consentEnabled = false;
         clearAnalyticsIdentity();
@@ -116,7 +118,12 @@
         local.setItem(guestPreferenceKey, String(nextEnabled));
       }
       if (!nextEnabled) return consentEnabled;
-      if (preferenceUserId && (preferenceGeneration !== preferenceLoadGeneration || !currentUser || currentUser.id !== preferenceUserId)) {
+      if (preferenceUserId && (
+        writeGeneration !== preferenceWriteGeneration
+        || preferenceGeneration !== preferenceLoadGeneration
+        || !currentUser
+        || currentUser.id !== preferenceUserId
+      )) {
         return consentEnabled;
       }
       consentEnabled = nextEnabled;

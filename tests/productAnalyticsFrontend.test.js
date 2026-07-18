@@ -235,6 +235,42 @@ test("a delayed authenticated preference write cannot re-enable a different acco
   assert.equal(controller.getAnalyticsConsent(), false);
 });
 
+test("a stale authenticated opt-in write cannot override a later opt-out for the same account", async () => {
+  const pendingWrites = new Map();
+  const { controller } = createHarness();
+  const client = {
+    from() {
+      return {
+        select() { return this; },
+        eq() { return { maybeSingle: async () => ({ data: { enabled: false }, error: null }) }; },
+        upsert(row) {
+          return new Promise((resolve) => {
+            pendingWrites.set(row.enabled ? "enable" : "disable", resolve);
+          });
+        }
+      };
+    }
+  };
+
+  await controller.loadPreferenceForSession({ user: { id: "account-a" }, client });
+  const enableAccount = controller.setAnalyticsConsent(true);
+  await new Promise((resolve) => setImmediate(resolve));
+  const disableAccount = controller.setAnalyticsConsent(false);
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(controller.getAnalyticsConsent(), false);
+
+  pendingWrites.get("disable")({ error: null });
+  await disableAccount;
+  assert.equal(controller.getAnalyticsConsent(), false);
+
+  pendingWrites.get("enable")({ error: null });
+  await enableAccount;
+
+  assert.equal(controller.getAnalyticsConsent(), false);
+  assert.equal(controller.trackEvent("app_opened"), false);
+});
+
 test("a guest flush is aborted when authentication starts before session resolution", async () => {
   let resolveSession;
   const { controller, requests, sessionStorage } = createHarness({

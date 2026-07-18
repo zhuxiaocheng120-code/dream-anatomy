@@ -117,3 +117,15 @@ After adding a preference-load generation guard and moving quick-input abandonme
 ### GREEN Evidence
 
 `npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js tests/productAnalytics.test.js tests/server.test.js` reported 141 passed and 0 failed. The server tests required the permitted localhost listener. `node --check src/auth.js && node --check src/app.js && node --check src/privacyData.js && node --check src/productAnalytics.js` and `git diff --check` also passed.
+
+---
+
+## Same-Account Rapid Toggle Fix
+
+### RED Evidence
+
+`npm test -- tests/productAnalyticsFrontend.test.js` reported 21 passed and 1 failed. The new same-account regression test showed a delayed authenticated opt-in write could re-enable product analytics after the same user had already opted out.
+
+### GREEN Evidence
+
+After adding an independent preference-write generation guard, `npm test -- tests/productAnalyticsFrontend.test.js` reported 22 passed and 0 failed. The required regression suite, `npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js tests/productAnalytics.test.js tests/server.test.js`, reported 142 passed and 0 failed when rerun with localhost listener permission for server tests. `node --check src/auth.js && node --check src/app.js && node --check src/privacyData.js && node --check src/productAnalytics.js` and `git diff --check` also passed.
