@@ -65,6 +65,7 @@
     let lastViewName = "";
     let preferenceLoadGeneration = 0;
     let identityGeneration = 0;
+    let currentPreferenceLoad = null;
 
     function getInstallationId() {
       if (!local) return "";
@@ -192,9 +193,19 @@
     }
 
     async function loadPreferenceForSession(detail = {}) {
-      const loadGeneration = ++preferenceLoadGeneration;
       const nextUser = detail.user || null;
       const nextClient = detail.client || null;
+      if (
+        nextUser
+        && currentPreferenceLoad
+        && currentUser
+        && currentUser.id === nextUser.id
+        && currentClient === nextClient
+      ) {
+        return currentPreferenceLoad;
+      }
+
+      const loadGeneration = ++preferenceLoadGeneration;
       const changedAccount = Boolean(currentUser && (!nextUser || currentUser.id !== nextUser.id));
       const guestToAuthenticated = Boolean(!currentUser && nextUser);
       if (changedAccount || guestToAuthenticated) clearAnalyticsIdentity();
@@ -209,17 +220,29 @@
 
       consentEnabled = false;
       if (!nextClient || typeof nextClient.from !== "function") return false;
-      const response = await nextClient.from("product_analytics_preferences")
-        .select("enabled")
-        .eq("user_id", nextUser.id)
-        .maybeSingle();
-      if (loadGeneration !== preferenceLoadGeneration || !currentUser || currentUser.id !== nextUser.id) {
-        return false;
-      }
-      if (response && response.error) throw response.error;
-      consentEnabled = Boolean(response && response.data && response.data.enabled);
-      if (consentEnabled) getSessionId();
-      return consentEnabled;
+      const preferenceLoad = (async () => {
+        const response = await nextClient.from("product_analytics_preferences")
+          .select("enabled")
+          .eq("user_id", nextUser.id)
+          .maybeSingle();
+        if (loadGeneration !== preferenceLoadGeneration || !currentUser || currentUser.id !== nextUser.id) {
+          return false;
+        }
+        if (response && response.error) throw response.error;
+        consentEnabled = Boolean(response && response.data && response.data.enabled);
+        if (consentEnabled) getSessionId();
+        return consentEnabled;
+      })();
+      currentPreferenceLoad = preferenceLoad;
+      preferenceLoad.then(
+        () => {
+          if (currentPreferenceLoad === preferenceLoad) currentPreferenceLoad = null;
+        },
+        () => {
+          if (currentPreferenceLoad === preferenceLoad) currentPreferenceLoad = null;
+        }
+      );
+      return preferenceLoad;
     }
 
     async function deleteProductAnalyticsData() {

@@ -105,3 +105,15 @@ After adding a preference-load generation guard and moving quick-input abandonme
 ### GREEN Evidence
 
 `npm test -- tests/productAnalyticsFrontend.test.js` reported 20 passed and 0 failed. The required regression suite, `npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js`, reported 88 passed and 0 failed. `node --check src/productAnalytics.js && node --check src/app.js && node --check src/auth.js && node --check src/privacyData.js` and `git diff --check` also passed.
+
+---
+
+## Explicit Login Preference-Load Ordering Fix
+
+### RED Evidence
+
+`npm test -- tests/productAnalyticsFrontend.test.js` reported 20 passed and 1 failed. The new real-ordering integration test dispatched the authenticated session to the privacy controller before explicit login started its conversion load. It received only `login_completed`; the required authenticated `app_opened` event was absent.
+
+### GREEN Evidence
+
+`npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js tests/privacyData.test.js tests/authDiagnostics.test.js tests/productAnalytics.test.js tests/server.test.js` reported 141 passed and 0 failed. The server tests required the permitted localhost listener. `node --check src/auth.js && node --check src/app.js && node --check src/privacyData.js && node --check src/productAnalytics.js` and `git diff --check` also passed.

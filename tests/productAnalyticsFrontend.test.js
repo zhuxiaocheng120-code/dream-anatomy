@@ -4,6 +4,7 @@ const test = require("node:test");
 const vm = require("node:vm");
 
 const ProductAnalytics = require("../src/productAnalytics");
+const PrivacyData = require("../src/privacyData");
 
 function createStorage(initial = {}) {
   const entries = new Map(Object.entries(initial));
@@ -545,4 +546,110 @@ test("login conversion waits for the authenticated preference before using the a
   assert.deepEqual(events.map((event) => event.eventName), ["signup_started", "signup_completed", "login_completed"]);
   assert.equal(requests.at(-1).headers.Authorization, "Bearer member-token");
   assert.doesNotMatch(JSON.stringify(events), /person@example\.com|safe-password/);
+});
+
+test("explicit login preserves authenticated app startup tracking while the privacy preference load is pending", async () => {
+  const code = fs.readFileSync("src/auth.js", "utf8");
+  const requests = [];
+  const preferenceLoads = [];
+  let activeSession = null;
+  const controller = ProductAnalytics.createProductAnalyticsController({
+    createUuid: createUuidFactory(),
+    fetch: async (url, options) => {
+      requests.push({ url, headers: options.headers, body: JSON.parse(options.body) });
+      return { ok: true };
+    },
+    localStorage: createStorage(),
+    sessionStorage: createStorage(),
+    getSession: async () => ({ data: { session: activeSession } })
+  });
+  const privacyDataController = PrivacyData.createPrivacyDataController({
+    document: {},
+    legalDocuments: {
+      getLegalVersions: () => ({}),
+      hasAcceptedVersions: () => true
+    },
+    onAnalyticsPreferenceLoaded() {
+      if (controller.trackEvent("app_opened")) controller.flushEvents();
+    },
+    productAnalytics: controller,
+    storage: createStorage()
+  });
+  const nodes = new Map();
+  const email = { value: "person@example.com" };
+  const password = { value: "safe-password" };
+  const createNode = () => ({
+    dataset: {}, hidden: false, disabled: false, value: "", classList: { toggle() {} }, listeners: {},
+    addEventListener(type, listener) { this.listeners[type] = listener; },
+    focus() {}, reset() {},
+    querySelector(selector) {
+      if (selector === "input[name='email']") return email;
+      if (selector === "input[name='password']") return password;
+      return createNode();
+    }
+  });
+  const getNode = (selector) => {
+    if (!nodes.has(selector)) nodes.set(selector, createNode());
+    return nodes.get(selector);
+  };
+  const client = {
+    from(tableName) {
+      return {
+        select() { return this; },
+        eq() {
+          return {
+            maybeSingle() {
+              if (tableName === "product_analytics_preferences") {
+                return new Promise((resolve) => preferenceLoads.push(resolve));
+              }
+              return Promise.resolve({ data: null, error: null });
+            }
+          };
+        }
+      };
+    },
+    auth: {
+      getSession: async () => ({ data: { session: activeSession } }),
+      onAuthStateChange() {},
+      signInWithPassword: async () => {
+        activeSession = { access_token: "member-token", user: { id: "user-1", email_confirmed_at: "yes" } };
+        return { data: { session: activeSession, user: { email_confirmed_at: "yes" } }, error: null };
+      },
+      signUp: async () => ({ data: {}, error: null })
+    }
+  };
+  let ready = Promise.resolve();
+  const context = {
+    CustomEvent: function CustomEvent(type, init) { return { type, detail: init && init.detail }; },
+    document: {
+      addEventListener(type, listener) { if (type === "DOMContentLoaded") ready = Promise.resolve(listener()); },
+      querySelector: getNode,
+      querySelectorAll() { return []; }
+    },
+    window: {
+      DREAM_ANATOMY_ENV: { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "anon" },
+      DreamProductAnalytics: { ...ProductAnalytics, controller },
+      dispatchEvent(event) {
+        privacyDataController.handleSession(event.detail);
+      },
+      location: { origin: "https://example.test" },
+      supabase: { createClient: () => client }
+    }
+  };
+  context.window.window = context.window;
+  vm.runInNewContext(code, context);
+  await ready;
+
+  const login = nodes.get("[data-auth-login-form]").listeners.submit({ preventDefault() {} });
+  await new Promise((resolve) => setImmediate(resolve));
+  preferenceLoads[0]({ data: { enabled: true }, error: null });
+  await new Promise((resolve) => setImmediate(resolve));
+  preferenceLoads.slice(1).forEach((resolve) => resolve({ data: { enabled: true }, error: null }));
+  await login;
+  await controller.flushEvents();
+
+  const events = requests.flatMap((request) => request.body.events);
+  assert.deepEqual(events.map((event) => event.eventName), ["app_opened", "login_completed"]);
+  assert.equal(requests.at(-1).headers.Authorization, "Bearer member-token");
+  assert.doesNotMatch(JSON.stringify(events), /person@example\.com|safe-password|member-token/);
 });
