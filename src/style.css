@@ -872,6 +872,20 @@ input:focus-visible {
   margin-top: 7px;
 }
 
+.analytics-consent-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  margin-top: 14px;
+  color: var(--muted);
+}
+
+.analytics-consent-row input {
+  width: auto;
+  margin: 0;
+}
+
 .inline-link {
   display: inline;
   min-height: auto;

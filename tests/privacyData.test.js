@@ -148,6 +148,7 @@ function createHarness(options = {}) {
     dreamSync,
     elements,
     legalDocuments: LegalDocuments,
+    productAnalytics: options.productAnalytics,
     runtimeEnv: { PUBLIC_SUPPORT_EMAIL: "support@example.com" },
     storage,
     storageKey: "dreamAnatomy.quickDecodeRecords",
@@ -221,8 +222,49 @@ test("renders privacy center entry and legal documents with Chinese text", () =>
   assert.match(viewText, /用户协议/);
   assert.match(viewText, /AI 使用说明/);
   assert.match(viewText, /导出我的数据/);
+  assert.match(viewText, /帮助改进 Dream Anatomy/);
+  assert.match(viewText, /删除我的产品分析数据/);
   assert.match(documentText, /support@example\.com/);
   assert.match(documentText, /Beta 技术版本/);
+});
+
+test("product analytics consent defaults off and saves only authenticated preferences", async () => {
+  const calls = [];
+  const productAnalytics = {
+    getAnalyticsConsent: () => false,
+    setAnalyticsConsent: async (enabled) => calls.push({ type: "set", enabled }),
+    loadPreferenceForSession: async (detail) => calls.push({ type: "load", detail })
+  };
+  const { controller, elements } = createHarness({ productAnalytics });
+
+  controller.render();
+  const toggle = elements.view.children[1].children[5].children[2].children[0];
+  assert.equal(toggle.checked, false);
+  await toggle.trigger("change", { target: { checked: true } });
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client: {} });
+
+  assert.deepEqual(calls[0], { type: "set", enabled: true });
+  assert.equal(calls[1].type, "load");
+  assert.equal(calls[1].detail.user.id, "user-1");
+});
+
+test("turning off analytics clears the queue and deletion uses the analytics controller", async () => {
+  const calls = [];
+  const productAnalytics = {
+    getAnalyticsConsent: () => true,
+    setAnalyticsConsent: async (enabled) => calls.push({ type: "set", enabled }),
+    deleteProductAnalyticsData: async () => calls.push({ type: "delete" })
+  };
+  const { controller, elements } = createHarness({ productAnalytics });
+
+  controller.render();
+  const analyticsCard = elements.view.children[1].children[5];
+  const toggle = analyticsCard.children[2].children[0];
+  await toggle.trigger("change", { target: { checked: false } });
+  await analyticsCard.children[3].trigger("click");
+
+  assert.deepEqual(calls, [{ type: "set", enabled: false }, { type: "delete" }]);
+  assert.match(elements.status.textContent, /产品分析数据/);
 });
 
 test("guest AI consent stores only current local legal versions after explicit confirmation", async () => {

@@ -148,6 +148,7 @@
     const storage = options.storage || localStorage;
     const dreamSync = options.dreamSync;
     const auth = options.auth || {};
+    const productAnalytics = options.productAnalytics || null;
     const app = options.app || {};
     const confirmAction = options.confirmAction || createElementConfirmAction(elements);
     const downloadJson = options.downloadJson || defaultDownloadJson;
@@ -159,6 +160,7 @@
     let currentConsent = null;
     let lastConsentCheckUserId = "";
     let guestCleanupCard = null;
+    let analyticsToggle = null;
 
     function setStatus(message) {
       if (elements.status) {
@@ -228,6 +230,42 @@
       return button;
     }
 
+    function renderAnalyticsControls(parent) {
+      const card = createElement(documentRef, "article", "privacy-action-card");
+      const heading = createElement(documentRef, "h3", "", "帮助改进 Dream Anatomy");
+      const copy = createElement(documentRef, "p", "", "允许我们记录不包含梦境内容的功能使用事件，用于分析产品体验、错误和使用趋势。你可以随时关闭。");
+      const label = createElement(documentRef, "label", "analytics-consent-row", "开启产品分析");
+      const toggle = createElement(documentRef, "input");
+      toggle.type = "checkbox";
+      toggle.checked = Boolean(productAnalytics && productAnalytics.getAnalyticsConsent && productAnalytics.getAnalyticsConsent());
+      toggle.addEventListener("change", async (event) => {
+        if (!productAnalytics || typeof productAnalytics.setAnalyticsConsent !== "function") return;
+        try {
+          await productAnalytics.setAnalyticsConsent(Boolean(event.target.checked));
+          setStatus(event.target.checked ? "已开启产品分析。" : "已关闭产品分析，并清除本机产品分析标识。");
+        } catch (error) {
+          toggle.checked = Boolean(productAnalytics.getAnalyticsConsent && productAnalytics.getAnalyticsConsent());
+          setStatus("产品分析偏好暂时没有保存成功，请稍后再试。");
+        }
+      });
+      label.append(toggle);
+      const deleteButton = createElement(documentRef, "button", "danger-button", "删除我的产品分析数据");
+      deleteButton.type = "button";
+      deleteButton.addEventListener("click", async () => {
+        if (!productAnalytics || typeof productAnalytics.deleteProductAnalyticsData !== "function") return;
+        try {
+          await productAnalytics.deleteProductAnalyticsData();
+          if (analyticsToggle) analyticsToggle.checked = false;
+          setStatus("产品分析数据删除请求已完成。");
+        } catch (error) {
+          setStatus("产品分析数据暂时无法删除，请稍后再试。");
+        }
+      });
+      card.append(heading, copy, label, deleteButton);
+      parent.append(card);
+      analyticsToggle = toggle;
+    }
+
     function updateGuestCleanupVisibility() {
       if (guestCleanupCard) {
         guestCleanupCard.hidden = Boolean(currentUser);
@@ -255,6 +293,7 @@
       const clearButton = renderAction(actions, "清空全部梦境", "删除当前账户的全部梦境记录；游客状态下只清理本机游客记录。", "清空全部梦境", "clear", true);
       const guestButton = renderAction(actions, "清除本机梦境数据", "游客可以清除当前浏览器中的本机梦境数据。", "清除本机梦境数据", "clear-guest", true);
       const accountButton = renderAction(actions, "注销账户", "注销会删除当前账户的云端梦境、法律同意记录和可关联的 authenticated AI 使用统计。", "注销账户", "delete-account", true);
+      renderAnalyticsControls(actions);
 
       acceptButton.addEventListener("click", () => {
         acceptCurrentLegalVersions().catch(() => {
@@ -518,6 +557,10 @@
 
       currentUser = nextUser;
       currentClient = nextUser ? nextClient : null;
+      if (productAnalytics && typeof productAnalytics.loadPreferenceForSession === "function") {
+        await productAnalytics.loadPreferenceForSession({ user: nextUser, client: currentClient, authEvent: detail.authEvent });
+        if (analyticsToggle) analyticsToggle.checked = Boolean(productAnalytics.getAnalyticsConsent && productAnalytics.getAnalyticsConsent());
+      }
       updateGuestCleanupVisibility();
 
       if (!nextUser) {

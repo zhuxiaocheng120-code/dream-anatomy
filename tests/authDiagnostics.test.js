@@ -119,6 +119,23 @@ test("reports safe diagnostics when runtime config exists but Supabase SDK is mi
   assert.equal(harness.auth.getClient(), null);
 });
 
+test("runtime configuration diagnostics do not expose analytics secrets or event internals", () => {
+  const harness = createAuthHarness({
+    env: {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_ANON_KEY: "anon-test-value",
+      SUPABASE_SERVICE_ROLE_KEY: "forbidden",
+      ANALYTICS_HASH_SECRET: "forbidden",
+      PRODUCT_ANALYTICS_SECRET: "forbidden",
+      PRODUCT_EVENT_INTERNALS: "forbidden"
+    },
+    supabase: undefined
+  });
+
+  const diagnostics = JSON.stringify(harness.auth.getDiagnostics());
+  assert.doesNotMatch(diagnostics, /service.role|analytics|product.*hash|product.*event|forbidden/i);
+});
+
 test("register submit does not show environment variable prompt when only the SDK is missing", async () => {
   const harness = createAuthHarness({
     env: {
