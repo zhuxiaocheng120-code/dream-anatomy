@@ -326,6 +326,10 @@ function createAppIntegrationHarness(options = {}) {
   const documentRef = {
     createElement: createFakeElement,
     querySelector(selector) {
+      if (selector === "[data-view].is-active") {
+        return viewPanels.find((panel) => panel.classList.contains("is-active")) || null;
+      }
+
       return selectors.get(selector) || null;
     },
     querySelectorAll(selector) {
@@ -784,6 +788,7 @@ test("tracks opt-in quick, journal, and detail behavior without dream content", 
   harness.windowRef.DreamAnatomyApp.showView("diary");
   harness.windowRef.DreamAnatomyApp.showView("admin");
   harness.windowRef.DreamAnatomyApp.openDreamDetail("detail-record");
+  harness.windowRef.DreamAnatomyApp.showView("quick");
 
   harness.quickDream.value = "我在学校走廊里一直找不到教室，门发着光。";
   harness.quickDream.trigger("input");
@@ -793,18 +798,30 @@ test("tracks opt-in quick, journal, and detail behavior without dream content", 
 
   const names = harness.analyticsCalls.map((call) => call.name);
   assert.equal(names.filter((name) => name === "app_opened").length, 1);
-  assert.equal(names.filter((name) => name === "view_opened").length, 2);
+  assert.equal(names.filter((name) => name === "view_opened").length, 3);
   assert.equal(names.includes("journal_opened"), true);
   assert.equal(names.includes("dream_detail_opened"), true);
   assert.equal(names.filter((name) => name === "dream_input_started").length, 1);
-  assert.equal(names.includes("dream_input_abandoned"), true);
+  assert.equal(names.includes("dream_input_abandoned"), false);
   assert.equal(names.filter((name) => name === "analysis_requested").length, 1);
   assert.equal(names.includes("analysis_completed"), true);
   assert.equal(names.includes("result_viewed"), true);
   assert.equal(names.filter((name) => name === "dream_saved").length, 1);
   assert.doesNotMatch(JSON.stringify(harness.analyticsCalls), /学校走廊|梦见/);
+});
+
+test("tracks quick input abandonment only when leaving without submitting analysis", () => {
+  const harness = createAppIntegrationHarness({ noDreamJournal: true, fakeDreamJournal: false });
+
+  harness.windowRef.DreamAnatomyApp.showView("quick");
+  harness.quickDream.value = "我在学校走廊里一直找不到教室，门发着光。";
+  harness.quickDream.trigger("input");
+  harness.windowRef.DreamAnatomyApp.showView("home");
+
+  const abandonment = harness.analyticsCalls.find((call) => call.name === "dream_input_abandoned");
+  assert.ok(abandonment);
   assert.deepEqual(
-    JSON.parse(JSON.stringify(harness.analyticsCalls.find((call) => call.name === "dream_input_abandoned").properties)),
+    JSON.parse(JSON.stringify(abandonment.properties)),
     { length_bucket: "1-50", view_name: "quick" }
   );
 });

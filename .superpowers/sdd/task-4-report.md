@@ -69,3 +69,15 @@ Verification: 81 focused Task 4 tests passed, all required syntax checks passed,
 ### GREEN Evidence
 
 The same focused command reported 82 passed. The deployed-controller test now verifies the Bearer header and validates the emitted payload with the server product-event batch normalizer. Required syntax checks and `git diff --check` also passed.
+
+---
+
+## Important Findings Re-review Fix
+
+### RED Evidence
+
+`npm test -- tests/productAnalyticsFrontend.test.js tests/dreamJournal.test.js` reported 56 passed and 3 failed. The new account A -> B test showed A's late enabled preference changed B's disabled state to enabled. The successful quick-analysis test showed `dream_input_abandoned` was emitted after a normal textarea blur before submit.
+
+### GREEN Evidence
+
+After adding a preference-load generation guard and moving quick-input abandonment to the quick-view exit path, the same focused command reported 59 passed and 0 failed. The new regression coverage confirms that a late account A response cannot overwrite account B, quick analysis success emits no abandonment event, and a started quick input is abandoned only when leaving the quick flow without submitting.

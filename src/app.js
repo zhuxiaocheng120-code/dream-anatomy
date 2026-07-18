@@ -133,6 +133,7 @@ const productAnalyticsController = window.DreamProductAnalytics
 if (productAnalyticsController) {
   window.DreamProductAnalytics.controller = productAnalyticsController;
 }
+let trackQuickInputAbandonment = () => false;
 const privacyDataController = window.DreamPrivacyData
   && typeof window.DreamPrivacyData.createPrivacyDataController === "function"
   ? window.DreamPrivacyData.createPrivacyDataController({
@@ -317,6 +318,8 @@ function showView(viewName) {
     return;
   }
 
+  const previousViewName = getCurrentView();
+
   if (viewName === "diary") {
     showDreamJournalList();
   }
@@ -339,6 +342,10 @@ function showView(viewName) {
 
   if (viewName !== "admin") {
     trackProductView(viewName);
+  }
+
+  if (previousViewName === "quick" && viewName !== "quick") {
+    trackQuickInputAbandonment();
   }
 
   if (viewName === "diary") {
@@ -1304,20 +1311,24 @@ function renderDreamJournal(records = loadDreamRecords()) {
 
 if (quickForm) {
   let quickInputStarted = false;
+  let quickInputSubmitted = false;
+  let quickInputAbandoned = false;
+
+  trackQuickInputAbandonment = () => {
+    const rawDreamText = quickDream.value.trim();
+    if (!quickInputStarted || quickInputSubmitted || quickInputAbandoned || !rawDreamText) return false;
+
+    quickInputAbandoned = true;
+    return trackProductEvent("dream_input_abandoned", {
+      length_bucket: getInputLengthBucket(rawDreamText.length),
+      view_name: "quick"
+    });
+  };
 
   quickDream.addEventListener("input", () => {
     if (quickInputStarted || !quickDream.value.trim()) return;
     quickInputStarted = true;
     trackProductEvent("dream_input_started", { entry_point: "nav" });
-  });
-
-  quickDream.addEventListener("blur", () => {
-    const rawDreamText = quickDream.value.trim();
-    if (!quickInputStarted || !rawDreamText) return;
-    trackProductEvent("dream_input_abandoned", {
-      length_bucket: getInputLengthBucket(rawDreamText.length),
-      view_name: getAnalyticsViewName(getCurrentView()) || "quick"
-    });
   });
 
   quickForm.addEventListener("submit", async (event) => {
@@ -1334,6 +1345,8 @@ if (quickForm) {
       quickDream.focus();
       return;
     }
+
+    quickInputSubmitted = true;
 
     if (rawDreamText.length > maxDreamTextLength) {
       if (status) {
@@ -1455,6 +1468,8 @@ if (quickForm) {
 
   quickForm.addEventListener("reset", () => {
     quickInputStarted = false;
+    quickInputSubmitted = false;
+    quickInputAbandoned = false;
     quickResult.hidden = true;
     if (quickResultCard) {
       quickResultCard.textContent = "";

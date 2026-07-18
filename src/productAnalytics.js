@@ -63,6 +63,7 @@
     let queue = [];
     let flushInFlight = false;
     let lastViewName = "";
+    let preferenceLoadGeneration = 0;
 
     function getInstallationId() {
       if (!local) return "";
@@ -176,6 +177,7 @@
     }
 
     async function loadPreferenceForSession(detail = {}) {
+      const loadGeneration = ++preferenceLoadGeneration;
       const nextUser = detail.user || null;
       const nextClient = detail.client || null;
       const changedAccount = Boolean(currentUser && (!nextUser || currentUser.id !== nextUser.id));
@@ -195,6 +197,9 @@
         .select("enabled")
         .eq("user_id", nextUser.id)
         .maybeSingle();
+      if (loadGeneration !== preferenceLoadGeneration || !currentUser || currentUser.id !== nextUser.id) {
+        return false;
+      }
       if (response && response.error) throw response.error;
       consentEnabled = Boolean(response && response.data && response.data.enabled);
       if (consentEnabled) getSessionId();

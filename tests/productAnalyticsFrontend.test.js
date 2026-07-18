@@ -117,6 +117,37 @@ test("account switches do not inherit analytics consent", async () => {
   assert.equal(controller.getAnalyticsConsent(), false);
 });
 
+test("stale account preference responses cannot overwrite the current account", async () => {
+  const pending = new Map();
+  const { controller } = createHarness();
+  const client = {
+    from() {
+      return {
+        select() { return this; },
+        eq(_column, userId) {
+          return {
+            maybeSingle() {
+              return new Promise((resolve) => pending.set(userId, resolve));
+            }
+          };
+        }
+      };
+    }
+  };
+
+  const accountALoad = controller.loadPreferenceForSession({ user: { id: "account-a" }, client });
+  const accountBLoad = controller.loadPreferenceForSession({ user: { id: "account-b" }, client });
+
+  pending.get("account-b")({ data: { enabled: false }, error: null });
+  await accountBLoad;
+  assert.equal(controller.getAnalyticsConsent(), false);
+
+  pending.get("account-a")({ data: { enabled: true }, error: null });
+  await accountALoad;
+
+  assert.equal(controller.getAnalyticsConsent(), false);
+});
+
 test("trackView de-duplicates identical view names", async () => {
   const { controller, requests } = createHarness();
   await controller.setAnalyticsConsent(true);
