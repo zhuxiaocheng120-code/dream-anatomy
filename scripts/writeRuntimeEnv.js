@@ -5,7 +5,8 @@ const path = require("path");
 
 const runtimeConfig = {
   SUPABASE_URL: process.env.SUPABASE_URL || "",
-  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || ""
+  SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || "",
+  PUBLIC_SUPPORT_EMAIL: process.env.PUBLIC_SUPPORT_EMAIL || ""
 };
 
 const outputPath = path.join(__dirname, "..", "src", "runtime-env.js");

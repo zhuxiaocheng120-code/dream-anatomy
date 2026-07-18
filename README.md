@@ -17,6 +17,7 @@
 - 快速解析区域可以输入梦境碎片，优先通过本项目后端代理请求 DeepSeek API；快速解析的一次最终请求会同时返回 V2 结构化分析正文和完整 `reportContent.dreamResultCard` 梦境画像。
 - AI 后端提供版本化接口 `POST /api/v1/dream-analysis`，旧的 `POST /api/dream-analysis` 暂时保留为兼容别名。接口会识别 Supabase Bearer token、应用 Beta 免费额度、短时限流、单用户并发限制和 DeepSeek 超时保护。
 - 服务器会把 AI 使用统计以隐私保护形式写入 Supabase `ai_usage_events`，用于运营分析和服务改进；管理员可在只读运营后台查看聚合数据。
+- 隐私与数据中心提供隐私政策、用户协议、AI 使用说明、显式同意、梦境导出、单条删除、清空全部梦境、游客本机数据清理和账户注销入口。
 - 快速解析 V2 会要求结果包含梦境摘要、核心主题、核心解析、梦境证据与解释、情绪画像、主要意象、自我思考、今日小行动和温和提醒，并在服务端做基础质量检查。
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果，AI 输出质量不完整时不会伪装成本地 mock。
 - 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
@@ -81,6 +82,8 @@
 - src/style.css: colors, layout, spacing, and responsive styles.
 - src/app.js: interactions for the dream analysis, local journal, and view switching flows.
 - src/adminAnalytics.js: read-only admin analytics controller, permission probing, aggregate rendering, and session cleanup.
+- src/legalDocuments.js: legal document copy, versions, and support-contact rendering helpers.
+- src/privacyData.js: privacy/data center controller for legal document viewing, consent, export, deletion, guest cleanup, and account deletion interaction.
 - src/auth.js: Supabase Auth interactions for account registration, login, logout, password reset, and persistent session display.
 - src/dreamHome.js: authenticated Dream Home session handling, current-user cloud-record loading, statistics, recent dreams, and reuse of existing navigation/detail flows.
 - src/dreamJournal.js: Dream Journal archive grouping, realtime search, filters, empty state, record rendering, and existing detail navigation.
@@ -91,6 +94,7 @@
 - src/vendor/supabase.js: browser Supabase SDK asset used by the account UI.
 - server.js: Express server that serves src and exposes the protected shared AI analysis API for current Web Beta and future clients.
 - server/: server-only AI API helpers for Supabase token identity, stable API errors, Beta quota, short-window rate limiting, concurrent request locking, analytics writing, service-role admin access, and in-memory limiter housekeeping.
+- server/accountDeletion.js: server-only account deletion flow using the verified Supabase token identity and service role cleanup.
 - scripts/writeRuntimeEnv.js: writes `src/runtime-env.js` from environment variables before startup.
 - lib/supabaseClient.js: helper for creating a Supabase client from environment variables.
 - supabase/migrations/: database migrations for cloud dream record storage and sync fields.
@@ -105,6 +109,7 @@
 - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` locally to enable the account UI. These are browser-safe Supabase project values, not service role secrets.
 - Optional AI protection settings are available in `.env.example`: `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_GUEST_REQUESTS_PER_MINUTE`, `AI_USER_REQUESTS_PER_MINUTE`, `AI_MAX_CONCURRENT_PER_PRINCIPAL`, `AI_REQUEST_TIMEOUT_MS`, and `DEEP_GUIDANCE_ENABLED`.
 - Optional admin analytics settings are available in `.env.example`: `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER_IDS`, `ANALYTICS_HASH_SECRET`, `AI_INPUT_COST_PER_1M_TOKENS`, and `AI_OUTPUT_COST_PER_1M_TOKENS`. These are server-only values and must not be exposed in browser runtime config.
+- Optional public contact setting: `PUBLIC_SUPPORT_EMAIL`. This is safe to expose in browser runtime config and is used by the legal documents. Do not put private inboxes or secrets here.
 - Start the app with `npm start`.
 - Open `http://localhost:3000` in your browser.
 - Without `DEEPSEEK_API_KEY`, the page can still open; analysis API requests will fail safely and the frontend will show clearly marked local fallback results.
@@ -134,6 +139,12 @@ Deep guidance is still visible as “正在开发中”. When `DEEP_GUIDANCE_ENA
 ## Supabase Security
 
 The current `dream_records` cloud storage path is covered by [docs/SUPABASE_SECURITY_AUDIT.md](docs/SUPABASE_SECURITY_AUDIT.md). The audit records the RLS policies, current-user query filters, sync de-duplication key, key exposure boundaries, and manual production checks that still require a real Supabase project.
+
+## Privacy And Data Controls
+
+Privacy/data controls setup is documented in [docs/PRIVACY_DATA_CONTROLS_SETUP.md](docs/PRIVACY_DATA_CONTROLS_SETUP.md). The legal documents are Beta technical copy and should receive professional review before production launch.
+
+Apply `supabase/migrations/20260717001000_create_legal_consents.sql` to store authenticated legal consent versions. Account deletion uses `DELETE /api/v1/account`, verifies the Supabase Bearer token on the server, ignores body `userId` and `email`, deletes authenticated AI usage events matched by recalculated HMAC when `ANALYTICS_HASH_SECRET` is configured, deletes the Supabase Auth user, and then performs scoped cleanup for that user's dream records and legal consent. Guest AI usage statistics are not deleted because they cannot be reliably tied to the account.
 
 ## Admin Analytics
 

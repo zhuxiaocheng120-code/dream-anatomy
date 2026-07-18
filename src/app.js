@@ -27,6 +27,17 @@ const adminAnalysisDistribution = document.querySelector("[data-admin-analysis-d
 const adminErrorDistribution = document.querySelector("[data-admin-error-distribution]");
 const adminRecent = document.querySelector("[data-admin-recent]");
 const adminRangeButtons = Array.from(document.querySelectorAll("[data-admin-range]"));
+const privacyDataView = document.querySelector("[data-privacy-data-view]");
+const privacyDocumentShell = document.querySelector("[data-legal-document-view]");
+const privacyStatus = document.querySelector("[data-privacy-status]");
+const privacyConfirmShell = document.querySelector("[data-privacy-confirm]");
+const privacyConfirmTitle = document.querySelector("[data-privacy-confirm-title]");
+const privacyConfirmBody = document.querySelector("[data-privacy-confirm-body]");
+const privacyConfirmInput = document.querySelector("[data-privacy-confirm-input]");
+const privacyConfirmCancel = document.querySelector("[data-privacy-confirm-cancel]");
+const privacyConfirmSubmit = document.querySelector("[data-privacy-confirm-submit]");
+const registerLegalConsent = document.querySelector("[data-legal-consent-checkbox]");
+const authLegalLinks = Array.from(document.querySelectorAll("[data-auth-legal-link]"));
 const guidedForm = document.querySelector("[data-guided-form]");
 const guidedDream = document.querySelector("#guidedDream");
 const guidedQuestionsContainer = document.querySelector("[data-guided-questions]");
@@ -110,6 +121,35 @@ const adminAnalyticsController = window.AdminAnalytics
       }
     })
   : null;
+const privacyDataController = window.DreamPrivacyData
+  && typeof window.DreamPrivacyData.createPrivacyDataController === "function"
+  ? window.DreamPrivacyData.createPrivacyDataController({
+      app: {
+        renderDreamJournal,
+        showDreamJournalList,
+        showView
+      },
+      auth: window.DreamAnatomyAuth || {},
+      document,
+      dreamSync: dreamSyncController,
+      elements: {
+        confirmBody: privacyConfirmBody,
+        confirmCancel: privacyConfirmCancel,
+        confirmInput: privacyConfirmInput,
+        confirmShell: privacyConfirmShell,
+        confirmSubmit: privacyConfirmSubmit,
+        confirmTitle: privacyConfirmTitle,
+        documentShell: privacyDocumentShell,
+        registerConsent: registerLegalConsent,
+        status: privacyStatus,
+        view: privacyDataView
+      },
+      legalDocuments: window.DreamLegalDocuments,
+      runtimeEnv: window.DREAM_ANATOMY_ENV || {},
+      storage: localStorage,
+      storageKey: dreamJournalStorageKey
+    })
+  : null;
 
 function updateJournalSyncStatus(message) {
   if (journalSyncStatus) {
@@ -139,6 +179,21 @@ if (adminAnalyticsController) {
     adminAnalyticsController.handleSession({
       authEvent: detail.authEvent || "",
       user: detail.user || null
+    });
+  });
+}
+
+if (privacyDataController) {
+  privacyDataController.render();
+
+  window.addEventListener("dream-anatomy-auth-session", (event) => {
+    privacyDataController.handleSession(event.detail || {});
+  });
+
+  authLegalLinks.forEach((button) => {
+    button.addEventListener("click", () => {
+      showView("privacy-data");
+      privacyDataController.openLegalDocument(button.dataset.authLegalLink);
     });
   });
 }
@@ -426,6 +481,10 @@ async function requestGuidedFinalReport(rawDreamText, guidedAnswers) {
 }
 
 async function requestDreamResultCard(rawDreamText) {
+  if (privacyDataController && !(await privacyDataController.ensureGuestAiConsent())) {
+    throw new Error("请先确认用户协议、隐私政策和 AI 使用说明，再生成梦境画像。");
+  }
+
   const data = await requestDreamAnalysis({
     dreamText: rawDreamText,
     analysisType: "result_card"
@@ -993,6 +1052,7 @@ function renderDreamDetail(recordId, fallbackRow) {
   const reflectionTitle = document.createElement("h4");
   const reflectionCopy = document.createElement("p");
   const dreamResultCard = document.createElement("div");
+  const detailActions = document.createElement("div");
 
   hero.className = "detail-hero";
   heroTitle.textContent = getDreamTitle(record);
@@ -1004,6 +1064,18 @@ function renderDreamDetail(recordId, fallbackRow) {
     createDetailMetaItem("睡眠质量", formatDetailValue(sleepQuality))
   );
   hero.append(heroTitle, heroMeta);
+
+  detailActions.className = "detail-actions";
+  if (privacyDataController) {
+    const deleteButton = document.createElement("button");
+    deleteButton.className = "danger-button";
+    deleteButton.type = "button";
+    deleteButton.textContent = "删除这条梦境";
+    deleteButton.addEventListener("click", () => {
+      privacyDataController.deleteDreamRecord(record).catch(() => {});
+    });
+    detailActions.append(deleteButton);
+  }
 
   analysisSection.className = "detail-analysis";
   analysisTitle.textContent = "AI 分析";
@@ -1025,6 +1097,7 @@ function renderDreamDetail(recordId, fallbackRow) {
 
   dreamDetailContent.append(
     hero,
+    detailActions,
     createDetailSection("梦境原文", rawDreamText, { preserveWhitespace: true }),
     createDetailSection("梦境摘要", dreamSummary),
     createDetailSection("情绪标签", emotions),
@@ -1128,6 +1201,13 @@ if (quickForm) {
         status.textContent = "梦境内容暂时最多 5000 个字符，可以先保留最想解析的片段。";
       }
       quickDream.focus();
+      return;
+    }
+
+    if (privacyDataController && !(await privacyDataController.ensureGuestAiConsent())) {
+      if (status) {
+        status.textContent = "请先确认用户协议、隐私政策和 AI 使用说明，再开始快速解析。";
+      }
       return;
     }
 
@@ -1405,15 +1485,7 @@ if (saveDeepReportButton) {
 
 if (clearJournalButton) {
   clearJournalButton.addEventListener("click", () => {
-    const shouldClear = window.confirm("确定要清空保存在这个浏览器里的梦境记录吗？");
-
-    if (!shouldClear) {
-      return;
-    }
-
-    localStorage.removeItem(dreamJournalStorageKey);
-    renderDreamJournal([]);
-    showDreamJournalList();
+    showView("privacy-data");
   });
 }
 

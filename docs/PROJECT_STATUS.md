@@ -18,17 +18,20 @@
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到当前浏览器或当前用户的梦境日记。
 - AI 后端现在提供版本化接口 `POST /api/v1/dream-analysis`，旧 `POST /api/dream-analysis` 暂时保留为兼容别名。接口会识别 Supabase Bearer token，把缺少 token 的请求当作访客，并使用内存计数器提供 Beta 免费额度、短时限流、单用户并发限制和 DeepSeek 超时保护。
 - AI 后端现在会在不影响用户解析流程的前提下，尝试把隐私保护的 AI 使用统计写入 Supabase `ai_usage_events`，用于运营分析和服务改进。
+- 页面新增“隐私与数据”中心，用于展示隐私政策、用户协议、AI 使用说明，处理用户同意、导出个人梦境数据、删除单条梦境、清空全部梦境、清除游客本机数据和注销账户。
 - 梦境日记区域会显示已保存记录的日期、梦境摘要、主要情绪、主要意象、睡眠质量和分析类型。
 - 深度引导源码、后端接口和既有测试仍保留，但当前用户不能从入口开始新的深度引导，也不能创建新的深度引导记录。
 - 已保存的历史深度引导记录仍会显示在梦境日记和梦境详情里。
 - 快速解析和深度引导记录会显示在同一个梦境日记列表中，深度引导记录的分析类型显示为“深度引导”。
 - 梦境日记列表里的记录可以点击“查看详情”，进入本地详情视图。
 - 梦境详情视图会展示梦境标题、日期、时间、完整梦境原文、AI 摘要、情绪标签、梦境意象、睡眠质量和分析类型，并支持返回梦境日记列表。
+- 梦境详情提供“删除这条梦境”，通过当前用户过滤或游客本地数据删除；删除失败时不会先清空 UI。
 - 梦境详情里的 AI 分析采用可折叠卡片，包含荣格、弗洛伊德和现代心理学三个温和视角，并预留“自我思考”区域供后续扩展。
 - 如果没有本地记录，梦境日记区域会显示空状态。
 - 项目已准备 Supabase 基础设施，包括 JavaScript SDK 依赖、`SUPABASE_URL` / `SUPABASE_ANON_KEY` 环境变量示例，以及 `dream_records` 数据表迁移和 RLS 策略。
 - 页面右上角已加入 Supabase Auth 账户入口。未登录时显示“登录 / 注册”；登录后显示当前邮箱和“退出登录”。
 - 当前账户系统支持邮箱注册、验证邮件提示、邮箱验证后登录、退出登录、忘记密码、重置密码，以及刷新页面后的登录状态保持。
+- 注册前需要主动勾选同意《用户协议》《隐私政策》和《AI 使用说明》。登录用户的法律文件版本同意会写入 `legal_consents`；游客首次 AI 请求前只在本机保存当前版本确认。
 - 登录后会自动尝试把当前浏览器里的本地梦境记录迁移到 Supabase，并通过 `local_record_id + user_id` 去重，避免重复同步。
 - 登录用户的新快速解析记录会优先保存到 Supabase；保存成功后再更新 localStorage 缓存，保存失败时会保留本地记录并标记为 `pending_sync`。新的深度引导记录当前暂时不能创建。
 - 梦境日记在登录后以 Supabase 云端记录为主，退出登录后不会继续显示上一位用户的云端梦境。
@@ -157,6 +160,16 @@ AI 使用统计只保存 request id、时间、用户类型、经过 `ANALYTICS_
 AI 使用统计将在实现产品运营分析和服务改进目的所必要的期限内长期保存。当前版本不执行自动清理；未来如调整保留期限，将在隐私政策和部署文档中同步更新。当前后台第一版只显示 7 / 30 / 90 天快捷筛选，这不代表数据库只保留 90 天。
 
 部署前需要在 Supabase SQL Editor 手动执行 `supabase/migrations/20260717000000_create_ai_usage_events.sql`，并在 Render 配置 `SUPABASE_SERVICE_ROLE_KEY`、`ADMIN_USER_IDS` 和 `ANALYTICS_HASH_SECRET`。详细步骤见 `docs/ADMIN_ANALYTICS_SETUP.md`。
+
+隐私与数据控制需要在 Supabase SQL Editor 手动执行 `supabase/migrations/20260717001000_create_legal_consents.sql`，并在 Render 配置公开的 `PUBLIC_SUPPORT_EMAIL`。详细步骤见 `docs/PRIVACY_DATA_CONTROLS_SETUP.md`。
+
+## 隐私与数据控制的当前边界
+
+当前法律文件是基于现有代码和数据流起草的 Web Beta 技术版本，正式发布前仍需专业法律审阅。
+
+账户注销由 `DELETE /api/v1/account` 完成。服务端只信任已验证 Supabase Bearer token 得到的当前用户，不信任请求 body 中的 `userId` 或 `email`。如果已配置 `ANALYTICS_HASH_SECRET`，注销会删除当前 authenticated principal hash 对应的 AI 使用统计；随后删除 Supabase Auth 用户，并对当前用户的法律同意记录和梦境记录执行限定清理。guest AI 使用统计不会被删除，因为无法可靠证明历史 guest 信号全部属于该账户。
+
+导出数据只包含当前用户或当前浏览器游客可见的梦境记录和法律版本信息，不包含 token、邮箱、完整 Supabase UUID、principal_hash、管理员统计或其他账户数据。
 
 # 下一步可以做什么
 适合初学者继续添加的功能：

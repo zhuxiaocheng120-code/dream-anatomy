@@ -108,6 +108,14 @@
     }
   }
 
+  function hasRegistrationLegalConsent() {
+    if (!window.DreamPrivacyData || typeof window.DreamPrivacyData.validateRegistrationConsent !== "function") {
+      return true;
+    }
+
+    return window.DreamPrivacyData.validateRegistrationConsent();
+  }
+
   function showAuthPanel(mode) {
     authPanels.forEach((panel) => {
       const isActive = panel.dataset.authPanel === mode;
@@ -174,6 +182,11 @@
     const client = getSupabaseClient();
     if (!client) {
       setStatus(`${getUnavailableMessage()}\n${formatDiagnostics()}`, "error");
+      return;
+    }
+
+    if (!hasRegistrationLegalConsent()) {
+      setStatus("请先阅读并勾选同意用户协议、隐私政策和 AI 使用说明。", "error");
       return;
     }
 
