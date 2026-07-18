@@ -214,7 +214,7 @@
           body: JSON.stringify(installationId ? { installationId } : {})
         });
         if (!response || !response.ok) throw new Error("产品分析删除暂时无法完成。");
-        clearAnalyticsIdentity();
+        await setAnalyticsConsent(false);
       } catch (error) {
         throw error;
       }

@@ -204,3 +204,43 @@ test("deleting analytics rejects a failed request without clearing the local ide
   assert.match(localStorage.getItem("dreamAnatomy.productAnalytics.installationId"), /^[0-9a-f-]{36}$/i);
   assert.match(sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId"), /^[0-9a-f-]{36}$/i);
 });
+
+test("deleting guest analytics disables consent and prevents later event sending", async () => {
+  const { controller, localStorage, requests } = createHarness();
+  await controller.setAnalyticsConsent(true);
+
+  await controller.deleteProductAnalyticsData();
+  const sentAfterDeletion = controller.trackEvent("app_opened");
+  await controller.flushEvents();
+
+  assert.equal(controller.getAnalyticsConsent(), false);
+  assert.equal(localStorage.getItem("dreamAnatomy.productAnalytics.guestPreference"), "false");
+  assert.equal(sentAfterDeletion, false);
+  assert.equal(requests.length, 1);
+});
+
+test("deleting authenticated analytics persists disabled consent", async () => {
+  const { controller } = createHarness();
+  const upserts = [];
+  const client = {
+    from() {
+      return {
+        select() { return this; },
+        eq() { return { maybeSingle: async () => ({ data: { enabled: true }, error: null }) }; },
+        upsert: async (row, options) => {
+          upserts.push({ row, options });
+          return { error: null };
+        }
+      };
+    }
+  };
+
+  await controller.loadPreferenceForSession({ user: { id: "user-1" }, client, authEvent: "SIGNED_IN" });
+  await controller.deleteProductAnalyticsData();
+
+  assert.equal(controller.getAnalyticsConsent(), false);
+  assert.deepEqual(upserts, [{
+    row: { user_id: "user-1", enabled: false },
+    options: { onConflict: "user_id" }
+  }]);
+});
