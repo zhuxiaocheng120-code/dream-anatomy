@@ -55,6 +55,26 @@ test("ai_usage_events migration creates protected analytics table", () => {
   assert.doesNotMatch(migration, /create policy[\s\S]+ai_usage_events/i);
 });
 
+test("product analytics migration protects preferences and server-only events", () => {
+  const migration = readProjectFile("supabase/migrations/20260719000000_create_product_analytics.sql");
+
+  assert.match(migration, /create table if not exists public\.product_analytics_preferences/);
+  assert.match(migration, /create table if not exists public\.product_events/);
+  assert.match(migration, /event_id uuid not null unique/);
+  for (const table of ["product_analytics_preferences", "product_events"]) {
+    assert.match(migration, new RegExp(`alter table public\\.${table} enable row level security`));
+    assert.match(migration, new RegExp(`alter table public\\.${table} force row level security`));
+  }
+  assert.match(migration, /for select\s+to authenticated\s+using \(auth\.uid\(\) = user_id\)/s);
+  assert.match(migration, /for insert\s+to authenticated\s+with check \(auth\.uid\(\) = user_id\)/s);
+  assert.match(migration, /for update\s+to authenticated\s+using \(auth\.uid\(\) = user_id\)\s+with check \(auth\.uid\(\) = user_id\)/s);
+  const productEventsSection = migration.slice(migration.indexOf("create table if not exists public.product_events"));
+  assert.match(productEventsSection, /revoke all on table public\.product_events from anon/);
+  assert.match(productEventsSection, /revoke all on table public\.product_events from authenticated/);
+  assert.doesNotMatch(productEventsSection, /create policy/i);
+  assert.doesNotMatch(migration, /ttl|retention|delete\s+from\s+public\.product_events/i);
+});
+
 test("service role and analytics secrets stay out of browser runtime config", () => {
   const runtimeWriter = readProjectFile("scripts/writeRuntimeEnv.js");
   const envExample = readProjectFile(".env.example");
