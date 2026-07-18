@@ -409,6 +409,39 @@ test("export does not include full cloud record UUIDs", async () => {
   assert.doesNotMatch(JSON.stringify(downloads[0].data), new RegExp(cloudUuid));
 });
 
+test("tracks export, deletion, and clearing only after each data action succeeds", async () => {
+  const events = [];
+  const productAnalytics = {
+    trackEvent(name, properties) {
+      events.push({ name, properties });
+    }
+  };
+  const record = { id: "record-1", analysisType: "快速解析" };
+  const { controller } = createHarness({
+    confirmResult: "清空全部梦境",
+    productAnalytics,
+    records: [record],
+    dreamSync: {
+      getVisibleRecords: () => [record],
+      loadAllRecords: () => [record],
+      deleteRecord: async () => ({ deletedCount: 1, records: [] }),
+      clearCurrentRecords: async () => ({ deletedCount: 1, records: [] }),
+      clearCurrentLocalCache: () => ({ deletedCount: 0, records: [] }),
+      getCurrentUser: () => null
+    }
+  });
+
+  await controller.exportData();
+  await controller.deleteDreamRecord(record);
+  await controller.clearAllDreams();
+
+  assert.deepEqual(events, [
+    { name: "data_export_completed", properties: { record_count_bucket: "1" } },
+    { name: "dream_deleted", properties: { analysis_type: "quick" } },
+    { name: "all_dreams_cleared", properties: { record_count_bucket: "1" } }
+  ]);
+});
+
 test("clear all requires exact confirmation text before deleting records", async () => {
   let clearCalls = 0;
   const { controller } = createHarness({

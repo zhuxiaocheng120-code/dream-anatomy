@@ -168,6 +168,29 @@
       }
     }
 
+    function trackProductEvent(eventName, properties) {
+      if (!productAnalytics || typeof productAnalytics.trackEvent !== "function") return;
+      productAnalytics.trackEvent(eventName, properties);
+      if (typeof productAnalytics.flushEvents === "function") {
+        Promise.resolve(productAnalytics.flushEvents()).catch(() => {});
+      }
+    }
+
+    function getRecordCountBucket(recordCount) {
+      if (recordCount <= 0) return "0";
+      if (recordCount === 1) return "1";
+      if (recordCount <= 5) return "2-5";
+      if (recordCount <= 20) return "6-20";
+      return "21+";
+    }
+
+    function getAnalyticsAnalysisType(record) {
+      const analysisType = String(record && (record.analysisType || record.analysis_type) || "");
+      if (analysisType.includes("深度")) return "deep";
+      if (analysisType.includes("画像")) return "result_card";
+      return "quick";
+    }
+
     function getCurrentVersions() {
       return legalDocuments.getLegalVersions();
     }
@@ -396,6 +419,7 @@
 
       downloadJson(`dream-anatomy-export-${getTodayString()}.json`, exportDataPayload);
       setStatus("数据导出已准备好。");
+      trackProductEvent("data_export_completed", { record_count_bucket: getRecordCountBucket(records.length) });
       return exportDataPayload;
     }
 
@@ -420,6 +444,7 @@
           app.showDreamJournalList();
         }
         setStatus("这条梦境已删除。");
+        trackProductEvent("dream_deleted", { analysis_type: getAnalyticsAnalysisType(record) });
         return result;
       } catch (error) {
         setStatus("删除失败，请稍后再试。");
@@ -450,6 +475,7 @@
         app.showDreamJournalList();
       }
       setStatus(`已清空 ${result.deletedCount || 0} 条梦境。`);
+      trackProductEvent("all_dreams_cleared", { record_count_bucket: getRecordCountBucket(records.length) });
       return result;
     }
 

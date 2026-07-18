@@ -121,6 +121,15 @@ const adminAnalyticsController = window.AdminAnalytics
       }
     })
   : null;
+const productAnalyticsController = window.DreamProductAnalytics
+  && typeof window.DreamProductAnalytics.createProductAnalyticsController === "function"
+  ? window.DreamProductAnalytics.createProductAnalyticsController({
+      auth: window.DreamAnatomyAuth || {},
+      fetch,
+      localStorage,
+      sessionStorage
+    })
+  : null;
 const privacyDataController = window.DreamPrivacyData
   && typeof window.DreamPrivacyData.createPrivacyDataController === "function"
   ? window.DreamPrivacyData.createPrivacyDataController({
@@ -145,11 +154,74 @@ const privacyDataController = window.DreamPrivacyData
         view: privacyDataView
       },
       legalDocuments: window.DreamLegalDocuments,
+      productAnalytics: productAnalyticsController,
       runtimeEnv: window.DREAM_ANATOMY_ENV || {},
       storage: localStorage,
       storageKey: dreamJournalStorageKey
     })
   : null;
+
+function flushProductAnalytics() {
+  if (productAnalyticsController && typeof productAnalyticsController.flushEvents === "function") {
+    Promise.resolve(productAnalyticsController.flushEvents()).catch(() => {});
+  }
+}
+
+function trackProductEvent(eventName, properties) {
+  if (!productAnalyticsController || typeof productAnalyticsController.trackEvent !== "function") {
+    return false;
+  }
+
+  const tracked = productAnalyticsController.trackEvent(eventName, properties);
+  flushProductAnalytics();
+  return tracked;
+}
+
+function getAnalyticsViewName(viewName) {
+  if (viewName === "diary") return "journal";
+  return ["home", "quick", "quick-result", "journal", "dream-detail", "privacy-data", "auth"].includes(viewName)
+    ? viewName
+    : "";
+}
+
+function trackProductView(viewName) {
+  const analyticsViewName = getAnalyticsViewName(viewName);
+  if (!analyticsViewName || !productAnalyticsController || typeof productAnalyticsController.trackView !== "function") {
+    return false;
+  }
+
+  const tracked = productAnalyticsController.trackView(analyticsViewName);
+  flushProductAnalytics();
+  return tracked;
+}
+
+function getRecordCountBucket(recordCount) {
+  if (recordCount <= 0) return "0";
+  if (recordCount === 1) return "1";
+  if (recordCount <= 5) return "2-5";
+  if (recordCount <= 20) return "6-20";
+  return "21+";
+}
+
+function getAnalyticsAnalysisType(record) {
+  const analysisType = String(record && (record.analysisType || record.analysis_type) || "");
+  if (analysisType.includes("深度")) return "deep";
+  if (analysisType.includes("画像")) return "result_card";
+  return "quick";
+}
+
+function getInputLengthBucket(length) {
+  if (length <= 50) return "1-50";
+  if (length <= 150) return "51-150";
+  if (length <= 500) return "151-500";
+  return "500+";
+}
+
+if (productAnalyticsController && sessionStorage.getItem("dreamAnatomy.productAnalytics.appOpened") !== "true") {
+  if (trackProductEvent("app_opened")) {
+    sessionStorage.setItem("dreamAnatomy.productAnalytics.appOpened", "true");
+  }
+}
 
 function updateJournalSyncStatus(message) {
   if (journalSyncStatus) {
@@ -228,6 +300,16 @@ function showView(viewName) {
   });
 
   window.scrollTo({ top: 0, behavior: "smooth" });
+
+  if (viewName !== "admin") {
+    trackProductView(viewName);
+  }
+
+  if (viewName === "diary") {
+    trackProductEvent("journal_opened", {
+      record_count_bucket: getRecordCountBucket(loadDreamRecords().length)
+    });
+  }
 }
 
 function applyDeepGuidanceFeatureState() {
@@ -1119,6 +1201,10 @@ function openDreamDetail(recordId, fallbackRow) {
   }
 
   renderDreamDetail(recordId, fallbackRow);
+  const record = loadDreamRecords().find((item) => String(item.id) === String(recordId)) || fallbackRow;
+  if (record) {
+    trackProductEvent("dream_detail_opened", { analysis_type: getAnalyticsAnalysisType(record) });
+  }
   window.scrollTo({ top: 0, behavior: "smooth" });
 }
 
@@ -1181,6 +1267,23 @@ function renderDreamJournal(records = loadDreamRecords()) {
 }
 
 if (quickForm) {
+  let quickInputStarted = false;
+
+  quickDream.addEventListener("input", () => {
+    if (quickInputStarted || !quickDream.value.trim()) return;
+    quickInputStarted = true;
+    trackProductEvent("dream_input_started", { entry_point: "nav" });
+  });
+
+  quickDream.addEventListener("blur", () => {
+    const rawDreamText = quickDream.value.trim();
+    if (!quickInputStarted || !rawDreamText) return;
+    trackProductEvent("dream_input_abandoned", {
+      length_bucket: getInputLengthBucket(rawDreamText.length),
+      view_name: getAnalyticsViewName(getCurrentView()) || "quick"
+    });
+  });
+
   quickForm.addEventListener("submit", async (event) => {
     event.preventDefault();
 
@@ -1223,13 +1326,17 @@ if (quickForm) {
       status.textContent = "正在整理梦境线索……";
     }
 
+    trackProductEvent("analysis_requested", { analysis_type: "quick" });
+
     let quickDecode;
     let statusPrefix = "已生成快速解析结果";
+    let analysisSource = "ai_generated";
 
     try {
       quickDecode = await requestQuickDecode(rawDreamText);
     } catch (error) {
       if (error.isValidationError) {
+        trackProductEvent("analysis_failed", { analysis_type: "quick", error_code: error.code || "INVALID_REQUEST" });
         if (status) {
           status.textContent = "梦境内容暂时无法提交，可以检查文字长度后再试。";
         }
@@ -1240,6 +1347,7 @@ if (quickForm) {
       }
 
       if (error.isIncompleteGeneration) {
+        trackProductEvent("analysis_failed", { analysis_type: "quick", error_code: error.code || "GENERATION_INCOMPLETE" });
         quickResult.hidden = true;
         if (quickResultCard) {
           quickResultCard.textContent = "";
@@ -1254,6 +1362,7 @@ if (quickForm) {
       }
 
       if (error.isAccessControlledError) {
+        trackProductEvent("analysis_failed", { analysis_type: "quick", error_code: error.code || "REQUEST_FAILED" });
         quickResult.hidden = true;
         if (quickResultCard) {
           quickResultCard.textContent = "";
@@ -1269,7 +1378,14 @@ if (quickForm) {
 
       quickDecode = generateMockQuickDecode(rawDreamText);
       statusPrefix = "当前无法连接 AI，已为你展示本地示例结果";
+      analysisSource = "fallback";
     }
+
+    trackProductEvent("analysis_completed", {
+      analysis_type: "quick",
+      has_result_card: Boolean(quickDecode.dreamResultCard),
+      source: analysisSource
+    });
 
     try {
       const dreamRecord = createDreamRecord(rawDreamText, quickDecode);
@@ -1280,6 +1396,11 @@ if (quickForm) {
       quickResult.hidden = false;
       renderDreamResultCardMount(quickResultCard, rawDreamText, quickDecode, savedRecord);
       renderDreamJournal(saveResult.records);
+      trackProductEvent("result_viewed", { analysis_type: "quick", source: analysisSource });
+      trackProductEvent("dream_saved", {
+        analysis_type: "quick",
+        sync_status: saveResult.syncStatus === "synced" ? "synced" : saveResult.syncStatus === "pending_sync" ? "pending_sync" : "local_only"
+      });
       if (status) {
         status.textContent = [getSaveStatusMessage(saveResult.syncStatus, statusPrefix), formatRemainingUsage(quickDecode.usage)]
           .filter(Boolean)
@@ -1297,6 +1418,7 @@ if (quickForm) {
   });
 
   quickForm.addEventListener("reset", () => {
+    quickInputStarted = false;
     quickResult.hidden = true;
     if (quickResultCard) {
       quickResultCard.textContent = "";

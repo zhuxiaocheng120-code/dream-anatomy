@@ -116,6 +116,17 @@
     return window.DreamPrivacyData.validateRegistrationConsent();
   }
 
+  function trackProductEvent(eventName, properties) {
+    if (!window.DreamProductAnalytics || typeof window.DreamProductAnalytics.trackEvent !== "function") {
+      return;
+    }
+
+    window.DreamProductAnalytics.trackEvent(eventName, properties);
+    if (typeof window.DreamProductAnalytics.flushEvents === "function") {
+      Promise.resolve(window.DreamProductAnalytics.flushEvents()).catch(() => {});
+    }
+  }
+
   function showAuthPanel(mode) {
     authPanels.forEach((panel) => {
       const isActive = panel.dataset.authPanel === mode;
@@ -194,6 +205,8 @@
     const email = getFormEmail(registerForm);
     const password = getFormPassword(registerForm);
 
+    trackProductEvent("signup_started", { entry_point: "auth" });
+
     const { data, error } = await client.auth.signUp({
       email,
       password,
@@ -215,6 +228,7 @@
       return;
     }
 
+    trackProductEvent("signup_completed", { method: "email" });
     registerForm.reset();
     setStatus("验证邮件已发送，请完成邮箱验证后登录。\n梦境将能够安全保存并跨设备同步。", "success");
     showAuthPanel("login");
@@ -250,6 +264,7 @@
 
     renderSession(data ? data.session : null);
     notifyAuthUser(data ? data.session : null, "SIGNED_IN");
+    trackProductEvent("login_completed", { method: "email" });
     loginForm.reset();
     setStatus("欢迎回来，继续探索你的梦境。", "success");
   }

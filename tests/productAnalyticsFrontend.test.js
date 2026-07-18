@@ -1,5 +1,7 @@
 const assert = require("node:assert/strict");
+const fs = require("node:fs");
 const test = require("node:test");
+const vm = require("node:vm");
 
 const ProductAnalytics = require("../src/productAnalytics");
 
@@ -243,4 +245,71 @@ test("deleting authenticated analytics persists disabled consent", async () => {
     row: { user_id: "user-1", enabled: false },
     options: { onConflict: "user_id" }
   }]);
+});
+
+test("explicit auth submits track conversion events but session restoration does not", async () => {
+  const code = fs.readFileSync("src/auth.js", "utf8");
+  const events = [];
+  const nodes = new Map();
+  const email = { value: "person@example.com" };
+  const password = { value: "safe-password" };
+  const createNode = () => ({
+    dataset: {},
+    hidden: false,
+    disabled: false,
+    value: "",
+    classList: { toggle() {} },
+    addEventListener(type, listener) { this.listeners[type] = listener; },
+    focus() {},
+    listeners: {},
+    querySelector(selector) {
+      if (selector === "input[name='email']") return email;
+      if (selector === "input[name='password']") return password;
+      return createNode();
+    },
+    reset() {}
+  });
+  const getNode = (selector) => {
+    if (!nodes.has(selector)) nodes.set(selector, createNode());
+    return nodes.get(selector);
+  };
+  const client = {
+    auth: {
+      getSession: async () => ({ data: { session: { user: { id: "user-1", email: "person@example.com" } } } }),
+      onAuthStateChange() {},
+      signInWithPassword: async () => ({
+        data: { session: { user: { id: "user-1", email: "person@example.com", email_confirmed_at: "yes" } }, user: { email_confirmed_at: "yes" } },
+        error: null
+      }),
+      signOut: async () => ({ error: null }),
+      signUp: async () => ({ data: {}, error: null })
+    }
+  };
+  let ready = Promise.resolve();
+  const context = {
+    CustomEvent: function CustomEvent(type, init) { return { type, detail: init && init.detail }; },
+    document: {
+      addEventListener(type, listener) { if (type === "DOMContentLoaded") ready = Promise.resolve(listener()); },
+      querySelector: getNode,
+      querySelectorAll() { return []; }
+    },
+    window: {
+      DREAM_ANATOMY_ENV: { SUPABASE_URL: "https://example.supabase.co", SUPABASE_ANON_KEY: "anon" },
+      DreamProductAnalytics: { trackEvent(name, properties) { events.push({ name, properties }); } },
+      dispatchEvent() {},
+      location: { origin: "https://example.test" },
+      supabase: { createClient: () => client }
+    }
+  };
+  context.window.window = context.window;
+  vm.runInNewContext(code, context);
+  await ready;
+  await nodes.get("[data-auth-register-form]").listeners.submit({ preventDefault() {} });
+  await nodes.get("[data-auth-login-form]").listeners.submit({ preventDefault() {} });
+
+  assert.deepEqual(JSON.parse(JSON.stringify(events)), [
+    { name: "signup_started", properties: { entry_point: "auth" } },
+    { name: "signup_completed", properties: { method: "email" } },
+    { name: "login_completed", properties: { method: "email" } }
+  ]);
 });

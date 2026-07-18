@@ -256,6 +256,37 @@ function createAppIntegrationHarness(options = {}) {
     confirm: () => false,
     scrollTo() {}
   };
+  const analyticsCalls = [];
+  let lastAnalyticsView = "";
+  const sessionStorageItems = new Map();
+  const sessionStorage = {
+    getItem(key) {
+      return sessionStorageItems.has(key) ? sessionStorageItems.get(key) : null;
+    },
+    removeItem(key) {
+      sessionStorageItems.delete(key);
+    },
+    setItem(key, value) {
+      sessionStorageItems.set(key, String(value));
+    }
+  };
+  const productAnalytics = options.productAnalytics || {
+    flushEvents() {},
+    trackEvent(name, properties) {
+      analyticsCalls.push({ name, properties });
+    },
+    trackView(viewName) {
+      if (viewName === lastAnalyticsView) return false;
+      lastAnalyticsView = viewName;
+      analyticsCalls.push({ name: "view_opened", properties: { view_name: viewName } });
+      return true;
+    }
+  };
+  windowRef.DreamProductAnalytics = {
+    createProductAnalyticsController() {
+      return productAnalytics;
+    }
+  };
   windowRef.DreamAnatomyFeatureFlags = {
     DEEP_GUIDANCE_ENABLED: options.deepGuidanceEnabled !== false
   };
@@ -348,6 +379,7 @@ function createAppIntegrationHarness(options = {}) {
 
   windowRef.document = documentRef;
   windowRef.localStorage = localStorage;
+  windowRef.sessionStorage = sessionStorage;
 
   if (options.authSession !== undefined) {
     windowRef.DreamAnatomyAuth = {
@@ -369,6 +401,7 @@ function createAppIntegrationHarness(options = {}) {
       throw new Error("Unexpected fetch request");
     }),
     localStorage,
+    sessionStorage,
     window: windowRef,
     Intl
   };
@@ -385,6 +418,7 @@ function createAppIntegrationHarness(options = {}) {
     deepSaveStatus,
     dreamDetail,
     dreamDetailContent,
+    analyticsCalls,
     dreamJournalCalls,
     generateDeepReportButton,
     guidedActions,
@@ -712,6 +746,70 @@ test("app.js fallback keeps New Dream and empty state usable without DreamJourna
   assert.equal(harness.viewPanels[1].hidden, false);
   assert.equal(harness.viewPanels[2].hidden, true);
   assert.equal(harness.viewPanels[3].hidden, true);
+});
+
+test("tracks opt-in quick, journal, and detail behavior without dream content", async () => {
+  const harness = createAppIntegrationHarness({
+    records: [createRecord({ id: "detail-record" })],
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        analysis: createQuickAnalysisFixture(),
+        dreamResultCard: createResultCardFixture(),
+        dreamResultCardStatus: "ai_generated"
+      })
+    })
+  });
+
+  harness.windowRef.DreamAnatomyApp.showView("quick");
+  harness.windowRef.DreamAnatomyApp.showView("quick");
+  harness.windowRef.DreamAnatomyApp.showView("diary");
+  harness.windowRef.DreamAnatomyApp.showView("admin");
+  harness.windowRef.DreamAnatomyApp.openDreamDetail("detail-record");
+
+  harness.quickDream.value = "我在学校走廊里一直找不到教室，门发着光。";
+  harness.quickDream.trigger("input");
+  harness.quickDream.trigger("input");
+  harness.quickDream.trigger("blur");
+  await harness.quickForm.trigger("submit");
+
+  const names = harness.analyticsCalls.map((call) => call.name);
+  assert.equal(names.filter((name) => name === "app_opened").length, 1);
+  assert.equal(names.filter((name) => name === "view_opened").length, 2);
+  assert.equal(names.includes("journal_opened"), true);
+  assert.equal(names.includes("dream_detail_opened"), true);
+  assert.equal(names.filter((name) => name === "dream_input_started").length, 1);
+  assert.equal(names.includes("dream_input_abandoned"), true);
+  assert.equal(names.filter((name) => name === "analysis_requested").length, 1);
+  assert.equal(names.includes("analysis_completed"), true);
+  assert.equal(names.includes("result_viewed"), true);
+  assert.equal(names.filter((name) => name === "dream_saved").length, 1);
+  assert.doesNotMatch(JSON.stringify(harness.analyticsCalls), /学校走廊|梦见/);
+  assert.deepEqual(
+    JSON.parse(JSON.stringify(harness.analyticsCalls.find((call) => call.name === "dream_input_abandoned").properties)),
+    { length_bucket: "1-50", view_name: "quick" }
+  );
+});
+
+test("tracks a failed quick analysis without completion", async () => {
+  const harness = createAppIntegrationHarness({
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: false,
+      status: 401,
+      json: async () => ({ error: { code: "AUTH_INVALID", message: "登录状态已失效，请重新登录。" } })
+    })
+  });
+
+  harness.quickDream.value = "我梦见自己在雨里迷路。";
+  await harness.quickForm.trigger("submit");
+
+  const names = harness.analyticsCalls.map((call) => call.name);
+  assert.equal(names.includes("analysis_failed"), true);
+  assert.equal(names.includes("analysis_completed"), false);
 });
 
 test("quick decode renders Dream Result Card on the current result page and saves it", async () => {
