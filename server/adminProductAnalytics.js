@@ -67,6 +67,7 @@ async function loadProductEvents(client, options = {}) {
     .from("product_events")
     .select("*")
     .gte("occurred_at", getRangeStart(range, now))
+    .lte("occurred_at", now.toISOString())
     .order("occurred_at", { ascending: true });
 
   if (response.error) throw response.error;

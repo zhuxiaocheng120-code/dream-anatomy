@@ -12,12 +12,27 @@ function createQueryClient(rows = []) {
   return {
     from(tableName) {
       assert.equal(tableName, "product_events");
+      let lowerBound = null;
+      let upperBound = null;
       const builder = {
         select() { return builder; },
-        gte() { return builder; },
+        gte(column, value) {
+          assert.equal(column, "occurred_at");
+          lowerBound = value;
+          return builder;
+        },
+        lte(column, value) {
+          assert.equal(column, "occurred_at");
+          upperBound = value;
+          return builder;
+        },
         order() { return builder; },
         then(resolve, reject) {
-          return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
+          const filteredRows = rows.filter((row) => (
+            (!lowerBound || row.occurred_at >= lowerBound)
+            && (!upperBound || row.occurred_at <= upperBound)
+          ));
+          return Promise.resolve({ data: filteredRows, error: null }).then(resolve, reject);
         }
       };
       return builder;
@@ -62,6 +77,20 @@ test("summarizes opted-in product events without exposing hashes", async () => {
     { label: "view_opened", count: 1 }
   ]);
   assert.doesNotMatch(JSON.stringify(summary), /private-hash/);
+});
+
+test("excludes future-dated client events from selected ranges", async () => {
+  const summary = await getProductAnalyticsSummary(createQueryClient([
+    createEvent({ occurred_at: "2026-07-19T11:59:59.999Z" }),
+    createEvent({
+      occurred_at: "2026-07-20T00:00:00.000Z",
+      principal_hash: "future-principal-private-hash"
+    })
+  ]), { now: new Date("2026-07-19T12:00:00.000Z") });
+
+  assert.equal(summary.approximatePrincipals, 1);
+  assert.deepEqual(summary.eventDistribution, [{ label: "app_opened", count: 1 }]);
+  assert.doesNotMatch(JSON.stringify(summary), /future-principal-private-hash/);
 });
 
 test("counts product funnel stages within the same session", async () => {

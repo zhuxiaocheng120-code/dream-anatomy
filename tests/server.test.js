@@ -1480,6 +1480,7 @@ function createProductAnalyticsQueryClient(rows = [], inserted = []) {
         },
         select() { return builder; },
         gte() { return builder; },
+        lte() { return builder; },
         order() { return builder; },
         then(resolve, reject) {
           return Promise.resolve({ data: rows, error: null }).then(resolve, reject);
