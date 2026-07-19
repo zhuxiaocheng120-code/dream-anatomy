@@ -199,12 +199,24 @@
       </section>
 
       <section class="view-panel work-panel" data-view="quick" aria-labelledby="quick-title" hidden>
-        <div class="panel-copy">
-          <p class="eyebrow">Quick Dream Decode</p>
-          <h2 id="quick-title">快速解析</h2>
-          <p class="summary">
-            刚醒来的梦通常是碎片化的。你可以随便写，不需要完整句子。例如：学校、考试、找不到路、下雨、妈妈、黑狗、很着急。
-          </p>
+        <div class="page-visual-shell quick-workbench-shell">
+          <div class="panel-copy page-visual-copy">
+            <p class="eyebrow">Quick Dream Decode</p>
+            <h2 id="quick-title">快速解析</h2>
+            <p class="summary">
+              刚醒来的梦通常是碎片化的。你可以随便写，不需要完整句子。例如：学校、考试、找不到路、下雨、妈妈、黑狗、很着急。
+            </p>
+          </div>
+          <aside class="work-panel-ornament quick-workbench-note">
+            <svg class="archive-divider-sketch" viewBox="0 0 180 120" aria-hidden="true" data-page-visual="quick-workbench">
+              <path d="M28 22h92c14 0 25 11 25 25v48H52c-13 0-24-11-24-24z" />
+              <path d="M50 45h70" />
+              <path d="M50 62h52" />
+              <path d="M50 79h66" />
+              <path d="M137 39c7 11 8 25 2 38" />
+            </svg>
+            <p>情绪有时比解释更早接近真相。</p>
+          </aside>
         </div>
 
         <form class="dream-form" data-quick-form>
@@ -270,12 +282,24 @@
       </section>
 
       <section class="view-panel work-panel" data-view="guided" aria-labelledby="guided-title" hidden>
-        <div class="panel-copy">
-          <p class="eyebrow">Guided Dream Analysis</p>
-          <h2 id="guided-title">深度引导</h2>
-          <p class="summary">
-            这里会先帮助你停留在梦的细节里，而不是立刻解释。你可以简单回答，不需要写得很完整；不想回答的问题可以跳过。
-          </p>
+        <div class="page-visual-shell guided-path-shell">
+          <div class="panel-copy page-visual-copy">
+            <p class="eyebrow">Guided Dream Analysis</p>
+            <h2 id="guided-title">深度引导</h2>
+            <p class="summary">
+              这里会先帮助你停留在梦的细节里，而不是立刻解释。你可以简单回答，不需要写得很完整；不想回答的问题可以跳过。
+            </p>
+          </div>
+          <aside class="work-panel-ornament guided-path-note">
+            <svg class="archive-divider-sketch" viewBox="0 0 180 120" aria-hidden="true" data-page-visual="guided-path">
+              <circle cx="70" cy="60" r="34" />
+              <circle cx="70" cy="60" r="17" />
+              <path d="M105 38c17 4 30 16 37 32" />
+              <path d="M104 82c15-5 27-15 35-29" />
+              <path d="M42 98c-10-9-16-21-17-34" />
+            </svg>
+            <p>你可以慢一点，让问题先陪你靠近梦。</p>
+          </aside>
         </div>
 
         <form class="dream-form guided-form" data-guided-form>
@@ -352,12 +376,25 @@
 
       <section class="view-panel work-panel" data-view="diary" aria-labelledby="diary-title" hidden>
         <div class="dream-journal-page-heading">
-          <div class="panel-copy">
-            <p class="eyebrow">Dream Archive</p>
-            <h2 id="diary-title">梦境日记</h2>
-            <p class="summary">你的每一个梦，都值得被温柔收藏。</p>
-            <p class="status journal-sync-status" data-journal-sync-status aria-live="polite"></p>
-            <p class="status dream-journal-loading" data-journal-loading aria-live="polite"></p>
+          <div class="page-visual-shell journal-archive-shell">
+            <div class="panel-copy page-visual-copy">
+              <p class="eyebrow">Dream Archive</p>
+              <h2 id="diary-title">梦境日记</h2>
+              <p class="summary">你的每一个梦，都值得被温柔收藏。</p>
+              <p class="status journal-sync-status" data-journal-sync-status aria-live="polite"></p>
+              <p class="status dream-journal-loading" data-journal-loading aria-live="polite"></p>
+            </div>
+            <aside class="work-panel-ornament journal-archive-rail">
+              <svg class="archive-divider-sketch" viewBox="0 0 180 120" aria-hidden="true" data-page-visual="journal-archive">
+                <path d="M34 34h112v62H34z" />
+                <path d="M34 50h112" />
+                <path d="M54 69h34" />
+                <path d="M54 83h72" />
+                <path d="M110 28v16" />
+                <path d="M127 28v16" />
+              </svg>
+              <p>把梦写下来，是给内在经验留一张索引卡。</p>
+            </aside>
           </div>
           <button class="secondary-button" type="button" data-journal-new-dream>记录新梦</button>
         </div>
@@ -390,6 +427,12 @@
               <p class="eyebrow">梦境详情</p>
               <h3>梦境记录详情</h3>
             </div>
+            <svg class="detail-manuscript-mark" viewBox="0 0 150 72" aria-hidden="true" data-page-visual="detail-manuscript">
+              <path d="M18 45c28-13 51-13 80 0 14 6 25 6 36-2" />
+              <path d="M36 24h74" />
+              <path d="M46 36h54" />
+              <path d="M114 18c9 9 13 19 12 31" />
+            </svg>
             <button class="secondary-button" type="button" data-back-to-journal>返回梦境日记</button>
           </div>
           <div class="dream-detail-content" data-dream-detail-content></div>
@@ -467,11 +510,24 @@
 
       <section class="view-panel work-panel privacy-data-panel" data-view="privacy-data" aria-labelledby="privacy-data-title" hidden>
         <div data-privacy-data-view>
-          <div class="panel-copy">
-            <p class="eyebrow">Privacy & Data</p>
-            <h2 id="privacy-data-title">隐私与数据</h2>
-            <p class="summary">管理法律文件确认、梦境导出、梦境删除和账户数据。</p>
-            <p class="status" data-privacy-status aria-live="polite"></p>
+          <div class="page-visual-shell privacy-ledger-shell">
+            <div class="panel-copy page-visual-copy">
+              <p class="eyebrow">Privacy & Data</p>
+              <h2 id="privacy-data-title">隐私与数据</h2>
+              <p class="summary">管理法律文件确认、梦境导出、梦境删除和账户数据。</p>
+              <p class="status" data-privacy-status aria-live="polite"></p>
+            </div>
+            <aside class="work-panel-ornament privacy-ledger-note">
+              <svg class="archive-divider-sketch" viewBox="0 0 180 120" aria-hidden="true" data-page-visual="privacy-ledger">
+                <path d="M45 24h90v72H45z" />
+                <path d="M62 44h56" />
+                <path d="M62 59h42" />
+                <path d="M62 74h62" />
+                <path d="M43 39c-11 9-14 25-7 38" />
+                <path d="M137 39c11 9 14 25 7 38" />
+              </svg>
+              <p>重要操作应该清楚地被看见，也应该被慎重确认。</p>
+            </aside>
           </div>
           <div data-legal-document-view></div>
         </div>
@@ -486,6 +542,14 @@
             <p class="eyebrow">Dream Anatomy Account</p>
             <h2 id="auth-title">登录 / 注册</h2>
           </div>
+          <svg class="auth-archive-mark" viewBox="0 0 82 82" aria-hidden="true" data-page-visual="auth-seal">
+            <circle cx="41" cy="41" r="28" />
+            <circle cx="41" cy="41" r="14" />
+            <path d="M41 17v12" />
+            <path d="M41 53v12" />
+            <path d="M17 41h12" />
+            <path d="M53 41h12" />
+          </svg>
           <button class="text-button auth-close-button" type="button" aria-label="关闭登录窗口" data-auth-close>关闭</button>
         </div>
 
