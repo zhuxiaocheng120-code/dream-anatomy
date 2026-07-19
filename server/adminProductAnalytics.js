@@ -127,21 +127,48 @@ function retentionMetric(principalDates, offsetDays) {
   return { status: "ok", cohortSize, retainedPrincipals, rate: retainedPrincipals / cohortSize };
 }
 
-function summarizeRetention(events = []) {
+function summarizeRetention(events = [], options = {}) {
   const principalDates = new Map();
+  const principalFirstSeen = new Map();
+  const rangeStartMs = options.rangeStart ? new Date(options.rangeStart).getTime() : null;
+  const nowMs = options.now ? new Date(options.now).getTime() : null;
   for (const event of events) {
+    const occurredAt = new Date(event.occurred_at);
+    const occurredMs = occurredAt.getTime();
     const dateKey = toUtcDateKey(event.occurred_at);
-    if (!event.principal_hash || !dateKey) continue;
+    if (!event.principal_hash || !dateKey || Number.isNaN(occurredMs)) continue;
     const dates = principalDates.get(event.principal_hash) || new Set();
     dates.add(dateKey);
     principalDates.set(event.principal_hash, dates);
+
+    const firstSeen = principalFirstSeen.get(event.principal_hash);
+    if (firstSeen === undefined || occurredMs < firstSeen) {
+      principalFirstSeen.set(event.principal_hash, occurredMs);
+    }
   }
+
+  if (rangeStartMs !== null || nowMs !== null) {
+    for (const [principalHash, firstSeen] of principalFirstSeen.entries()) {
+      if (
+        (rangeStartMs !== null && firstSeen < rangeStartMs)
+        || (nowMs !== null && firstSeen > nowMs)
+      ) {
+        principalDates.delete(principalHash);
+      }
+    }
+  }
+
   return { d1: retentionMetric(principalDates, 1), d7: retentionMetric(principalDates, 7) };
 }
 
 async function getProductAnalyticsRetention(client, options = {}) {
-  const { range, events } = await loadProductEvents(client, options, { includeHistorical: true });
-  return { sampleLabel: SAMPLE_LABEL, range, ...summarizeRetention(events) };
+  const now = options.now || new Date();
+  const { range, events } = await loadProductEvents(client, { ...options, now }, { includeHistorical: true });
+  return {
+    sampleLabel: SAMPLE_LABEL,
+    range,
+    ...summarizeRetention(events, { rangeStart: getRangeStart(range, now), now: now.toISOString() })
+  };
 }
 
 module.exports = {

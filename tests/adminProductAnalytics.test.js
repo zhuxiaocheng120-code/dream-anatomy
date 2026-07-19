@@ -147,7 +147,36 @@ test("retention uses each principal's first event instead of first event in the 
     now: new Date("2026-07-19T12:00:00.000Z")
   });
 
-  assert.deepEqual(retention.d1, { status: "ok", cohortSize: 5, retainedPrincipals: 0, rate: 0 });
+  assert.deepEqual(retention.d1, { status: "insufficient_data" });
+  assert.deepEqual(retention.d7, { status: "insufficient_data" });
+});
+
+test("retention scopes cohorts to principals whose true first event is in the selected range", async () => {
+  const events = [
+    ...Array.from({ length: 5 }, (_, index) => createEvent({
+      principal_hash: `older-principal-${index}`,
+      occurred_at: "2026-05-01T00:00:00.000Z"
+    })),
+    ...Array.from({ length: 5 }, (_, index) => createEvent({
+      principal_hash: `older-principal-${index}`,
+      occurred_at: "2026-07-18T00:00:00.000Z"
+    })),
+    ...Array.from({ length: 5 }, (_, index) => createEvent({
+      principal_hash: `new-principal-${index}`,
+      occurred_at: "2026-07-15T00:00:00.000Z"
+    })),
+    ...Array.from({ length: 5 }, (_, index) => createEvent({
+      principal_hash: `new-principal-${index}`,
+      occurred_at: "2026-07-16T00:00:00.000Z"
+    }))
+  ];
+
+  const retention = await getProductAnalyticsRetention(createQueryClient(events), {
+    range: "7d",
+    now: new Date("2026-07-19T12:00:00.000Z")
+  });
+
+  assert.deepEqual(retention.d1, { status: "ok", cohortSize: 5, retainedPrincipals: 5, rate: 1 });
   assert.deepEqual(retention.d7, { status: "ok", cohortSize: 5, retainedPrincipals: 0, rate: 0 });
 });
 

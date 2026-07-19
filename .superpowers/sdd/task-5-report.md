@@ -93,3 +93,7 @@ After tightening the product event allowlists, rejecting authenticated payloads 
 ### Final Re-Review Fix
 
 The final reviewer found two additional Important findings: authenticated product analytics deletion did not pass the active user's Bearer token, and authenticated event writes trusted the request consent flag without checking the stored `product_analytics_preferences` row. Regression tests now assert authenticated deletion sends Authorization and authenticated event writes require `enabled = true` for the verified user. `npm test -- tests/productAnalyticsFrontend.test.js` reported 23 passing and 0 failing; `npm test -- tests/server.test.js` reported 42 passing and 0 failing with localhost listener permission.
+
+### Final Re-Review Retention Fix
+
+The final re-review found one Important reporting issue: retention used all-time cohorts while displaying a selected `7d`/`30d`/`90d` range. A regression test now covers principals whose true first event is outside the selected range and principals whose true first event is inside it. Retention still loads historical events to identify true first-touch dates, then scopes the cohort to principals first seen within the selected admin range. `npm test -- tests/adminProductAnalytics.test.js` reported 8 passing and 0 failing.
