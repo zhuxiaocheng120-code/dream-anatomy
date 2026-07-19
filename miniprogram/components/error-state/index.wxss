@@ -1,0 +1,6 @@
+.error-state {
+  color: #7d5048;
+  font-size: 26rpx;
+  line-height: 1.6;
+  background: rgba(255, 246, 239, 0.9);
+}

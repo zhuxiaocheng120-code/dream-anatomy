@@ -1,0 +1,8 @@
+{
+  "navigationBarTitleText": "梦境详情",
+  "usingComponents": {
+    "confirmation-modal": "/components/confirmation-modal/index",
+    "error-state": "/components/error-state/index",
+    "result-card": "/components/result-card/index"
+  }
+}

@@ -1,0 +1,10 @@
+<view class="legal-document">
+  <view class="title">{{document.title}}</view>
+  <view class="small muted">版本：{{document.version}}</view>
+  <view class="section stack">
+    <view wx:for="{{document.sections}}" wx:key="title" class="card">
+      <view class="section-title">{{item.title}}</view>
+      <view wx:for="{{item.paragraphs}}" wx:key="*this" class="paragraph">{{item}}</view>
+    </view>
+  </view>
+</view>

@@ -1,0 +1,19 @@
+{
+  "pages": [
+    "pages/home/index",
+    "pages/quick/index",
+    "pages/result/index",
+    "pages/journal/index",
+    "pages/detail/index",
+    "pages/privacy/index",
+    "pages/profile/index"
+  ],
+  "window": {
+    "navigationBarTitleText": "析梦 Dream Anatomy",
+    "navigationBarBackgroundColor": "#f7f2ea",
+    "navigationBarTextStyle": "black",
+    "backgroundColor": "#f7f2ea"
+  },
+  "style": "v2",
+  "sitemapLocation": "sitemap.json"
+}

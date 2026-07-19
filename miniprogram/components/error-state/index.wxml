@@ -1,0 +1,3 @@
+<view wx:if="{{message}}" class="error-state card">
+  <text>{{message}}</text>
+</view>

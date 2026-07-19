@@ -1,0 +1,10 @@
+<view wx:if="{{visible}}" class="modal-mask">
+  <view class="modal card">
+    <view class="modal-title">{{title}}</view>
+    <view class="modal-message">{{message}}</view>
+    <view class="modal-actions">
+      <button class="button secondary" bindtap="cancel">取消</button>
+      <button class="button" bindtap="confirm">{{confirmText}}</button>
+    </view>
+  </view>
+</view>

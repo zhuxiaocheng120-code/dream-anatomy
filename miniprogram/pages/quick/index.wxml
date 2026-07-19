@@ -1,0 +1,22 @@
+<view class="page">
+  <view class="eyebrow">快速解析</view>
+  <view class="title">写下梦境碎片</view>
+  <view class="subtitle">可以只写几个画面、人物或醒来后的感受。</view>
+
+  <textarea class="input section" value="{{dreamText}}" maxlength="5000" placeholder="例如：我梦见自己在很长的走廊里找一间教室……" bindinput="onDreamInput"></textarea>
+
+  <checkbox-group class="section consent" bindchange="toggleAgreement">
+    <label class="small muted">
+      <checkbox value="accepted" checked="{{agreed}}" />
+      我已阅读并同意
+      <text class="link" bindtap="openTerms">《用户协议》</text>
+      <text class="link" bindtap="openPrivacy">《隐私政策》</text>
+      和
+      <text class="link" bindtap="openAi">《AI 使用说明》</text>
+    </label>
+  </checkbox-group>
+
+  <error-state message="{{errorMessage}}"></error-state>
+  <loading-state wx:if="{{submitting}}" text="正在整理梦境线索……"></loading-state>
+  <button class="button section" disabled="{{submitting}}" bindtap="submit">保存并解析</button>
+</view>
