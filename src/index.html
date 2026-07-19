@@ -82,18 +82,52 @@
 
         <div class="dream-home-layout" data-dream-home hidden>
           <header class="dream-home-welcome">
-            <div>
-              <p class="eyebrow">Dream Home</p>
-              <h1><span data-dream-home-greeting></span>，欢迎回到 Dream Home</h1>
-              <p class="dream-home-intro">这里收藏着你曾经记住的梦。</p>
+            <div class="dream-home-hero-copy">
+              <div>
+                <p class="eyebrow">Dream Home</p>
+                <h1><span data-dream-home-greeting></span>，欢迎回到 Dream Home</h1>
+                <p class="dream-home-intro">这里收藏着你曾经记住的梦。</p>
+              </div>
+              <p class="dream-home-email" data-dream-home-email></p>
             </div>
-            <p class="dream-home-email" data-dream-home-email></p>
+
+            <aside class="dream-home-sketch-panel" aria-hidden="true">
+              <svg class="dream-home-sketch" viewBox="0 0 260 220" data-sketch-visual="dream-home-archive">
+                <path d="M42 168c28-9 58-11 88-6 31 5 58 4 88-8" />
+                <path d="M64 52c35-12 78-10 114 5 15 6 27 15 35 27" />
+                <path d="M70 134c-4-32 9-60 36-78 28 15 46 41 47 74" />
+                <path d="M106 56c-8 26-4 53 13 78" />
+                <path d="M153 70c15 14 25 32 30 55" />
+                <path d="M79 146c23-9 48-10 73-2" />
+                <path d="M185 82c14 5 25 15 31 29 5 13 4 28-2 41" />
+                <circle cx="98" cy="94" r="8" />
+                <circle cx="165" cy="118" r="5" />
+              </svg>
+            </aside>
           </header>
 
           <blockquote class="dream-home-quote">
             <p data-dream-home-quote-text></p>
             <cite data-dream-home-quote-author></cite>
           </blockquote>
+
+          <section class="dream-home-reflection" data-dream-home-reflection aria-labelledby="dream-home-reflection-title">
+            <svg class="dream-home-divider-sketch" viewBox="0 0 240 28" aria-hidden="true" data-sketch-visual="dream-home-divider">
+              <path d="M8 14c34-12 58 8 88 0 28-7 47-18 78-6 18 7 34 6 58-2" />
+              <path d="M84 17c9 5 17 5 26 0" />
+              <path d="M154 10c7-4 14-4 21 0" />
+            </svg>
+            <div>
+              <p class="eyebrow">内在札记</p>
+              <h2 id="dream-home-reflection-title">给梦留一点时间</h2>
+            </div>
+            <div class="reflection-note-list">
+              <p>梦并不急着给出答案，它更像是在递来线索。</p>
+              <p>有些反复出现的意象，也许是内在经验的回声。</p>
+              <p>你不需要立刻理解梦，只需要先把它留住。</p>
+              <p>自我探索不是判断对错，而是看见自己。</p>
+            </div>
+          </section>
 
           <section aria-labelledby="dream-home-stats-title">
             <div class="dream-home-section-heading">

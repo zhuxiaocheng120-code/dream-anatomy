@@ -1,17 +1,24 @@
 :root {
   color-scheme: light;
-  --bg: #f3efe7;
-  --surface: #fffaf1;
-  --surface-strong: #ffffff;
-  --ink: #20242b;
-  --muted: #626b76;
-  --border: rgba(32, 36, 43, 0.12);
-  --violet: #5546a3;
-  --violet-dark: #3e337b;
-  --gold: #b8792b;
-  --teal: #2f7f74;
-  --blue: #355f8f;
-  --ring: rgba(85, 70, 163, 0.24);
+  --paper: #f1eadc;
+  --aged-paper: #fff7e8;
+  --warm-charcoal: #302a23;
+  --sepia: #8a6f52;
+  --muted-olive: #5f6549;
+  --dusty-sage: #9fa58b;
+  --soft-brown: #7b624b;
+  --bg: var(--paper);
+  --surface: var(--aged-paper);
+  --surface-strong: #fffdf6;
+  --ink: var(--warm-charcoal);
+  --muted: #6d6358;
+  --border: rgba(76, 61, 45, 0.16);
+  --violet: #5f6549;
+  --violet-dark: #454b34;
+  --gold: var(--sepia);
+  --teal: var(--muted-olive);
+  --blue: #5f6e6a;
+  --ring: rgba(115, 121, 93, 0.26);
 }
 
 * {
@@ -28,9 +35,10 @@ body {
   font-family: "PingFang SC", "Microsoft YaHei", Inter, ui-sans-serif, system-ui, sans-serif;
   color: var(--ink);
   background:
-    radial-gradient(circle at 18% 8%, rgba(85, 70, 163, 0.14), transparent 28%),
-    radial-gradient(circle at 88% 16%, rgba(47, 127, 116, 0.12), transparent 24%),
-    linear-gradient(180deg, #fbf7ef 0%, var(--bg) 100%);
+    linear-gradient(90deg, rgba(112, 96, 70, 0.035) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(112, 96, 70, 0.028) 1px, transparent 1px),
+    linear-gradient(180deg, #f8f0e2 0%, var(--bg) 52%, #ece1cf 100%);
+  background-size: 34px 34px, 34px 34px, auto;
 }
 
 button,
@@ -52,7 +60,7 @@ button {
   justify-content: space-between;
   gap: 24px;
   padding: 18px clamp(20px, 5vw, 64px);
-  background: rgba(243, 239, 231, 0.86);
+  background: rgba(241, 234, 220, 0.9);
   border-bottom: 1px solid var(--border);
   backdrop-filter: blur(16px);
 }
@@ -68,6 +76,7 @@ button {
 
 .brand {
   color: var(--ink);
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
   font-weight: 800;
   line-height: 1.2;
 }
@@ -293,6 +302,7 @@ p {
 h1 {
   max-width: 10em;
   margin-bottom: 22px;
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
   font-size: clamp(2.7rem, 6vw, 5.5rem);
   line-height: 1.05;
   letter-spacing: 0;
@@ -300,6 +310,7 @@ h1 {
 
 h2 {
   margin-bottom: 18px;
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
   font-size: clamp(1.7rem, 3vw, 2.5rem);
   letter-spacing: 0;
 }
@@ -332,8 +343,8 @@ h3 {
 .empty-state {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 250, 241, 0.88);
-  box-shadow: 0 22px 60px rgba(32, 36, 43, 0.1);
+  background: rgba(255, 247, 232, 0.88);
+  box-shadow: 0 22px 60px rgba(70, 52, 35, 0.09);
 }
 
 .dream-card {
@@ -392,7 +403,7 @@ h3 {
 
 .entry-card:hover,
 .entry-card:focus-visible {
-  border-color: rgba(85, 70, 163, 0.34);
+  border-color: rgba(115, 121, 93, 0.36);
   transform: translateY(-2px);
 }
 
@@ -414,7 +425,7 @@ h3 {
   border: 1px solid rgba(125, 111, 74, 0.22);
   border-radius: 999px;
   color: var(--muted);
-  background: rgba(255, 255, 255, 0.58);
+  background: rgba(255, 253, 246, 0.66);
   font-size: 0.72rem;
   font-weight: 800;
   line-height: 1.35;
@@ -433,7 +444,7 @@ h3 {
 .is-feature-disabled:focus-visible {
   border-color: var(--border);
   color: inherit;
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 253, 246, 0.66);
 }
 
 .entry-card.is-feature-disabled:hover,
@@ -452,16 +463,31 @@ h3 {
 }
 
 .dream-home-welcome {
+  display: grid;
+  grid-template-columns: minmax(0, 1.35fr) minmax(240px, 0.65fr);
+  gap: clamp(28px, 6vw, 70px);
+  align-items: stretch;
+  padding: clamp(26px, 5vw, 44px);
+  border: 1px solid rgba(76, 61, 45, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(135deg, rgba(255, 253, 246, 0.94) 0%, rgba(249, 239, 219, 0.82) 100%);
+  box-shadow: 0 28px 70px rgba(70, 52, 35, 0.08);
+}
+
+.dream-home-hero-copy {
   display: flex;
-  align-items: end;
+  flex-direction: column;
   justify-content: space-between;
   gap: 28px;
+  min-width: 0;
 }
 
 .dream-home-welcome h1 {
   max-width: 16em;
   margin-bottom: 0;
-  font-size: 2.5rem;
+  color: var(--warm-charcoal);
+  font-size: clamp(2.15rem, 5vw, 3.75rem);
   line-height: 1.2;
 }
 
@@ -475,13 +501,47 @@ h3 {
   max-width: 32ch;
   margin: 0;
   color: var(--muted);
-  text-align: right;
   overflow-wrap: anywhere;
+}
+
+.dream-home-sketch-panel {
+  position: relative;
+  min-height: 220px;
+  display: grid;
+  place-items: center;
+  overflow: hidden;
+  border: 1px solid rgba(76, 61, 45, 0.14);
+  border-radius: 8px;
+  background:
+    linear-gradient(180deg, rgba(255, 253, 246, 0.72), rgba(232, 219, 194, 0.46));
+}
+
+.dream-home-sketch-panel::before {
+  position: absolute;
+  inset: 18px;
+  border: 1px solid rgba(115, 121, 93, 0.18);
+  content: "";
+}
+
+.dream-home-sketch {
+  position: relative;
+  width: min(100%, 260px);
+  color: rgba(105, 83, 59, 0.72);
+}
+
+.dream-home-sketch path,
+.dream-home-sketch circle,
+.dream-home-divider-sketch path {
+  fill: none;
+  stroke: currentColor;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2;
 }
 
 .dream-home-quote {
   margin: 0;
-  padding: 28px 0;
+  padding: 28px clamp(4px, 2vw, 16px);
   border-top: 1px solid var(--border);
   border-bottom: 1px solid var(--border);
 }
@@ -489,6 +549,8 @@ h3 {
 .dream-home-quote p {
   max-width: 42ch;
   margin-bottom: 12px;
+  color: var(--warm-charcoal);
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
   font-size: 1.35rem;
   line-height: 1.65;
 }
@@ -496,6 +558,39 @@ h3 {
 .dream-home-quote cite {
   color: var(--muted);
   font-style: normal;
+}
+
+.dream-home-reflection {
+  display: grid;
+  grid-template-columns: minmax(180px, 0.75fr) minmax(0, 1.25fr);
+  gap: 24px;
+  align-items: start;
+  padding: clamp(22px, 4vw, 34px);
+  border: 1px solid rgba(76, 61, 45, 0.14);
+  border-radius: 8px;
+  background: rgba(255, 247, 232, 0.7);
+}
+
+.dream-home-reflection h2 {
+  margin-bottom: 0;
+}
+
+.dream-home-divider-sketch {
+  grid-column: 1 / -1;
+  width: min(240px, 100%);
+  color: rgba(115, 121, 93, 0.72);
+}
+
+.reflection-note-list {
+  display: grid;
+  gap: 14px;
+}
+
+.reflection-note-list p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 1.02rem;
+  line-height: 1.85;
 }
 
 .dream-home-section-heading {
@@ -521,11 +616,11 @@ h3 {
   padding: 22px;
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 250, 241, 0.78);
+  background: rgba(255, 247, 232, 0.78);
 }
 
 .dream-home-stats strong {
-  color: var(--violet);
+  color: var(--muted-olive);
   font-size: 1.9rem;
 }
 
@@ -577,7 +672,7 @@ h3 {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--ink);
-  background: rgba(255, 255, 255, 0.66);
+  background: rgba(255, 253, 246, 0.66);
   font-weight: 800;
   text-align: left;
   overflow-wrap: anywhere;
@@ -585,7 +680,7 @@ h3 {
 
 .dream-home-recent-list button:hover,
 .dream-home-action-list button:hover {
-  border-color: rgba(85, 70, 163, 0.34);
+  border-color: rgba(115, 121, 93, 0.36);
   color: var(--violet);
   background: var(--surface-strong);
 }
@@ -610,7 +705,7 @@ h3 {
 .dream-home-expansion article {
   min-width: 0;
   padding-top: 24px;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid rgba(76, 61, 45, 0.14);
 }
 
 .dream-home-expansion p:last-child {
@@ -649,7 +744,7 @@ textarea {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--ink);
-  background: var(--surface-strong);
+  background: rgba(255, 253, 246, 0.86);
   line-height: 1.7;
 }
 
@@ -660,7 +755,7 @@ input {
   border: 1px solid var(--border);
   border-radius: 6px;
   color: var(--ink);
-  background: var(--surface-strong);
+  background: rgba(255, 253, 246, 0.86);
 }
 
 .button-row {
@@ -700,7 +795,7 @@ button:disabled:hover {
 
 .button-row .secondary-button {
   color: var(--violet);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 253, 246, 0.72);
   border-color: var(--border);
 }
 
@@ -713,13 +808,13 @@ button:disabled:hover {
   border-radius: 6px;
   border: 1px solid var(--border);
   color: var(--violet);
-  background: rgba(255, 255, 255, 0.72);
+  background: rgba(255, 253, 246, 0.72);
   font-weight: 800;
 }
 
 .button-row .secondary-button:hover,
 .secondary-button:hover {
-  background: #ffffff;
+  background: var(--surface-strong);
 }
 
 .danger-button {
@@ -1737,6 +1832,11 @@ input:focus-visible {
       "recent";
   }
 
+  .dream-home-welcome,
+  .dream-home-reflection {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
   .dream-journal-page-heading .secondary-button {
     width: 100%;
   }
@@ -1787,12 +1887,21 @@ input:focus-visible {
 
   .dream-home-welcome {
     align-items: flex-start;
-    flex-direction: column;
+    grid-template-columns: minmax(0, 1fr);
     gap: 12px;
+    padding: 22px;
   }
 
   .dream-home-welcome h1 {
     font-size: 2rem;
+  }
+
+  .dream-home-sketch-panel {
+    min-height: 172px;
+  }
+
+  .dream-home-reflection {
+    padding: 20px;
   }
 
   .dream-home-email {
