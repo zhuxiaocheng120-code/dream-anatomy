@@ -1197,6 +1197,13 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   assert.match(html, /目前还没有标记为重要的梦。/);
   assert.match(html, /连续记录的夜晚/);
   assert.match(html, /<blockquote[^>]*>[\s\S]*data-dream-home-quote-text[\s\S]*<cite data-dream-home-quote-author>/);
+  assert.match(html, /data-dream-home-reflection/);
+  assert.match(html, /梦并不急着给出答案，它更像是在递来线索。/);
+  assert.match(html, /自我探索不是判断对错，而是看见自己。/);
+  assert.match(html, /data-sketch-visual="dream-home-archive"/);
+  assert.match(html, /data-sketch-visual="dream-home-divider"/);
+  const reflection = html.match(/<section class="dream-home-reflection"[\s\S]*?<\/section>/)[0];
+  assert.doesNotMatch(reflection, /算命|诊断|治疗|吉凶|未来预测|预言/);
   [
     "data-dream-home-greeting",
     "data-dream-home-email",
@@ -1244,6 +1251,12 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   );
   assert.match(css, /\.feature-status-badge/);
   assert.match(css, /\.is-feature-disabled/);
+  assert.match(css, /--paper:\s*#/);
+  assert.match(css, /--aged-paper:\s*#/);
+  assert.match(css, /--warm-charcoal:\s*#/);
+  assert.match(css, /--muted-olive:\s*#/);
+  assert.match(css, /\.dream-home-sketch-panel/);
+  assert.match(css, /\.dream-home-reflection/);
   assert.match(css, /\.dream-home-layout\[hidden\]\s*\{\s*display:\s*none;\s*\}/);
   assert.match(
     css,
