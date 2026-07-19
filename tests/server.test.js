@@ -1469,9 +1469,26 @@ test("admin recent returns redacted events with max limit", { concurrency: false
   });
 });
 
-function createProductAnalyticsQueryClient(rows = [], inserted = []) {
+function createProductAnalyticsQueryClient(rows = [], inserted = [], preferenceRows = []) {
   return {
     from(tableName) {
+      if (tableName === "product_analytics_preferences") {
+        let selectedUserId = null;
+        const preferenceBuilder = {
+          select() { return preferenceBuilder; },
+          eq(column, value) {
+            assert.equal(column, "user_id");
+            selectedUserId = value;
+            return preferenceBuilder;
+          },
+          maybeSingle: async () => ({
+            data: preferenceRows.find((row) => row.user_id === selectedUserId) || null,
+            error: null
+          })
+        };
+        return preferenceBuilder;
+      }
+
       assert.equal(tableName, "product_events");
       const builder = {
         upsert(events) {
@@ -1522,6 +1539,7 @@ test("product events accept opted-in guest events without caching", { concurrenc
 
 test("product events derive logged-in identity from a valid Bearer token", { concurrency: false }, async () => {
   const inserted = [];
+  const userId = "00000000-0000-4000-8000-000000000104";
   await withServer(async (baseUrl) => {
     const response = await fetch(`${baseUrl}/api/v1/product-events`, {
       method: "POST",
@@ -1533,9 +1551,36 @@ test("product events derive logged-in identity from a valid Bearer token", { con
     assert.doesNotMatch(JSON.stringify(inserted), /attacker-id/);
   }, {
     authResolver: {
-      resolveIdentity: async () => ({ type: "authenticated", userId: "00000000-0000-4000-8000-000000000104" })
+      resolveIdentity: async () => ({ type: "authenticated", userId })
     },
-    analyticsClient: createProductAnalyticsQueryClient([], inserted),
+    analyticsClient: createProductAnalyticsQueryClient([], inserted, [{ user_id: userId, enabled: true }]),
+    analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" }
+  });
+});
+
+test("product events require the authenticated user's stored opt-in preference", { concurrency: false }, async () => {
+  const inserted = [];
+  const userId = "00000000-0000-4000-8000-000000000104";
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/v1/product-events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer member-token" },
+      body: JSON.stringify({
+        analyticsConsent: true,
+        sessionId: "00000000-0000-4000-8000-000000000102",
+        events: [createProductEvent()]
+      })
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 403);
+    assert.equal(payload.error.code, "PRODUCT_ANALYTICS_DISABLED");
+    assert.equal(inserted.length, 0);
+  }, {
+    authResolver: {
+      resolveIdentity: async () => ({ type: "authenticated", userId })
+    },
+    analyticsClient: createProductAnalyticsQueryClient([], inserted, [{ user_id: userId, enabled: false }]),
     analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" }
   });
 });

@@ -89,3 +89,7 @@ The final reviewer reported four Important findings. New regression tests reprod
 ### GREEN Evidence
 
 After tightening the product event allowlists, rejecting authenticated payloads with guest installation IDs, gating frontend Bearer headers to the controller's active authenticated user, isolating product analytics preference-read failures, and calculating retention from historical first events, `npm test` reported 275 passing and 0 failing with localhost listener permission. The final verification syntax checks and `git diff --check` also passed.
+
+### Final Re-Review Fix
+
+The final reviewer found two additional Important findings: authenticated product analytics deletion did not pass the active user's Bearer token, and authenticated event writes trusted the request consent flag without checking the stored `product_analytics_preferences` row. Regression tests now assert authenticated deletion sends Authorization and authenticated event writes require `enabled = true` for the verified user. `npm test -- tests/productAnalyticsFrontend.test.js` reported 23 passing and 0 failing; `npm test -- tests/server.test.js` reported 42 passing and 0 failing with localhost listener permission.

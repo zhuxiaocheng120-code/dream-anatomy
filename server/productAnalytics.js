@@ -170,6 +170,21 @@ async function recordProductEventsSafely(client, events, logger = console) {
   }
 }
 
+async function hasEnabledProductAnalyticsPreference(client, userId) {
+  if (!client || !isUuid(userId)) return { ok: false, enabled: false };
+
+  try {
+    const response = await client.from("product_analytics_preferences")
+      .select("enabled")
+      .eq("user_id", userId)
+      .maybeSingle();
+    if (response && response.error) throw response.error;
+    return { ok: true, enabled: Boolean(response && response.data && response.data.enabled) };
+  } catch (error) {
+    return { ok: false, enabled: false };
+  }
+}
+
 async function deleteProductEventsForIdentity(client, identity, installationId, secret) {
   const principalHash = createProductPrincipalHash(identity, installationId, secret);
   if (!client || !principalHash) return { deleted: false, principalHash: null };
@@ -192,5 +207,6 @@ module.exports = {
   createProductSessionHash,
   normalizeProductEventBatch,
   recordProductEventsSafely,
+  hasEnabledProductAnalyticsPreference,
   deleteProductEventsForIdentity
 };

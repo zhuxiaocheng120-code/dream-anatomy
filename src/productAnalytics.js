@@ -272,7 +272,8 @@
     async function deleteProductAnalyticsData() {
       const installationId = !currentUser ? getInstallationId() : "";
       const headers = { "Content-Type": "application/json" };
-      const token = await getAccessToken();
+      const token = await getAccessToken(currentUser ? currentUser.id : "");
+      if (currentUser && !token) throw new Error("产品分析删除暂时无法完成。");
       if (token) headers.Authorization = `Bearer ${token}`;
       try {
         if (typeof request !== "function") throw new Error("产品分析删除暂时无法完成。");

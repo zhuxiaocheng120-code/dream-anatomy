@@ -452,7 +452,9 @@ test("deleting guest analytics disables consent and prevents later event sending
 });
 
 test("deleting authenticated analytics persists disabled consent", async () => {
-  const { controller } = createHarness();
+  const { controller, requests } = createHarness({
+    getSession: async () => ({ data: { session: { access_token: "delete-token", user: { id: "user-1" } } } })
+  });
   const upserts = [];
   const client = {
     from() {
@@ -470,6 +472,8 @@ test("deleting authenticated analytics persists disabled consent", async () => {
   await controller.loadPreferenceForSession({ user: { id: "user-1" }, client, authEvent: "SIGNED_IN" });
   await controller.deleteProductAnalyticsData();
 
+  assert.equal(requests[0].url, "/api/v1/product-analytics");
+  assert.equal(requests[0].request.headers.Authorization, "Bearer delete-token");
   assert.equal(controller.getAnalyticsConsent(), false);
   assert.deepEqual(upserts, [{
     row: { user_id: "user-1", enabled: false },

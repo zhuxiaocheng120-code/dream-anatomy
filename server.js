@@ -16,6 +16,7 @@ const { createApiError, formatApiError } = require("./server/aiErrors");
 const {
   PRODUCT_ANALYTICS_VERSION,
   deleteProductEventsForIdentity,
+  hasEnabledProductAnalyticsPreference,
   normalizeProductEventBatch,
   recordProductEventsSafely
 } = require("./server/productAnalytics");
@@ -1207,6 +1208,16 @@ async function handleProductEventsRequest(request, response) {
 
     if (identity.type === "authenticated" && request.body.installationId) {
       throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);
+    }
+
+    if (identity.type === "authenticated") {
+      const preference = await hasEnabledProductAnalyticsPreference(client, identity.userId);
+      if (!preference.ok) {
+        throw createApiError("ANALYTICS_UNAVAILABLE", "运营统计暂时不可用，请检查服务端配置。", 503);
+      }
+      if (!preference.enabled) {
+        throw createApiError("PRODUCT_ANALYTICS_DISABLED", "产品分析尚未启用，未记录本次事件。", 403);
+      }
     }
 
     const normalized = normalizeProductEventBatch(request.body, {
