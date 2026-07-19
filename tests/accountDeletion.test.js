@@ -3,6 +3,8 @@ const test = require("node:test");
 
 const { createAccountDeletionService } = require("../server/accountDeletion");
 
+const verifiedUserId = "00000000-0000-4000-8000-000000000001";
+
 function createRequest({ headers = {}, body = {} } = {}) {
   return { headers, body, ip: "127.0.0.1" };
 }
@@ -69,7 +71,7 @@ function createService(options = {}) {
   const adminClient = options.adminClient || createFakeAdminClient();
   const service = createAccountDeletionService({
     aiAuthResolver: {
-      resolveIdentity: async () => options.identity || { type: "authenticated", userId: "verified-user" }
+      resolveIdentity: async () => options.identity || { type: "authenticated", userId: verifiedUserId }
     },
     env: {
       ANALYTICS_HASH_SECRET: "analytics-secret"
@@ -103,7 +105,7 @@ test("wrong confirmation is rejected before service role operations", async () =
 });
 
 test("deletes only data for the verified user and ignores body identity fields", async () => {
-  const { adminClient, service } = createService({ identity: { type: "authenticated", userId: "verified-user" } });
+  const { adminClient, service } = createService({ identity: { type: "authenticated", userId: verifiedUserId } });
 
   const result = await service.deleteAccount(createRequest({
     body: {
@@ -117,21 +119,28 @@ test("deletes only data for the verified user and ignores body identity fields",
   assert.equal(result.requestId, "request-1");
   assert.deepEqual(adminClient.state.deletes.map((item) => item.tableName), [
     "ai_usage_events",
+    "product_events",
+    "product_analytics_preferences",
     "legal_consents",
     "dream_records"
   ]);
   assert.deepEqual(adminClient.state.events, [
     "delete:ai_usage_events",
-    "auth:verified-user",
+    "delete:product_events",
+    `auth:${verifiedUserId}`,
+    "delete:product_analytics_preferences",
     "delete:legal_consents",
     "delete:dream_records"
   ]);
   assert.deepEqual(adminClient.state.deletes[0].filters.map((filter) => filter.column), ["principal_type", "principal_hash"]);
   assert.equal(adminClient.state.deletes[0].filters[0].value, "authenticated");
   assert.notEqual(adminClient.state.deletes[0].filters[1].value, "guest:verified-user");
-  assert.equal(adminClient.state.deletes[1].filters[0].value, "verified-user");
-  assert.equal(adminClient.state.deletes[2].filters[0].value, "verified-user");
-  assert.deepEqual(adminClient.state.authDeletes, ["verified-user"]);
+  assert.deepEqual(adminClient.state.deletes[1].filters.map((filter) => filter.column), ["principal_hash"]);
+  assert.notEqual(adminClient.state.deletes[1].filters[0].value, "guest:verified-user");
+  assert.equal(adminClient.state.deletes[2].filters[0].value, verifiedUserId);
+  assert.equal(adminClient.state.deletes[3].filters[0].value, verifiedUserId);
+  assert.equal(adminClient.state.deletes[4].filters[0].value, verifiedUserId);
+  assert.deepEqual(adminClient.state.authDeletes, [verifiedUserId]);
 });
 
 test("missing service role client returns a safe unavailable error", async () => {
@@ -147,7 +156,7 @@ test("missing analytics secret skips usage event deletion but still deletes acco
   const adminClient = createFakeAdminClient();
   const service = createAccountDeletionService({
     aiAuthResolver: {
-      resolveIdentity: async () => ({ type: "authenticated", userId: "verified-user" })
+      resolveIdentity: async () => ({ type: "authenticated", userId: verifiedUserId })
     },
     env: {},
     getAdminClient: () => adminClient,
@@ -158,15 +167,17 @@ test("missing analytics secret skips usage event deletion but still deletes acco
 
   assert.equal(result.ok, true);
   assert.deepEqual(adminClient.state.deletes.map((item) => item.tableName), [
+    "product_analytics_preferences",
     "legal_consents",
     "dream_records"
   ]);
   assert.deepEqual(adminClient.state.events, [
-    "auth:verified-user",
+    `auth:${verifiedUserId}`,
+    "delete:product_analytics_preferences",
     "delete:legal_consents",
     "delete:dream_records"
   ]);
-  assert.deepEqual(adminClient.state.authDeletes, ["verified-user"]);
+  assert.deepEqual(adminClient.state.authDeletes, [verifiedUserId]);
 });
 
 test("missing auth admin support fails before deleting account data", async () => {
@@ -194,11 +205,12 @@ test("auth deletion failure preserves dream and legal records for retry", async 
       && !String(error.message).includes("verified-user")
   );
 
-  assert.deepEqual(adminClient.state.deletes.map((item) => item.tableName), ["ai_usage_events"]);
-  assert.deepEqual(adminClient.state.authDeletes, ["verified-user"]);
+  assert.deepEqual(adminClient.state.deletes.map((item) => item.tableName), ["ai_usage_events", "product_events"]);
+  assert.deepEqual(adminClient.state.authDeletes, [verifiedUserId]);
   assert.deepEqual(adminClient.state.events, [
     "delete:ai_usage_events",
-    "auth:verified-user"
+    "delete:product_events",
+    `auth:${verifiedUserId}`
   ]);
 });
 
@@ -213,5 +225,5 @@ test("post-auth cleanup failure returns a safe request id without false success"
       && !String(error.message).includes("verified-user")
   );
 
-  assert.deepEqual(adminClient.state.authDeletes, ["verified-user"]);
+  assert.deepEqual(adminClient.state.authDeletes, [verifiedUserId]);
 });

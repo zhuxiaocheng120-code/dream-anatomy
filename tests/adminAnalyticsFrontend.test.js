@@ -53,6 +53,13 @@ function createElements() {
     entry: createElement(),
     errorDistribution: createElement(),
     principalDistribution: createElement(),
+    productCards: createElement(),
+    productEventDistribution: createElement(),
+    productFunnel: createElement(),
+    productPageDistribution: createElement(),
+    productRetention: createElement(),
+    productSampleLabel: createElement(),
+    productPrincipalDistribution: createElement(),
     rangeButtons: [],
     recent: createElement(),
     status: createElement(),
@@ -85,7 +92,7 @@ test("admin entry is hidden until server confirms admin", async () => {
   await controller.handleSession({ user: { id: "admin" } });
 
   assert.equal(elements.entry.hidden, false);
-  assert.equal(calls.length, 2);
+  assert.equal(calls.length, 5);
 });
 
 test("logout clears data and leaves admin view", async () => {
@@ -185,4 +192,58 @@ test("renders summary and recent events without principal hash", async () => {
   assert.doesNotMatch(JSON.stringify(elements), /"quick"/);
   assert.match(JSON.stringify(elements), /快速解析/);
   assert.match(JSON.stringify(elements), /120 毫秒/);
+});
+
+test("renders aggregate product analytics with the consented-sample label and no hashes", async () => {
+  const elements = createElements();
+  const principalHash = "product-principal-hash-must-not-render";
+  const sessionHash = "product-session-hash-must-not-render";
+  const controller = AdminAnalytics.createAdminAnalyticsController({
+    elements,
+    fetchJson: async (url) => ({
+      ok: true,
+      json: async () => {
+        if (url.includes("product-analytics/funnel")) {
+          return {
+            sampleLabel: "基于已同意产品分析的用户样本",
+            stages: [
+              { name: "app_opened", count: 12, principal_hash: principalHash, session_hash: sessionHash },
+              { name: "dream_saved", count: 4 }
+            ]
+          };
+        }
+        if (url.includes("product-analytics/retention")) {
+          return {
+            sampleLabel: "基于已同意产品分析的用户样本",
+            d1: { status: "ok", cohortSize: 8, retainedPrincipals: 3, rate: 0.375 },
+            d7: { status: "insufficient_data" }
+          };
+        }
+        if (url.includes("product-analytics/summary")) {
+          return {
+            sampleLabel: "基于已同意产品分析的用户样本",
+            approximatePrincipals: 12,
+            principalTypeDistribution: [{ label: "authenticated", count: 7 }],
+            pageDistribution: [{ label: "quick", count: 9 }],
+            eventDistribution: [{ label: "analysis_completed", count: 5 }],
+            principal_hash: principalHash,
+            session_hash: sessionHash
+          };
+        }
+        return { totalRequests: 0, dailyTrend: [], recent: [] };
+      }
+    }),
+    getAuthHeader: async () => ({ Authorization: "Bearer token" }),
+    app: { showView() {} },
+    document: createDocument()
+  });
+
+  await controller.enterAdminView();
+
+  assert.ok(elements.productCards.children.length > 0);
+  assert.ok(elements.productFunnel.children.length > 0);
+  assert.ok(elements.productRetention.children.length > 0);
+  assert.equal(elements.productSampleLabel.textContent, "基于已同意产品分析的用户样本");
+  assert.match(JSON.stringify(elements), /分析完成/);
+  assert.doesNotMatch(JSON.stringify(elements), /product-(principal|session)-hash-must-not-render/);
 });

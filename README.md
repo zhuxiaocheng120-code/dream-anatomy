@@ -144,7 +144,13 @@ The current `dream_records` cloud storage path is covered by [docs/SUPABASE_SECU
 
 Privacy/data controls setup is documented in [docs/PRIVACY_DATA_CONTROLS_SETUP.md](docs/PRIVACY_DATA_CONTROLS_SETUP.md). The legal documents are Beta technical copy and should receive professional review before production launch.
 
-Apply `supabase/migrations/20260717001000_create_legal_consents.sql` to store authenticated legal consent versions. Account deletion uses `DELETE /api/v1/account`, verifies the Supabase Bearer token on the server, ignores body `userId` and `email`, deletes authenticated AI usage events matched by recalculated HMAC when `ANALYTICS_HASH_SECRET` is configured, deletes the Supabase Auth user, and then performs scoped cleanup for that user's dream records and legal consent. Guest AI usage statistics are not deleted because they cannot be reliably tied to the account.
+Apply `supabase/migrations/20260717001000_create_legal_consents.sql` to store authenticated legal consent versions. Account deletion uses `DELETE /api/v1/account`, verifies the Supabase Bearer token on the server, ignores body `userId` and `email`, deletes authenticated AI usage events and authenticated product events matched by recalculated HMAC when `ANALYTICS_HASH_SECRET` is configured, deletes the Supabase Auth user, and then performs scoped cleanup for that user's dream records, legal consent, and product analytics preference. Guest AI and product analytics events are not deleted because they cannot be reliably tied to the account.
+
+## Product Analytics
+
+Product analytics is first-party, optional, and default off. It records only allowlisted behavior metadata after consent; it does not store dream content, personal identifiers, or raw installation/session values. The admin dashboard shows aggregate product usage, funnel, and UTC D1/D7 retention figures labeled `基于已同意产品分析的用户样本`, without full hashes.
+
+Apply `supabase/migrations/20260719000000_create_product_analytics.sql` manually in Supabase, then configure the existing server-only `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER_IDS`, and `ANALYTICS_HASH_SECRET` values. Full setup and manual verification steps are in [docs/PRODUCT_ANALYTICS_SETUP.md](docs/PRODUCT_ANALYTICS_SETUP.md).
 
 ## Admin Analytics
 

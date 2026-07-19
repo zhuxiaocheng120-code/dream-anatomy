@@ -1,5 +1,6 @@
 const crypto = require("node:crypto");
 const { createApiError } = require("./aiErrors");
+const { deleteProductEventsForIdentity } = require("./productAnalytics");
 
 const requiredConfirmationText = "注销账户";
 
@@ -66,11 +67,24 @@ function createAccountDeletionService(options = {}) {
         { column: "principal_type", value: "authenticated" },
         { column: "principal_hash", value: principalHash }
       ], requestId);
+
+      const productEventsResult = await deleteProductEventsForIdentity(
+        client,
+        identity,
+        null,
+        analyticsSecret
+      );
+      if (!productEventsResult.deleted) {
+        throw createApiError("ACCOUNT_DELETION_FAILED", "账户注销暂时没有完成，请稍后重试。", 500, { requestId });
+      }
     }
 
     const authResponse = await authAdmin.deleteUser(identity.userId);
     assertDeleteSuccess(authResponse, requestId);
 
+    await deleteFromTable(client, "product_analytics_preferences", [
+      { column: "user_id", value: identity.userId }
+    ], requestId);
     await deleteFromTable(client, "legal_consents", [
       { column: "user_id", value: identity.userId }
     ], requestId);

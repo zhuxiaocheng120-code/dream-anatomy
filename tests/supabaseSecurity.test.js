@@ -155,3 +155,23 @@ test("privacy data controls setup documents deletion and legal boundaries", () =
   assert.match(docs, /注销账户/);
   assert.doesNotMatch(docs, /永久保存|永不删除|完全匿名|已通过律师审核/);
 });
+
+test("product analytics setup documents consent, retention, and deletion boundaries", () => {
+  const docs = readProjectFile("docs/PRODUCT_ANALYTICS_SETUP.md");
+
+  assert.match(docs, /20260719000000_create_product_analytics\.sql/);
+  assert.match(docs, /app_opened/);
+  assert.match(docs, /analysis_completed/);
+  assert.match(docs, /view_name/);
+  assert.match(docs, /analysis_type/);
+  assert.match(docs, /默认关闭/);
+  assert.match(docs, /随时关闭/);
+  assert.match(docs, /D1/);
+  assert.match(docs, /D7/);
+  assert.match(docs, /UTC/);
+  assert.match(docs, /当前版本不执行自动清理/);
+  assert.match(docs, /authenticated.*product_events/s);
+  assert.match(docs, /guest.*product_events.*不会被删除/s);
+  assert.match(docs, /基于已同意产品分析的用户样本/);
+  assert.doesNotMatch(docs, /永久保存|永不删除|完全匿名/);
+});

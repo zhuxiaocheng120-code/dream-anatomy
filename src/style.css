@@ -186,6 +186,20 @@ button {
   font-size: 1rem;
 }
 
+.admin-section-heading {
+  display: flex;
+  align-items: start;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.admin-sample-note {
+  margin: 8px 0 0;
+  color: var(--muted);
+  font-size: 0.88rem;
+  line-height: 1.5;
+}
+
 .admin-chart,
 .admin-distribution-list,
 .admin-recent-list {
@@ -211,6 +225,12 @@ button {
 }
 
 .admin-distribution-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+  gap: 14px;
+}
+
+.admin-product-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
   gap: 14px;
@@ -1798,7 +1818,8 @@ input:focus-visible {
   }
 
   .admin-card-grid,
-  .admin-distribution-grid {
+  .admin-distribution-grid,
+  .admin-product-grid {
     grid-template-columns: minmax(0, 1fr);
   }
 
