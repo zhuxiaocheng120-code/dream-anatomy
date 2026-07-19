@@ -212,10 +212,30 @@ test("result card normalization avoids fake zero scores and unsafe text", () => 
     archetype: { id: "seeker" },
     coreInsight: "这个梦可能与你正在寻找方向有关。",
     dimensions: [{ id: "symbol_depth", score: 55, rationale: ["门出现在梦里。"] }]
+  }), false);
+  assert.equal(hasResultCard({
+    archetype: { id: "unknown" },
+    coreInsight: "这个梦可能与你正在寻找方向有关。",
+    dimensions: [
+      { id: "symbol_depth", score: 55, rationale: ["门出现在梦里。"] },
+      { id: "emotion_intensity", score: 62, rationale: ["紧张来自寻找。"] },
+      { id: "self_awareness", score: 48, rationale: ["梦里有观察。"] },
+      { id: "growth_signal", score: 50, rationale: ["出现选择线索。"] }
+    ]
+  }), false);
+  assert.equal(hasResultCard({
+    archetype: { id: "creator" },
+    coreInsight: "这个梦可能与你正在寻找方向有关。",
+    dimensions: [
+      { id: "symbol_depth", score: 55, rationale: ["门出现在梦里。"] },
+      { id: "emotion_intensity", score: 62, rationale: ["紧张来自寻找。"] },
+      { id: "self_awareness", score: 48, rationale: ["梦里有观察。"] },
+      { id: "growth_signal", score: 50, rationale: ["出现选择线索。"] }
+    ]
   }), true);
 
   const card = normalizeResultCard({
-    archetype: { id: "seeker", summary: "你就是寻路者", evidence: ["梦里有一扇门。"] },
+    archetype: { id: "creator", summary: "你就是创造者", evidence: ["梦里有一扇门。"] },
     coreInsight: "这个梦可能与你正在寻找方向有关。",
     dimensions: [{ id: "symbol_depth", score: "", summary: "门和走廊是线索。", rationale: ["门出现在梦里。"] }],
     symbols: [{ name: "门", contextMeaning: "可能与选择有关。", evidence: "梦里出现门。", reflectionQuestion: "门让你想到什么？" }],
@@ -224,7 +244,7 @@ test("result card normalization avoids fake zero scores and unsafe text", () => 
     safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
   });
 
-  assert.equal(card.archetype.nameZh, "寻路者");
+  assert.equal(card.archetype.nameZh, "创造者");
   assert.equal(card.archetype.summary.includes("你就是"), false);
   assert.equal(card.dimensions[0].score, null);
   assert.equal(card.emotionalProfile.intensity, null);

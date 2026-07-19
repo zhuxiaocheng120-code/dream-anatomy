@@ -37,7 +37,7 @@ dream_anatomy_guest_records_v1
 
 ## 法律文件与同意
 
-小程序通过 `miniprogram/services/legalDocuments.js` 复用 Web 端 `src/legalDocuments.js` 的版本号和文档内容。游客第一次快速解析前必须主动勾选同意；本机保存的版本落后时需要重新同意。
+小程序通过 `miniprogram/services/legalDocuments.js` 保留小程序根目录内的法律文件版本和精简文案。自动化测试会和 Web 端 `src/legalDocuments.js` 比对版本号，避免版本漂移；运行时不跨出 `miniprogramRoot` 读取 Web 文件。游客第一次快速解析前必须主动勾选同意；本机保存的版本落后时需要重新同意。
 
 ## 功能边界
 

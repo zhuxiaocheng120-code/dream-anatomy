@@ -13,6 +13,6 @@ Component({
     }
   },
   data: {
-    normalized: normalizeResultCard({})
+    normalized: null
   }
 });

@@ -3,7 +3,12 @@ const { safeList, safeText } = require("../utils/safeRender");
 const archetypes = {
   seeker: { id: "seeker", nameZh: "寻路者", nameEn: "The Seeker", summary: "本次梦境更接近寻路者原型，也许与你正在寻找方向有关。" },
   explorer: { id: "explorer", nameZh: "探索者", nameEn: "The Explorer", summary: "本次梦境更接近探索者原型，也许与你靠近未知经验有关。" },
-  guardian: { id: "guardian", nameZh: "守护者", nameEn: "The Guardian", summary: "本次梦境更接近守护者原型，也许与你在意边界和保护有关。" }
+  guardian: { id: "guardian", nameZh: "守护者", nameEn: "The Guardian", summary: "本次梦境更接近守护者原型，也许与你在意边界和保护有关。" },
+  observer: { id: "observer", nameZh: "观察者", nameEn: "The Observer", summary: "本次梦境更接近观察者原型，也许与你停下来理解自身感受有关。" },
+  transformer: { id: "transformer", nameZh: "转变者", nameEn: "The Transformer", summary: "本次梦境更接近转变者原型，也许与你正在经历变化有关。" },
+  creator: { id: "creator", nameZh: "创造者", nameEn: "The Creator", summary: "本次梦境更接近创造者原型，也许与你表达和创造有关。" },
+  healer: { id: "healer", nameZh: "疗愈者", nameEn: "The Healer", summary: "本次梦境更接近疗愈者原型，也许与你照看感受和恢复有关。" },
+  homecomer: { id: "homecomer", nameZh: "归途者", nameEn: "The Homecomer", summary: "本次梦境更接近归途者原型，也许与你寻找熟悉感和归属有关。" }
 };
 
 const dimensionDefinitions = [
@@ -21,16 +26,25 @@ function normalizeScore(value) {
 
 function hasResultCard(raw) {
   if (!raw || typeof raw !== "object") return false;
-  const hasArchetype = Boolean(raw.archetype && typeof raw.archetype === "object" && raw.archetype.id);
+  const hasArchetype = Boolean(raw.archetype && typeof raw.archetype === "object" && archetypes[raw.archetype.id]);
   const hasInsight = typeof raw.coreInsight === "string" && raw.coreInsight.trim().length > 0;
-  const hasDimension = Array.isArray(raw.dimensions)
-    && raw.dimensions.some((dimension) => dimension && dimension.id && normalizeScore(dimension.score) !== null);
-  return hasArchetype && hasInsight && hasDimension;
+  const dimensionMap = new Map(Array.isArray(raw.dimensions) ? raw.dimensions.map((item) => [item && item.id, item]) : []);
+  const hasAllDimensions = dimensionDefinitions.every((definition) => {
+    const dimension = dimensionMap.get(definition.id);
+    return Boolean(
+      dimension
+        && normalizeScore(dimension.score) !== null
+        && Array.isArray(dimension.rationale)
+        && dimension.rationale.some((item) => typeof item === "string" && item.trim())
+    );
+  });
+  return hasArchetype && hasInsight && hasAllDimensions;
 }
 
 function normalizeResultCard(raw = {}) {
   const input = raw && typeof raw === "object" ? raw : {};
-  const selected = archetypes[input.archetype && input.archetype.id] || archetypes.seeker;
+  const selected = archetypes[input.archetype && input.archetype.id];
+  if (!selected) return null;
   const dimensionMap = new Map(Array.isArray(input.dimensions) ? input.dimensions.map((item) => [item && item.id, item]) : []);
   const emotion = input.emotionalProfile && typeof input.emotionalProfile === "object" ? input.emotionalProfile : {};
 
