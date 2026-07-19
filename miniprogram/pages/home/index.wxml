@@ -1,7 +1,13 @@
 <view class="page">
-  <view class="eyebrow">析梦 Dream Anatomy</view>
-  <view class="title">把醒来的碎片，轻轻收好。</view>
-  <view class="subtitle">这里是游客版小程序雏形。你可以快速解析梦境，并把结果保存在本机。</view>
+  <view class="page-hero home-hero">
+    <view class="page-hero-content">
+      <view class="eyebrow">析梦 Dream Anatomy</view>
+      <view class="title">把醒来的碎片，轻轻收好。</view>
+      <view class="subtitle">这里是游客版小程序雏形。你可以快速解析梦境，并把结果保存在本机。</view>
+      <view class="microcopy">梦并不急着给出答案，它更像是在递来线索。</view>
+    </view>
+    <view class="visual-orbit home-orbit" aria-hidden="true" data-visual="home-archive"></view>
+  </view>
 
   <view class="section stack">
     <button class="button" bindtap="goQuick">快速解析</button>
@@ -16,8 +22,11 @@
       <view class="eyebrow">最近梦境</view>
       <button class="button secondary small-button" bindtap="goPrivacy">隐私与数据</button>
     </view>
-    <view wx:if="{{recentRecords.length === 0}}" class="card empty">还没有本机梦境记录。</view>
-    <view wx:for="{{recentRecords}}" wx:key="localRecordId" class="card record" data-id="{{item.localRecordId}}" bindtap="openRecord">
+    <view wx:if="{{recentRecords.length === 0}}" class="card empty archive-empty">
+      <view class="empty-mark" aria-hidden="true"></view>
+      <view>还没有本机梦境记录。</view>
+    </view>
+    <view wx:for="{{recentRecords}}" wx:key="localRecordId" class="card record archive-card" data-id="{{item.localRecordId}}" bindtap="openRecord">
       <view>{{item.title}}</view>
       <view class="small muted">{{item.displayDate}} · {{item.analysisType}}</view>
     </view>

@@ -2,13 +2,14 @@
   display: flex;
   align-items: center;
   gap: 18rpx;
-  color: #6d6257;
+  color: #6d6358;
   font-size: 26rpx;
+  border-left: 4rpx solid rgba(95, 101, 73, 0.28);
 }
 
 .loading-dot {
   width: 18rpx;
   height: 18rpx;
   border-radius: 50%;
-  background: #8b7764;
+  background: #5f6549;
 }

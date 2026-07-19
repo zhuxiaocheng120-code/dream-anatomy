@@ -1,3 +1,7 @@
+.result-hero .archive-rail {
+  margin-top: 30rpx;
+}
+
 result-card {
   display: block;
   margin-top: 32rpx;

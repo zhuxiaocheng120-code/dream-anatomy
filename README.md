@@ -18,7 +18,7 @@
 - AI 后端提供版本化接口 `POST /api/v1/dream-analysis`，旧的 `POST /api/dream-analysis` 暂时保留为兼容别名。接口会识别 Supabase Bearer token、应用 Beta 免费额度、短时限流、单用户并发限制和 DeepSeek 超时保护。
 - 服务器会把 AI 使用统计以隐私保护形式写入 Supabase `ai_usage_events`，用于运营分析和服务改进；管理员可在只读运营后台查看聚合数据。
 - 隐私与数据中心提供隐私政策、用户协议、AI 使用说明、显式同意、梦境导出、单条删除、清空全部梦境、游客本机数据清理和账户注销入口。
-- 原生微信小程序游客版基础工程位于 `miniprogram/`，支持快速解析、梦境画像、本机保存、本机梦境日记、详情、删除、导出和清除本机数据；当前不接微信登录、Supabase 登录、云同步、支付、会员或小程序产品行为分析事件。
+- 原生微信小程序游客版基础工程位于 `miniprogram/`，支持快速解析、梦境画像、本机保存、本机梦境日记、详情、删除、导出和清除本机数据；当前不接微信登录、Supabase 登录、云同步、支付、会员或小程序产品行为分析事件。小程序视觉已同步 Web 的旧纸、私人档案、心理工作室和手稿记录语言。
 - 快速解析 V2 会要求结果包含梦境摘要、核心主题、核心解析、梦境证据与解释、情绪画像、主要意象、自我思考、今日小行动和温和提醒，并在服务端做基础质量检查。
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果，AI 输出质量不完整时不会伪装成本地 mock。
 - 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
@@ -126,7 +126,7 @@
 
 ## WeChat Mini Program Guest Foundation
 
-The Mini Program setup guide is in [docs/MINIPROGRAM_SETUP.md](docs/MINIPROGRAM_SETUP.md), and its data/security architecture is in [docs/MINIPROGRAM_ARCHITECTURE.md](docs/MINIPROGRAM_ARCHITECTURE.md).
+The Mini Program setup guide is in [docs/MINIPROGRAM_SETUP.md](docs/MINIPROGRAM_SETUP.md), its data/security architecture is in [docs/MINIPROGRAM_ARCHITECTURE.md](docs/MINIPROGRAM_ARCHITECTURE.md), and its visual system is in [docs/MINIPROGRAM_VISUAL_LANGUAGE.md](docs/MINIPROGRAM_VISUAL_LANGUAGE.md).
 
 Current boundaries:
 
@@ -136,6 +136,7 @@ Current boundaries:
 - Dreams are stored locally under `dream_anatomy_guest_records_v1`, capped at 100 records.
 - Deep guidance is visible but marked “正在开发中”.
 - `miniprogram/project.config.json` and `miniprogram/config/config.js` are ignored local/private files.
+- The current Mini Program visual refresh uses local WXML/WXSS decorations only; it does not rely on remote images or font files.
 - Real-device validation has not been completed yet; use WeChat Developer Tools and a test AppID before release.
 
 ## AI API Protection

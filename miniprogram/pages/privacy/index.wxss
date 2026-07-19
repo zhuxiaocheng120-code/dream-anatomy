@@ -1,3 +1,7 @@
+.privacy-heading .archive-rail {
+  margin-top: 28rpx;
+}
+
 legal-document {
   display: block;
   margin-top: 32rpx;

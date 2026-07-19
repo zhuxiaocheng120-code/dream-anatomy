@@ -1,3 +1,7 @@
+.detail-hero .corner-lines {
+  margin-top: 28rpx;
+}
+
 result-card {
   display: block;
   margin-top: 32rpx;

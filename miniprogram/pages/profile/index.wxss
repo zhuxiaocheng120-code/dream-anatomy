@@ -1,3 +1,12 @@
+.profile-hero .identity-seal {
+  margin-top: 34rpx;
+  margin-left: auto;
+}
+
 .card {
   line-height: 1.7;
+}
+
+.profile-card {
+  border-left: 4rpx solid rgba(95, 101, 73, 0.24);
 }

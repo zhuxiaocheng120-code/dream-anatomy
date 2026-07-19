@@ -6,22 +6,27 @@
   align-items: flex-end;
   justify-content: center;
   padding: 36rpx;
-  background: rgba(44, 41, 37, 0.28);
+  background: rgba(48, 42, 35, 0.34);
   box-sizing: border-box;
 }
 
 .modal {
   width: 100%;
+  background: linear-gradient(180deg, rgba(255, 253, 246, 0.98), rgba(255, 247, 232, 0.96));
 }
 
 .modal-title {
-  font-size: 34rpx;
-  font-weight: 600;
+  color: #302a23;
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", serif;
+  font-size: 36rpx;
+  font-weight: 700;
 }
 
 .modal-message {
   margin-top: 18rpx;
-  color: #6d6257;
+  padding-left: 18rpx;
+  border-left: 4rpx solid rgba(137, 72, 72, 0.24);
+  color: #6d6358;
   font-size: 26rpx;
   line-height: 1.7;
 }

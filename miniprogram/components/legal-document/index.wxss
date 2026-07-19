@@ -3,8 +3,9 @@
 }
 
 .section-title {
+  color: #5f6549;
   font-size: 30rpx;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .paragraph {
@@ -12,4 +13,5 @@
   color: #5f564e;
   font-size: 26rpx;
   line-height: 1.75;
+  word-break: break-word;
 }
