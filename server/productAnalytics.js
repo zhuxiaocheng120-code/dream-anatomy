@@ -160,7 +160,10 @@ async function deleteProductEventsForIdentity(client, identity, installationId, 
   if (!client || !principalHash) return { deleted: false, principalHash: null };
 
   try {
-    const response = await client.from("product_events").delete().eq("principal_hash", principalHash);
+    const response = await client.from("product_events")
+      .delete()
+      .eq("principal_type", identity.type)
+      .eq("principal_hash", principalHash);
     return { deleted: !(response && response.error), principalHash };
   } catch (error) {
     return { deleted: false, principalHash };

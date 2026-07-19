@@ -1,7 +1,10 @@
 const assert = require("node:assert/strict");
 const test = require("node:test");
 
-const { createAccountDeletionService } = require("../server/accountDeletion");
+const {
+  createAccountDeletionService,
+  createAuthenticatedPrincipalHash
+} = require("../server/accountDeletion");
 
 const verifiedUserId = "00000000-0000-4000-8000-000000000001";
 
@@ -14,6 +17,7 @@ function createFakeAdminClient(options = {}) {
     deletes: [],
     authDeletes: [],
     events: [],
+    productEvents: options.productEvents ? options.productEvents.map((event) => ({ ...event })) : [],
     failTable: options.failTable || "",
     failAuthDelete: Boolean(options.failAuthDelete),
     omitAuthAdmin: Boolean(options.omitAuthAdmin)
@@ -36,6 +40,12 @@ function createFakeAdminClient(options = {}) {
 
               if (state.failTable === tableName) {
                 return resolve({ data: null, error: new Error("delete failed") });
+              }
+
+              if (tableName === "product_events") {
+                state.productEvents = state.productEvents.filter((event) => {
+                  return !filters.every((filter) => event[filter.column] === filter.value);
+                });
               }
 
               return resolve({ data: null, error: null });
@@ -105,7 +115,17 @@ test("wrong confirmation is rejected before service role operations", async () =
 });
 
 test("deletes only data for the verified user and ignores body identity fields", async () => {
-  const { adminClient, service } = createService({ identity: { type: "authenticated", userId: verifiedUserId } });
+  const matchingHash = createAuthenticatedPrincipalHash(verifiedUserId, "analytics-secret");
+  const adminClient = createFakeAdminClient({
+    productEvents: [
+      { principal_type: "authenticated", principal_hash: matchingHash },
+      { principal_type: "guest", principal_hash: matchingHash }
+    ]
+  });
+  const { service } = createService({
+    adminClient,
+    identity: { type: "authenticated", userId: verifiedUserId }
+  });
 
   const result = await service.deleteAccount(createRequest({
     body: {
@@ -135,8 +155,12 @@ test("deletes only data for the verified user and ignores body identity fields",
   assert.deepEqual(adminClient.state.deletes[0].filters.map((filter) => filter.column), ["principal_type", "principal_hash"]);
   assert.equal(adminClient.state.deletes[0].filters[0].value, "authenticated");
   assert.notEqual(adminClient.state.deletes[0].filters[1].value, "guest:verified-user");
-  assert.deepEqual(adminClient.state.deletes[1].filters.map((filter) => filter.column), ["principal_hash"]);
-  assert.notEqual(adminClient.state.deletes[1].filters[0].value, "guest:verified-user");
+  assert.deepEqual(adminClient.state.deletes[1].filters.map((filter) => filter.column), ["principal_type", "principal_hash"]);
+  assert.equal(adminClient.state.deletes[1].filters[0].value, "authenticated");
+  assert.notEqual(adminClient.state.deletes[1].filters[1].value, "guest:verified-user");
+  assert.deepEqual(adminClient.state.productEvents, [
+    { principal_type: "guest", principal_hash: matchingHash }
+  ]);
   assert.equal(adminClient.state.deletes[2].filters[0].value, verifiedUserId);
   assert.equal(adminClient.state.deletes[3].filters[0].value, verifiedUserId);
   assert.equal(adminClient.state.deletes[4].filters[0].value, verifiedUserId);

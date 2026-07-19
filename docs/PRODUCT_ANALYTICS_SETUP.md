@@ -16,17 +16,44 @@ The migration creates `public.product_analytics_preferences` for authenticated o
 
 Events store an event id, UTC occurrence time, allowed event name, authenticated-or-guest type, HMAC-derived principal and session hashes, web platform, application version, and allowlisted properties. They do not store dream text, dream title, analysis text, emotions, symbols, sleep quality, search terms, email, full user id, token, Authorization header, raw IP, raw User-Agent, raw installation id, or raw session id.
 
-The event allowlist is:
+The complete event and property allowlist is:
 
 ```text
-app_opened, view_opened, dream_input_started, dream_input_abandoned,
-analysis_requested, analysis_completed, analysis_failed, result_viewed,
-dream_saved, journal_opened, dream_detail_opened, signup_started,
-signup_completed, login_completed, data_export_completed, dream_deleted,
-all_dreams_cleared
+app_opened: no properties
+view_opened: view_name
+dream_input_started: entry_point
+dream_input_abandoned: length_bucket, view_name
+analysis_requested: analysis_type
+analysis_completed: analysis_type, source, has_result_card
+analysis_failed: analysis_type, error_code
+result_viewed: analysis_type, source
+dream_saved: analysis_type, sync_status
+journal_opened: record_count_bucket
+dream_detail_opened: analysis_type
+signup_started: entry_point
+signup_completed: method
+login_completed: method
+data_export_completed: record_count_bucket
+dream_deleted: analysis_type
+all_dreams_cleared: record_count_bucket
 ```
 
-Each event accepts only its documented categorical properties. Examples include `view_name`, `entry_point`, `length_bucket`, `analysis_type`, `source`, `has_result_card`, `error_code`, `sync_status`, `record_count_bucket`, and `method`. Unknown properties are removed by the server.
+Allowed property values are:
+
+```text
+view_name: home, quick, quick-result, journal, dream-detail, privacy-data, auth
+entry_point: nav, home, journal, auth, privacy-data
+length_bucket: 1-50, 51-150, 151-500, 500+
+analysis_type: quick, deep, result_card
+source: ai_generated, fallback, generation_failed, mock_legacy
+has_result_card: boolean only
+error_code: uppercase stable code, A-Z and underscore, maximum 64 characters
+sync_status: synced, pending_sync, local_only
+record_count_bucket: 0, 1, 2-5, 6-20, 21+
+method: email
+```
+
+Each event accepts only the documented properties and values above. Unknown properties are removed by the server.
 
 ## Consent And Withdrawal
 

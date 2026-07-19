@@ -53,3 +53,15 @@ The sandbox run could not bind `127.0.0.1` and failed only route tests with `EPE
 Manual final diff review found no Critical or Important issue. A separate reviewer subagent was unavailable in this environment, so the review used the Task 5 brief checklist, targeted privacy/hash inspection, and the full automated suite.
 
 Authenticated product-event deletion requires a stable `ANALYTICS_HASH_SECRET` to recalculate the historical HMAC. Without that secret, account deletion still deletes the product analytics preference but cannot reliably target historical authenticated product events. Guest product events remain intentionally outside account deletion because ownership cannot be proven.
+
+---
+
+## Task Review Fix
+
+### RED Evidence
+
+`npm test -- tests/adminAnalyticsFrontend.test.js tests/accountDeletion.test.js tests/supabaseSecurity.test.js` reported 23 passing and 2 failing. The account deletion test showed product event deletion filtered only by `principal_hash`, so an identically hashed guest row could be selected. The product analytics setup test showed the documentation did not include the complete event-to-property allowlist.
+
+### GREEN Evidence
+
+After adding `principal_type` to product event deletion filters and documenting the full event/property/value allowlist, `npm test -- tests/adminAnalyticsFrontend.test.js tests/accountDeletion.test.js tests/supabaseSecurity.test.js` reported 25 passing and 0 failing. `node --check server/productAnalytics.js && node --check server/accountDeletion.js && node --check src/adminAnalytics.js` and `git diff --check` also passed.

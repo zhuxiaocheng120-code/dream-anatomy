@@ -164,6 +164,30 @@ test("product analytics setup documents consent, retention, and deletion boundar
   assert.match(docs, /analysis_completed/);
   assert.match(docs, /view_name/);
   assert.match(docs, /analysis_type/);
+  [
+    "app_opened: no properties",
+    "view_opened: view_name",
+    "dream_input_started: entry_point",
+    "dream_input_abandoned: length_bucket, view_name",
+    "analysis_requested: analysis_type",
+    "analysis_completed: analysis_type, source, has_result_card",
+    "analysis_failed: analysis_type, error_code",
+    "result_viewed: analysis_type, source",
+    "dream_saved: analysis_type, sync_status",
+    "journal_opened: record_count_bucket",
+    "dream_detail_opened: analysis_type",
+    "signup_started: entry_point",
+    "signup_completed: method",
+    "login_completed: method",
+    "data_export_completed: record_count_bucket",
+    "dream_deleted: analysis_type",
+    "all_dreams_cleared: record_count_bucket"
+  ].forEach((line) => {
+    assert.match(docs, new RegExp(line.replace(/[+]/g, "\\+")));
+  });
+  assert.match(docs, /entry_point: nav, home, journal, auth, privacy-data/);
+  assert.match(docs, /source: ai_generated, fallback, generation_failed, mock_legacy/);
+  assert.match(docs, /sync_status: synced, pending_sync, local_only/);
   assert.match(docs, /默认关闭/);
   assert.match(docs, /随时关闭/);
   assert.match(docs, /D1/);
