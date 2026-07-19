@@ -23,8 +23,8 @@
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果，AI 输出质量不完整时不会伪装成本地 mock。
 - 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
 - 梦境日记区域会在同一个列表中显示快速解析和深度引导记录，并可以点击查看单条记录详情。
-- 梦境详情会展示梦境标题、日期、时间、完整原文、AI 摘要、情绪标签、梦境意象、睡眠质量和分析类型。
-- 梦境详情里的 AI 分析采用可折叠卡片，包含荣格、弗洛伊德和现代心理学三个温和视角，并预留“自我思考”区域供后续扩展。
+- 梦境详情会展示梦境标题、日期、时间、完整原文、AI 摘要、情绪标签、梦境意象、睡眠质量和分析类型，并支持在本条记录里保存“自我思考”。
+- 梦境详情里的 AI 分析采用可折叠卡片，包含荣格、弗洛伊德和现代心理学三个温和视角。用户写下的“自我思考”保存在现有 `reportContent.userReflection` / `reportContent.userReflectionUpdatedAt` 字段中，不新增数据库 schema，也不会发送给 AI。
 - 项目包含 Supabase 基础设施准备：JavaScript SDK 依赖、环境变量示例，以及 `dream_records` 表迁移和 RLS 策略。
 - 右上角提供 Supabase Auth 账户入口，支持邮箱注册、邮箱验证后登录、退出登录、忘记密码和重置密码。
 - 登录后会自动把当前浏览器里的本地梦境迁移到 Supabase，并以云端梦境日记为主；未登录或云端暂时不可用时，仍保留 localStorage 本地保存和待同步兜底。
@@ -206,9 +206,9 @@ This PR does not add Timeline, Calendar, Favorite, Trash, Edit, Delete, Growth, 
 
 ## Dream Detail Boundaries
 
-Dream Detail is a read-only view of an existing dream record's original content. It does not edit dream text, change titles, or add database fields.
+Dream Detail keeps the existing dream text and generated analysis read-only. It does not edit dream text, change titles, or add database fields. It now supports a user-owned “自我思考” note saved inside the existing `reportContent` JSON.
 
-The folded AI analysis sections and saved Dream Result Card are presentation views derived from the existing saved record content. Dream Journal and Dream Detail read saved data and do not automatically repeat AI calls. They are not diagnosis, treatment, fortune telling, or future prediction.
+The folded AI analysis sections and saved Dream Result Card are presentation views derived from the existing saved record content. Dream Journal and Dream Detail read saved data and do not automatically repeat AI calls. The user reflection note is not included in AI requests, product analytics, or AI usage analytics. They are not diagnosis, treatment, fortune telling, or future prediction.
 
 ## Dream Result Card Boundaries
 

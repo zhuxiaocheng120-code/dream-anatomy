@@ -24,10 +24,10 @@ function createResultCardPayload() {
     },
     coreInsight: "这个梦也许在邀请你留意正在靠近的选择。",
     dimensions: [
-      { id: "symbol_depth", score: 140, summary: "门和走廊带来方向线索。", rationale: ["走廊和门形成过渡主题。", "寻找教室让方向感更清晰。"] },
-      { id: "emotion_intensity", score: -12, summary: "情绪线索较轻。", rationale: ["梦中停留在走廊。", "紧张感来自找不到教室。"] },
+      { id: "symbol_depth", score: 88, summary: "门和走廊带来方向线索。", rationale: ["走廊和门形成过渡主题。", "寻找教室让方向感更清晰。"] },
+      { id: "emotion_intensity", score: 0, summary: "情绪线索较轻。", rationale: ["梦中停留在走廊。", "紧张感来自找不到教室。"] },
       { id: "self_awareness", score: 42, summary: "你注意到门的存在。", rationale: ["门是清晰画面。", "你能描述停在门前的状态。"] },
-      { id: "growth_signal", score: 101, summary: "也许值得继续观察。", rationale: ["发光的门带来靠近新方向的线索。", "寻找教室暗示仍在准备。"] }
+      { id: "growth_signal", score: 76, summary: "也许值得继续观察。", rationale: ["发光的门带来靠近新方向的线索。", "寻找教室暗示仍在准备。"] }
     ],
     symbols: [
       { name: "门", generalPossibility: "门有时与选择有关。", contextMeaning: "在这次梦里可能与方向有关。", evidence: "梦里出现一扇门。", reflectionQuestion: "这扇门让你想到什么？" },
@@ -35,7 +35,7 @@ function createResultCardPayload() {
       { name: "学校", generalPossibility: "学校有时与学习有关。", contextMeaning: "可能与你熟悉的经历有关。", evidence: "地点是学校。", reflectionQuestion: "这让你想起什么？" },
       { name: "窗", generalPossibility: "窗有时与视野有关。", contextMeaning: "可能带来新的看法。", evidence: "窗在远处。", reflectionQuestion: "你看见了什么？" }
     ],
-    emotionalProfile: { primary: "好奇", secondary: ["迟疑"], intensity: 130, evidence: "你停在门前。" },
+    emotionalProfile: { primary: "好奇", secondary: ["迟疑"], intensity: 72, evidence: "你停在门前。" },
     reflectionQuestions: ["哪个画面最想被你记住？"],
     safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
   };
@@ -249,9 +249,111 @@ test("returns a normalized result card from strict DeepSeek JSON", { concurrency
       const payload = await response.json();
 
       assert.equal(response.status, 200);
-      assert.deepEqual(payload.analysis.dimensions.map((dimension) => dimension.score), [100, 0, 42, 100]);
+      assert.deepEqual(payload.analysis.dimensions.map((dimension) => dimension.score), [88, 0, 42, 76]);
       assert.equal(payload.analysis.symbols.length, 3);
-      assert.equal(payload.analysis.emotionalProfile.intensity, 100);
+      assert.equal(payload.analysis.emotionalProfile.intensity, 72);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("rejects incomplete standalone result-card generations before saving partial scores", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    const partialCard = createResultCardPayload();
+    partialCard.dimensions = [
+      {
+        id: "symbol_depth",
+        score: 70,
+        summary: "学校走廊和门提供了一些象征线索。",
+        rationale: ["学校走廊和门形成过渡线索。"]
+      }
+    ];
+    partialCard.emotionalProfile = {
+      primary: "迟疑",
+      secondary: ["好奇"],
+      intensity: null,
+      evidence: "梦里停在门前。"
+    };
+    return {
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify(partialCard) } }] })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里看见一扇门，停在门前很久。",
+        analysisType: "result_card"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 422);
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
+      assert.equal(payload.analysis, undefined);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("rejects standalone result-card generations with out-of-range raw scores", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    const partialCard = createResultCardPayload();
+    partialCard.dimensions[0].score = 140;
+    partialCard.emotionalProfile.intensity = -1;
+    return {
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify(partialCard) } }] })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "学校走廊里的门",
+        analysisType: "result_card"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 422);
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
+      assert.equal(payload.analysis, undefined);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("rejects standalone result-card generations with fallback-filled core fields", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    const partialCard = createResultCardPayload();
+    partialCard.coreInsight = "";
+    return {
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify(partialCard) } }] })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "学校走廊里的门",
+        analysisType: "result_card"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 422);
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
+      assert.equal(payload.generationMeta.source, "generation_failed");
+      assert.equal(payload.analysis, undefined);
     });
   } finally {
     global.fetch = nativeFetch;
@@ -306,7 +408,7 @@ test("returns quick analysis and result card from one final request", { concurre
       assert.equal(payload.analysis.emotionalReading.primaryEmotion, "紧张");
       assert.equal(payload.analysis.symbolReading.length, 2);
       assert.equal(payload.dreamResultCard.archetype.nameZh, "寻路者");
-      assert.deepEqual(payload.dreamResultCard.dimensions.map((dimension) => dimension.score), [100, 0, 42, 100]);
+      assert.deepEqual(payload.dreamResultCard.dimensions.map((dimension) => dimension.score), [88, 0, 42, 76]);
     });
   } finally {
     global.fetch = nativeFetch;
@@ -705,8 +807,8 @@ test("returns only a safe error when result-card JSON has no result-card shape",
         dreamText: "学校走廊里的门",
         analysisType: "result_card"
       });
-      assert.equal(response.status, 502);
-      assert.equal((await response.json()).error.code, "UPSTREAM_UNAVAILABLE");
+      assert.equal(response.status, 422);
+      assert.equal((await response.json()).error.code, "GENERATION_INCOMPLETE");
     });
   } finally {
     global.fetch = nativeFetch;
@@ -742,8 +844,8 @@ test("returns only a safe error when result-card JSON uses quick-analysis shape"
         dreamText: "学校走廊里的门",
         analysisType: "result_card"
       });
-      assert.equal(response.status, 502);
-      assert.equal((await response.json()).error.code, "UPSTREAM_UNAVAILABLE");
+      assert.equal(response.status, 422);
+      assert.equal((await response.json()).error.code, "GENERATION_INCOMPLETE");
     });
   } finally {
     global.fetch = nativeFetch;

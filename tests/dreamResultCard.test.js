@@ -135,12 +135,13 @@ test("does not render missing dimension scores as real zero values", () => {
   });
 
   controller.render(container, {
-    reportContent: { dreamResultCard: card, dreamResultCardStatus: "generation_failed" }
+    reportContent: { dreamResultCard: card, dreamResultCardStatus: "mock_legacy" }
   });
 
   assert.equal(card.dimensions[0].score, null);
-  assert.match(collectText(container), /暂不可用/);
+  assert.match(collectText(container), /线索不足，暂不评分/);
   assert.doesNotMatch(collectText(container), /象征深度 0/);
+  assert.equal(findElements(container, (element) => element.className === "result-card-progress").length, 0);
 });
 
 test("does not render missing dimension scores as zero for ai generated cards", () => {
@@ -165,8 +166,14 @@ test("does not render missing dimension scores as zero for ai generated cards", 
   });
 
   const text = collectText(container);
-  assert.match(text, /暂不可用/);
+  assert.match(text, /这是一条较早生成的梦境画像。/);
+  assert.match(text, /线索不足，暂不评分/);
+  assert.match(text, /暂不评分/);
+  assert.match(text, /观察依据/);
+  assert.match(text, /这次记录中没有足够明确的情绪强度线索/);
+  assert.equal(findElements(container, (element) => element.className === "result-card-progress").length, 0);
   assert.doesNotMatch(text, /象征深度 0/);
+  assert.doesNotMatch(text, /暂不可用/);
 });
 
 test("does not render non-numeric dimension scores as zero for ai generated cards", () => {
@@ -191,9 +198,10 @@ test("does not render non-numeric dimension scores as zero for ai generated card
   });
 
   const text = collectText(container);
-  assert.match(text, /暂不可用/);
+  assert.match(text, /线索不足，暂不评分/);
   assert.doesNotMatch(text, /象征深度 0/);
   assert.doesNotMatch(text, /情绪强度：0/);
+  assert.doesNotMatch(text, /暂不可用/);
 });
 
 test("does not render missing emotional intensity as zero", () => {
@@ -218,8 +226,33 @@ test("does not render missing emotional intensity as zero", () => {
   });
 
   const text = collectText(container);
-  assert.match(text, /情绪强度：暂不可用/);
+  assert.match(text, /情绪强度：线索不足，暂不评分/);
   assert.doesNotMatch(text, /情绪强度：0/);
+  assert.doesNotMatch(text, /暂不可用/);
+});
+
+test("renders true zero scores as valid scores", () => {
+  const card = createResultCardFixture();
+  card.dimensions[1] = {
+    id: "emotion_intensity",
+    score: 0,
+    summary: "情绪线索非常轻。",
+    rationale: ["梦里只是安静地站在门前。"]
+  };
+  card.emotionalProfile.intensity = 0;
+  const container = createFakeElement();
+  const controller = DreamResultCard.createDreamResultCardController({
+    document: { createElement: createFakeElement }
+  });
+
+  controller.render(container, {
+    reportContent: { dreamResultCard: card, dreamResultCardStatus: "ai_generated" }
+  });
+
+  const text = collectText(container);
+  assert.match(text, /情绪强度 0/);
+  assert.match(text, /情绪强度：0/);
+  assert.doesNotMatch(text, /线索不足，暂不评分/);
 });
 
 test("removes absolute or identity-defining model language before card rendering", () => {
@@ -333,6 +366,28 @@ test("renders an existing dream result card with its required sections", () => {
   }
   assert.equal(findElements(container, (element) => element.tagName === "DETAILS").length, 4);
   assert.equal(findElements(container, (element) => element.className === "result-card-symbol").length, 3);
+});
+
+test("marks historical cards with complete scores but missing core fields as partial", () => {
+  const card = createResultCardFixture();
+  delete card.coreInsight;
+  card.symbols = [];
+  card.reflectionQuestions = [];
+  const container = createFakeElement();
+  const controller = DreamResultCard.createDreamResultCardController({
+    document: { createElement: createFakeElement }
+  });
+
+  controller.render(container, {
+    reportContent: {
+      dreamResultCard: card,
+      dreamResultCardStatus: "ai_generated"
+    }
+  });
+
+  const renderedText = collectText(container);
+  assert.match(renderedText, /这是一条较早生成的梦境画像。/);
+  assert.match(renderedText, /一句话核心洞察/);
 });
 
 test("renders a generation fallback when a record has no dream result card", () => {

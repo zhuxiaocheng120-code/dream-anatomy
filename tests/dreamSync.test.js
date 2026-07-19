@@ -147,7 +147,13 @@ function readStoredRecords(storage) {
 }
 
 test("maps a local dream record to the Supabase row shape for the current user", () => {
-  const record = createRecord();
+  const record = createRecord({
+    reportContent: {
+      summary: "梦境整理",
+      userReflection: "我想把这个梦留给之后再看。",
+      userReflectionUpdatedAt: "2026-07-20T08:00:00.000Z"
+    }
+  });
   const row = DreamSync.mapLocalRecordToSupabaseRow(record, user);
 
   assert.equal(row.user_id, "user-1");
@@ -156,8 +162,35 @@ test("maps a local dream record to the Supabase row shape for the current user",
   assert.deepEqual(row.emotions, ["紧张"]);
   assert.deepEqual(row.symbols, ["学校", "雨"]);
   assert.equal(row.analysis_type, "快速解析");
+  assert.equal(row.report_content.userReflection, "我想把这个梦留给之后再看。");
+  assert.equal(row.report_content.userReflectionUpdatedAt, "2026-07-20T08:00:00.000Z");
   assert.equal(row.source, "local_storage");
   assert.equal(row.sync_status, "synced");
+});
+
+test("maps Supabase user reflection report content back to a local dream record", () => {
+  const localRecord = DreamSync.mapSupabaseRowToLocalRecord({
+    id: "cloud-one",
+    user_id: "user-1",
+    local_record_id: "local-one",
+    created_at: "2026-07-20T08:00:00.000Z",
+    raw_dream_text: "我梦见门。",
+    dream_summary: "门",
+    emotions: ["好奇"],
+    symbols: ["门"],
+    sleep_quality: "未记录",
+    analysis_type: "快速解析",
+    report_content: {
+      summary: "门",
+      userReflection: "门让我想到一个还没做的决定。",
+      userReflectionUpdatedAt: "2026-07-20T09:00:00.000Z"
+    },
+    source: "app",
+    sync_status: "synced"
+  });
+
+  assert.equal(localRecord.reportContent.userReflection, "门让我想到一个还没做的决定。");
+  assert.equal(localRecord.reportContent.userReflectionUpdatedAt, "2026-07-20T09:00:00.000Z");
 });
 
 test("ignores a forged local user id when mapping rows for the current session user", () => {

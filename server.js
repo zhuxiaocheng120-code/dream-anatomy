@@ -605,6 +605,80 @@ function normalizeDeepSeekResultCardOutput(parsed) {
   return DreamResultCard.normalizeDreamResultCard(parsed);
 }
 
+function hasModelText(value) {
+  return normalizeText(value).length > 0;
+}
+
+function hasModelScore(value) {
+  if (value === null || value === undefined || value === "") return false;
+  const score = Number(value);
+  return Number.isFinite(score) && score >= 0 && score <= 100;
+}
+
+function hasModelTextList(value, minLength = 1) {
+  return Array.isArray(value) && value.filter(hasModelText).length >= minLength;
+}
+
+function validateRawResultCardCompleteness(card) {
+  const issues = [];
+  const requiredDimensionIds = ["symbol_depth", "emotion_intensity", "self_awareness", "growth_signal"];
+
+  if (!isPlainObject(card)) {
+    return ["缺少完整 dreamResultCard。"];
+  }
+
+  if (!isPlainObject(card.archetype) || !hasModelText(card.archetype.id) || !hasModelText(card.archetype.summary) || !hasModelTextList(card.archetype.evidence, 2)) {
+    issues.push("梦境原型缺少真实 id、summary 或至少 2 条 evidence。");
+  }
+
+  if (!hasModelText(card.coreInsight)) {
+    issues.push("一句话核心洞察缺失。");
+  }
+
+  if (!Array.isArray(card.dimensions)) {
+    issues.push("四个梦境维度必须齐全。");
+  } else {
+    requiredDimensionIds.forEach((id) => {
+      const dimension = card.dimensions.find((item) => isPlainObject(item) && item.id === id);
+      if (!dimension || !hasModelScore(dimension.score) || !hasModelText(dimension.summary) || !hasModelTextList(dimension.rationale)) {
+        issues.push(`${id} 缺少真实分数、summary 或 rationale。`);
+      }
+    });
+  }
+
+  const symbols = Array.isArray(card.symbols) ? card.symbols.slice(0, 3) : [];
+  if (!symbols.length) {
+    issues.push("梦境画像主要意象缺失。");
+  } else if (!symbols.every((symbol) => (
+    isPlainObject(symbol)
+    && hasModelText(symbol.name)
+    && hasModelText(symbol.contextMeaning)
+    && hasModelText(symbol.evidence)
+    && hasModelText(symbol.reflectionQuestion)
+  ))) {
+    issues.push("梦境画像主要意象缺少语境解释、证据或反思问题。");
+  }
+
+  if (
+    !isPlainObject(card.emotionalProfile) ||
+    !hasModelText(card.emotionalProfile.primary) ||
+    !hasModelScore(card.emotionalProfile.intensity) ||
+    !hasModelText(card.emotionalProfile.evidence)
+  ) {
+    issues.push("情绪画像必须包含真实主要情绪、强度和梦境线索。");
+  }
+
+  if (!hasModelTextList(card.reflectionQuestions)) {
+    issues.push("梦境画像自我思考问题缺失。");
+  }
+
+  if (!hasModelText(card.safetyReminder) || !normalizeText(card.safetyReminder).includes("这不是诊断、治疗或预言，只是一种自我探索视角")) {
+    issues.push("梦境画像安全提醒缺失。");
+  }
+
+  return issues;
+}
+
 const forbiddenAnalysisLanguage = /算命|吉凶|预言|预测未来|命运|你就是|这(?:说明|代表)[：:，,\s]*你?一定|一定代表|绝对|必然|注定|诊断为|抑郁症|焦虑症|PTSD|心理治疗|治疗方案|治疗建议|药物治疗|会发财|会倒霉|会遇灾|恋爱成功/u;
 
 function getTextLength(value) {
@@ -780,8 +854,11 @@ function normalizeQuickCombinedOutput(parsed, dreamText) {
     return { output: null, issues: analysisIssues };
   }
 
-  const dreamResultCard = normalizeDeepSeekResultCardOutput(parsed.dreamResultCard);
-  const cardIssues = dreamResultCard ? validateResultCardQuality(dreamResultCard, dreamText) : ["梦境画像暂时未能完整生成。"];
+  const rawCardIssues = validateRawResultCardCompleteness(parsed.dreamResultCard);
+  const dreamResultCard = rawCardIssues.length ? null : normalizeDeepSeekResultCardOutput(parsed.dreamResultCard);
+  const cardIssues = rawCardIssues.length
+    ? rawCardIssues
+    : (dreamResultCard ? validateResultCardQuality(dreamResultCard, dreamText) : ["梦境画像暂时未能完整生成。"]);
   const generationMeta = {
     source: "ai_generated",
     promptVersion: quickPromptVersion,
@@ -977,7 +1054,24 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
   let normalized = null;
 
   if (parsed && analysisType === "result_card") {
-    normalized = normalizeDeepSeekResultCardOutput(parsed);
+    const rawCardIssues = validateRawResultCardCompleteness(parsed);
+    normalized = rawCardIssues.length ? null : normalizeDeepSeekResultCardOutput(parsed);
+    const cardIssues = rawCardIssues.length
+      ? rawCardIssues
+      : (normalized ? validateResultCardQuality(normalized, dreamText) : ["梦境画像暂时未能完整生成。"]);
+    if (!normalized || cardIssues.length) {
+      const incompleteError = new Error("Dream result card generation was incomplete.");
+      incompleteError.code = "GENERATION_INCOMPLETE";
+      incompleteError.statusCode = 422;
+      incompleteError.status = 422;
+      incompleteError.generationMeta = {
+        source: "generation_failed",
+        promptVersion: quickPromptVersion,
+        qualityStatus: "incomplete"
+      };
+      incompleteError.analyticsMeta = analyticsMeta;
+      throw incompleteError;
+    }
   } else if (parsed && analysisType === "guided_questions") {
     normalized = normalizeGuidedQuestionsOutput(parsed);
   } else if (parsed && analysisType === "guided_final") {

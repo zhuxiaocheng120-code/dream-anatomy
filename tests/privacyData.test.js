@@ -370,7 +370,11 @@ test("export excludes tokens principal hashes email and full user ids", async ()
     symbols: "门",
     sleepQuality: "未记录",
     analysisType: "快速解析",
-    reportContent: { dreamResultCard: { coreInsight: "也许在靠近选择。" } }
+    reportContent: {
+      dreamResultCard: { coreInsight: "也许在靠近选择。" },
+      userReflection: "这个梦让我想到一个还没有说出口的选择。",
+      userReflectionUpdatedAt: "2026-07-20T09:00:00.000Z"
+    }
   };
   const { controller, downloads } = createHarness({
     records: [record],
@@ -384,6 +388,7 @@ test("export excludes tokens principal hashes email and full user ids", async ()
 
   const exportedText = JSON.stringify(downloads[0].data);
   assert.match(exportedText, /我梦见一扇门/);
+  assert.match(exportedText, /这个梦让我想到一个还没有说出口的选择/);
   assert.doesNotMatch(exportedText, /private@example\.com/);
   assert.doesNotMatch(exportedText, /12345678-1234-1234-1234-123456789abc/);
   assert.doesNotMatch(exportedText, /access_token|refresh_token|principal_hash/i);
