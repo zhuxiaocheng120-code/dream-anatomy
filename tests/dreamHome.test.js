@@ -522,8 +522,13 @@ test("keeps the current view during restored and refreshed auth sessions", async
     client: {},
     user: { id: "user-one", email: "one@example.com" }
   });
+  await controller.handleSession({
+    authEvent: "SESSION_RESTORED",
+    client: {},
+    user: { id: "user-one", email: "one@example.com" }
+  });
 
-  assert.deepEqual(fetchedUsers, ["user-one", "user-one"]);
+  assert.deepEqual(fetchedUsers, ["user-one", "user-one", "user-one"]);
   assert.deepEqual(app.calls, []);
   assert.equal(elements.publicHome.hidden, true);
   assert.equal(elements.dreamHome.hidden, false);
@@ -600,6 +605,41 @@ test("initializes a public home without querying Supabase", async () => {
   assert.equal(queryCount, 0);
   assert.equal(elements.publicHome.hidden, false);
   assert.equal(elements.dreamHome.hidden, true);
+});
+
+test("initializes Dream Home from an already restored authenticated session", async () => {
+  const elements = createDreamHomeElements();
+  const app = createFakeApp();
+  const fetchedUsers = [];
+  const controller = DreamHome.createDreamHomeController({
+    app,
+    document: createFakeDocument(),
+    elements,
+    fetchRecords: async (_client, user) => {
+      fetchedUsers.push(user.id);
+      return [{
+        id: "record-one",
+        user_id: user.id,
+        created_at: "2026-07-12T08:00:00Z",
+        dream_summary: "已经恢复的梦"
+      }];
+    },
+    getCurrentSession: async () => ({
+      client: {},
+      user: { id: "restored-user", email: "restored@example.com" }
+    }),
+    now: () => new Date(2026, 6, 12, 8),
+    quotes: testQuotes
+  });
+
+  await controller.init();
+
+  assert.deepEqual(fetchedUsers, ["restored-user"]);
+  assert.equal(elements.publicHome.hidden, true);
+  assert.equal(elements.dreamHome.hidden, false);
+  assert.equal(elements.email.textContent, "restored@example.com");
+  assert.equal(elements.recent.children[0].textContent, "已经恢复的梦");
+  assert.deepEqual(app.calls, []);
 });
 
 test("discards a stale response after another user becomes active", async () => {
@@ -1065,6 +1105,83 @@ test("initializes the browser controller on DOMContentLoaded and maps auth event
   assert.equal(elements.email.textContent, "");
   assert.equal(elements.publicHome.hidden, false);
   assert.equal(elements.dreamHome.hidden, true);
+});
+
+test("browser Dream Home reads the current auth session when the first auth event was missed", async () => {
+  const documentListeners = new Map();
+  const windowListeners = new Map();
+  const elements = createDreamHomeElements();
+  const selectors = [
+    ["[data-public-home]", elements.publicHome],
+    ["[data-dream-home]", elements.dreamHome],
+    ["[data-dream-home-greeting]", elements.greeting],
+    ["[data-dream-home-email]", elements.email],
+    ["[data-dream-home-quote-text]", elements.quoteText],
+    ["[data-dream-home-quote-author]", elements.quoteAuthor],
+    ["[data-dream-home-stat='total']", elements.total],
+    ["[data-dream-home-stat='important']", elements.important],
+    ["[data-dream-home-stat='streak']", elements.streak],
+    ["[data-dream-home-stat='ai-organized']", elements.aiOrganized],
+    ["[data-dream-home-recent]", elements.recent],
+    ["[data-dream-home-status]", elements.status],
+    ["[data-dream-home-retry]", elements.retry],
+    ["[data-dream-home-action='quick']", elements.quickAction],
+    ["[data-dream-home-action='guided']", elements.guidedAction],
+    ["[data-dream-home-action='diary']", elements.diaryAction]
+  ];
+  const fakeDocument = {
+    readyState: "loading",
+    addEventListener(type, listener) {
+      documentListeners.set(type, listener);
+    },
+    createElement: createFakeElement,
+    querySelector(selector) {
+      const match = selectors.find(([item]) => item === selector);
+      return match ? match[1] : null;
+    }
+  };
+  const app = createFakeApp();
+  const fake = createFakeSupabase([{
+    id: "restored-record",
+    user_id: "restored-browser-user",
+    created_at: "2026-07-12T08:00:00",
+    dream_summary: "恢复后立即显示的梦"
+  }]);
+  fake.client.auth = {
+    getSession: async () => ({
+      data: {
+        session: {
+          user: { id: "restored-browser-user", email: "restored@example.com" }
+        }
+      }
+    })
+  };
+  const fakeWindow = {
+    DreamAnatomyApp: app,
+    DreamAnatomyAuth: {
+      getClient: () => fake.client
+    },
+    DreamQuotes: testQuotes,
+    addEventListener(type, listener) {
+      windowListeners.set(type, listener);
+    },
+    document: fakeDocument
+  };
+  fakeWindow.window = fakeWindow;
+  fakeWindow.globalThis = fakeWindow;
+
+  const source = fs.readFileSync(path.join(__dirname, "../src/dreamHome.js"), "utf8");
+  vm.runInNewContext(source, { globalThis: fakeWindow, window: fakeWindow });
+  documentListeners.get("DOMContentLoaded")();
+  await new Promise((resolve) => setImmediate(resolve));
+
+  assert.equal(typeof windowListeners.get("dream-anatomy-auth-session"), "function");
+  assert.deepEqual(fake.state.eqCalls, [["user_id", "restored-browser-user"]]);
+  assert.equal(elements.publicHome.hidden, true);
+  assert.equal(elements.dreamHome.hidden, false);
+  assert.equal(elements.email.textContent, "restored@example.com");
+  assert.equal(elements.recent.children[0].textContent, "恢复后立即显示的梦");
+  assert.deepEqual(app.calls, []);
 });
 
 test("integrates Dream Home markup, browser scripts, app bridge, and responsive layout", () => {

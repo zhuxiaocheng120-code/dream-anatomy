@@ -222,6 +222,7 @@
     const now = options.now || (() => new Date());
     const quotes = options.quotes || (root && root.DreamQuotes);
     const featureFlags = options.featureFlags || (root && root.DreamAnatomyFeatureFlags) || {};
+    const getCurrentSession = options.getCurrentSession || null;
     const deepGuidanceEnabled = isDeepGuidanceEnabled(featureFlags);
     let activeUser = null;
     let activeClient = null;
@@ -371,8 +372,33 @@
       return handleSession({ client: null, user: null });
     }
 
-    function init(session) {
-      return handleSession(session || { client: null, user: null });
+    async function init(session) {
+      if (session) {
+        return handleSession(session);
+      }
+
+      if (typeof getCurrentSession === "function") {
+        const generationAtStart = requestGeneration;
+        showHome(false);
+        try {
+          const currentSession = await getCurrentSession();
+          if (generationAtStart !== requestGeneration) {
+            return [];
+          }
+          return handleSession({
+            authEvent: "SESSION_RESTORED",
+            client: currentSession && currentSession.client ? currentSession.client : null,
+            user: currentSession && currentSession.user ? currentSession.user : null
+          });
+        } catch (error) {
+          if (generationAtStart !== requestGeneration) {
+            return [];
+          }
+          return handleSession({ authEvent: "SESSION_RESTORED", client: null, user: null });
+        }
+      }
+
+      return handleSession({ client: null, user: null });
     }
 
     function retry() {
@@ -448,11 +474,24 @@
       app: root.DreamAnatomyApp,
       document: root.document,
       elements,
+      getCurrentSession: async () => {
+        const auth = root.DreamAnatomyAuth;
+        const client = auth && typeof auth.getClient === "function" ? auth.getClient() : null;
+        if (!client || !client.auth || typeof client.auth.getSession !== "function") {
+          return { client: null, user: null };
+        }
+
+        const result = await client.auth.getSession();
+        const activeSession = result && result.data ? result.data.session : null;
+        return {
+          client,
+          user: activeSession && activeSession.user ? activeSession.user : null
+        };
+      },
       quotes: root.DreamQuotes
     });
 
     api.controller = controller;
-    controller.init();
     root.addEventListener("dream-anatomy-auth-session", (event) => {
       controller.handleSession({
         authEvent: event.detail ? event.detail.authEvent : "",
@@ -460,6 +499,7 @@
         client: event.detail ? event.detail.client : null
       });
     });
+    controller.init();
   }
 
   const api = {
