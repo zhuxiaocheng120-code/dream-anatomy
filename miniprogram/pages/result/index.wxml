@@ -1,12 +1,18 @@
 <view class="page">
-  <view class="eyebrow">快速解析结果</view>
-  <view class="title">梦境画像</view>
-  <view class="subtitle">AI 会整理线索，但不会替你下结论。</view>
-  <view class="small muted">下方包含梦境原型、一句话洞察和分享卡片预览。</view>
+  <view class="page-hero result-hero">
+    <view class="page-hero-content">
+      <view class="eyebrow">快速解析结果</view>
+      <view class="title">梦境画像</view>
+      <view class="subtitle">AI 会整理线索，但不会替你下结论。</view>
+      <view class="small muted">心理档案报告会区分摘要、线索、意象和自我思考。</view>
+      <view class="small muted">下方包含梦境原型、一句话洞察和分享卡片预览。</view>
+    </view>
+    <view class="archive-rail" aria-hidden="true" data-visual="result-report"></view>
+  </view>
 
   <error-state message="{{errorMessage}}"></error-state>
 
-  <view wx:if="{{analysis}}" class="section card stack">
+  <view wx:if="{{analysis}}" class="section manuscript-panel stack">
     <view>
       <view class="eyebrow">梦境摘要</view>
       <view>{{analysis.dreamSummary || analysis.summary}}</view>

@@ -1,3 +1,11 @@
+.home-hero {
+  min-height: 420rpx;
+}
+
+.home-orbit {
+  margin-left: auto;
+}
+
 .small-button {
   min-height: 60rpx;
   font-size: 24rpx;
@@ -6,4 +14,14 @@
 .record,
 .empty {
   margin-top: 18rpx;
+}
+
+.archive-empty {
+  display: flex;
+  align-items: center;
+  gap: 20rpx;
+}
+
+.archive-card {
+  border-left: 4rpx solid rgba(95, 101, 73, 0.26);
 }

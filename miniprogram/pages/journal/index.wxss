@@ -1,3 +1,7 @@
+.journal-heading .archive-rail {
+  margin-top: 28rpx;
+}
+
 .moon {
   width: 72rpx;
   height: 72rpx;
@@ -5,6 +9,9 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  background: rgba(139, 119, 100, 0.12);
   color: #8b7764;
+}
+
+.journal-record {
+  border-left: 4rpx solid rgba(95, 101, 73, 0.24);
 }

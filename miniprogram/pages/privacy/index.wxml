@@ -1,7 +1,12 @@
 <view class="page">
-  <view class="eyebrow">Dream Anatomy</view>
-  <view class="title">隐私与数据</view>
-  <view class="subtitle">你可以查看法律文件，导出或清除本机游客数据。</view>
+  <view class="archive-panel privacy-heading">
+    <view class="panel-content">
+      <view class="eyebrow">Dream Anatomy</view>
+      <view class="title">隐私与数据</view>
+      <view class="subtitle">档案文书会把重要边界说清楚：你可以查看法律文件，导出或清除本机游客数据。</view>
+    </view>
+    <view class="archive-rail" aria-hidden="true" data-visual="privacy-ledger"></view>
+  </view>
 
   <view class="section stack">
     <button class="button secondary" data-type="privacy" bindtap="openDocument">隐私政策</button>
@@ -13,11 +18,11 @@
 
   <view class="section stack">
     <button class="button" bindtap="exportData">导出我的数据</button>
-    <button class="button secondary" bindtap="showClearConfirm">清除本机梦境数据</button>
+    <button class="button danger" bindtap="showClearConfirm">清除本机梦境数据</button>
   </view>
 
   <view wx:if="{{message}}" class="section card small muted">{{message}}</view>
-  <view wx:if="{{exportText}}" class="section card export-text">{{exportText}}</view>
+  <view wx:if="{{exportText}}" class="section card export-text long-text-safe">{{exportText}}</view>
 
   <confirmation-modal
     visible="{{confirmVisible}}"

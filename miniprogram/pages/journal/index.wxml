@@ -1,17 +1,22 @@
 <view class="page">
-  <view class="eyebrow">Dream Anatomy</view>
-  <view class="title">本机梦境日记</view>
-  <view class="subtitle">游客版记录只保存在当前微信本机。</view>
+  <view class="archive-panel journal-heading">
+    <view class="panel-content">
+      <view class="eyebrow">Dream Anatomy</view>
+      <view class="title">本机梦境日记</view>
+      <view class="subtitle">私人梦境档案只保存在当前微信本机。</view>
+    </view>
+    <view class="archive-rail" aria-hidden="true" data-visual="journal-archive"></view>
+  </view>
 
   <button class="button section" bindtap="goQuick">记录新梦</button>
 
   <view wx:if="{{records.length === 0}}" class="section card empty">
-    <view class="moon">月</view>
+    <view class="moon empty-mark" aria-hidden="true">月</view>
     <view>你还没有记录任何梦。</view>
     <view class="small muted">今天开始，把梦轻轻放进梦境日记。</view>
   </view>
 
-  <view wx:for="{{records}}" wx:key="localRecordId" class="section card" data-id="{{item.localRecordId}}" bindtap="openRecord">
+  <view wx:for="{{records}}" wx:key="localRecordId" class="section card journal-record" data-id="{{item.localRecordId}}" bindtap="openRecord">
     <view>{{item.title}}</view>
     <view class="small muted">{{item.displayDate}} · {{item.analysisType}}</view>
   </view>

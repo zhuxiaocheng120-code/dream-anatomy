@@ -1,23 +1,33 @@
 .result-card {
   display: block;
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(180deg, rgba(255, 253, 246, 0.82), rgba(255, 247, 232, 0.64));
 }
 
 .archetype {
   margin-top: 16rpx;
+  color: #302a23;
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", serif;
   font-size: 36rpx;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .insight {
   margin-top: 24rpx;
+  padding: 24rpx;
+  border: 1rpx solid rgba(78, 63, 49, 0.12);
+  border-radius: 14rpx;
+  background: rgba(255, 253, 246, 0.58);
   font-size: 28rpx;
   line-height: 1.7;
 }
 
 .section-title {
   margin-top: 32rpx;
+  color: #5f6549;
   font-size: 28rpx;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .dimension,
@@ -38,19 +48,20 @@
 .bar-fill {
   height: 100%;
   border-radius: inherit;
-  background: #8b7764;
+  background: #5f6549;
 }
 
 .symbol-name {
   font-size: 28rpx;
-  font-weight: 600;
+  font-weight: 700;
 }
 
 .share-preview {
   margin-top: 18rpx;
   padding: 26rpx;
-  border-radius: 18rpx;
-  background: #f2eadf;
+  border: 1rpx solid rgba(78, 63, 49, 0.14);
+  border-radius: 16rpx;
+  background: #fffdf6;
   font-size: 26rpx;
   line-height: 1.7;
 }

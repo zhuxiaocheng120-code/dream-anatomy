@@ -1,8 +1,13 @@
 <view class="page">
-  <view class="eyebrow">Dream Anatomy</view>
-  <view class="title">游客模式</view>
-  <view class="subtitle">当前版本不接入微信登录，也不做云端同步。梦境只保存在本机。</view>
-  <view class="section card">
+  <view class="page-hero profile-hero">
+    <view class="page-hero-content">
+      <view class="eyebrow">Dream Anatomy</view>
+      <view class="title">游客模式</view>
+      <view class="subtitle">当前版本不接入微信登录，也不做云端同步。梦境只保存在本机。</view>
+    </view>
+    <view class="identity-seal" aria-hidden="true" data-visual="profile-seal">本机游客档案</view>
+  </view>
+  <view class="section card profile-card">
     <view>账户状态：游客</view>
     <view class="small muted">云同步：暂未开启</view>
   </view>

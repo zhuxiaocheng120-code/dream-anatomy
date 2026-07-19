@@ -1,9 +1,15 @@
 <view class="page">
-  <view class="eyebrow">快速解析</view>
-  <view class="title">写下梦境碎片</view>
-  <view class="subtitle">可以只写几个画面、人物或醒来后的感受。</view>
+  <view class="archive-panel quick-workbench">
+    <view class="panel-content">
+      <view class="eyebrow">快速解析</view>
+      <view class="title">写下梦境碎片</view>
+      <view class="subtitle">可以只写几个画面、人物或醒来后的感受。</view>
+      <view class="microcopy">情绪有时比解释更早接近真相。</view>
+    </view>
+    <view class="corner-lines" aria-hidden="true" data-visual="quick-workbench"></view>
+  </view>
 
-  <textarea class="input section" value="{{dreamText}}" maxlength="5000" placeholder="例如：我梦见自己在很长的走廊里找一间教室……" bindinput="onDreamInput"></textarea>
+  <textarea class="input section manuscript-input" value="{{dreamText}}" maxlength="5000" placeholder="例如：我梦见自己在很长的走廊里找一间教室……" bindinput="onDreamInput"></textarea>
 
   <checkbox-group class="section consent" bindchange="toggleAgreement">
     <label class="small muted">

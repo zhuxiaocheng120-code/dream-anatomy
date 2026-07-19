@@ -49,6 +49,22 @@ dream_anatomy_guest_records_v1
 - 不写入产品行为分析事件。
 - 深度引导保持“正在开发中”，不能触发 AI 请求或创建深度引导记录。
 
+## 视觉结构
+
+小程序视觉语言复用 Web 端已经确定的 aged paper / quiet archive / psychological studio 方向，但保持原生小程序轻量实现。共享视觉样式集中在 `miniprogram/app.wxss`，页面只保留必要的局部 WXSS。
+
+主要页面视觉定位：
+
+- 首页：最完整的品牌视觉锚点。
+- 快速解析：梦境记录工作台和手稿输入区。
+- 结果页：心理档案报告。
+- 梦境日记：私人梦境档案和索引卡列表。
+- 梦境详情：手稿记录与分析报告。
+- 隐私与数据：可信的档案文书。
+- 我的：本机游客档案和印章感。
+
+原创装饰仅通过 WXML/WXSS 绘制，不依赖远程图片、字体文件或版权不明素材。完整视觉说明见 `docs/MINIPROGRAM_VISUAL_LANGUAGE.md`。
+
 ## 页面与服务
 
 - `miniprogram/pages/home/`：首页、快速解析入口、本机最近梦境、深度引导禁用展示。
