@@ -5,7 +5,8 @@
     root.DreamLegalDocuments = factory();
   }
 })(typeof window !== "undefined" ? window : globalThis, function () {
-  const PRIVACY_POLICY_VERSION = "2026-07-17";
+  const PRIVACY_POLICY_VERSION = "2026-07-19";
+  const PRODUCT_ANALYTICS_VERSION = "2026-07-19";
   const TERMS_VERSION = "2026-07-17";
   const AI_DISCLAIMER_VERSION = "2026-07-17";
 
@@ -16,6 +17,7 @@
   function getLegalVersions() {
     return {
       privacyPolicyVersion: PRIVACY_POLICY_VERSION,
+      productAnalyticsVersion: PRODUCT_ANALYTICS_VERSION,
       termsVersion: TERMS_VERSION,
       aiDisclaimerVersion: AI_DISCLAIMER_VERSION
     };
@@ -45,6 +47,10 @@
           "为了服务安全、额度控制、成本估算和运营分析，我们会记录 AI 请求时间、用户类型、analysisType、结果状态、错误码、耗时、模型、Token 用量和可选成本估算。",
           "AI 使用统计不保存梦境正文、邮箱、raw IP、完整 Supabase UUID、access token、refresh token、Authorization header 或完整 AI 回复。",
           "principal_hash 是经过 ANALYTICS_HASH_SECRET 处理的去标识化标识，用于近似独立用户统计、长期趋势和使用频率分析。它不是完全不可关联的数据。"
+        ]),
+        createSection("可选的产品分析", [
+          "产品分析默认关闭。只有你主动开启后，我们才会记录不包含梦境内容的功能使用事件，用于分析产品体验、错误和使用趋势。",
+          "产品分析不记录梦境正文、邮箱、raw IP、raw User-Agent、token、完整 UUID 或直接身份关联信息。你可以随时在隐私与数据中心关闭产品分析，并删除可关联的产品分析数据。"
         ]),
         createSection("服务提供方", [
           "Dream Anatomy 当前使用 Supabase 提供账户、认证和云端数据存储能力，使用 Render 承载 Web 服务，使用 DeepSeek 提供 AI 解析能力。",
@@ -148,6 +154,7 @@
 
   return {
     AI_DISCLAIMER_VERSION,
+    PRODUCT_ANALYTICS_VERSION,
     PRIVACY_POLICY_VERSION,
     TERMS_VERSION,
     getLegalDocument,

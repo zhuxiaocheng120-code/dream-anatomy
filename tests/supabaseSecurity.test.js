@@ -55,6 +55,26 @@ test("ai_usage_events migration creates protected analytics table", () => {
   assert.doesNotMatch(migration, /create policy[\s\S]+ai_usage_events/i);
 });
 
+test("product analytics migration protects preferences and server-only events", () => {
+  const migration = readProjectFile("supabase/migrations/20260719000000_create_product_analytics.sql");
+
+  assert.match(migration, /create table if not exists public\.product_analytics_preferences/);
+  assert.match(migration, /create table if not exists public\.product_events/);
+  assert.match(migration, /event_id uuid not null unique/);
+  for (const table of ["product_analytics_preferences", "product_events"]) {
+    assert.match(migration, new RegExp(`alter table public\\.${table} enable row level security`));
+    assert.match(migration, new RegExp(`alter table public\\.${table} force row level security`));
+  }
+  assert.match(migration, /for select\s+to authenticated\s+using \(auth\.uid\(\) = user_id\)/s);
+  assert.match(migration, /for insert\s+to authenticated\s+with check \(auth\.uid\(\) = user_id\)/s);
+  assert.match(migration, /for update\s+to authenticated\s+using \(auth\.uid\(\) = user_id\)\s+with check \(auth\.uid\(\) = user_id\)/s);
+  const productEventsSection = migration.slice(migration.indexOf("create table if not exists public.product_events"));
+  assert.match(productEventsSection, /revoke all on table public\.product_events from anon/);
+  assert.match(productEventsSection, /revoke all on table public\.product_events from authenticated/);
+  assert.doesNotMatch(productEventsSection, /create policy/i);
+  assert.doesNotMatch(migration, /ttl|retention|delete\s+from\s+public\.product_events/i);
+});
+
 test("service role and analytics secrets stay out of browser runtime config", () => {
   const runtimeWriter = readProjectFile("scripts/writeRuntimeEnv.js");
   const envExample = readProjectFile(".env.example");
@@ -134,4 +154,48 @@ test("privacy data controls setup documents deletion and legal boundaries", () =
   assert.match(docs, /ANALYTICS_HASH_SECRET/);
   assert.match(docs, /注销账户/);
   assert.doesNotMatch(docs, /永久保存|永不删除|完全匿名|已通过律师审核/);
+});
+
+test("product analytics setup documents consent, retention, and deletion boundaries", () => {
+  const docs = readProjectFile("docs/PRODUCT_ANALYTICS_SETUP.md");
+
+  assert.match(docs, /20260719000000_create_product_analytics\.sql/);
+  assert.match(docs, /app_opened/);
+  assert.match(docs, /analysis_completed/);
+  assert.match(docs, /view_name/);
+  assert.match(docs, /analysis_type/);
+  [
+    "app_opened: no properties",
+    "view_opened: view_name",
+    "dream_input_started: entry_point",
+    "dream_input_abandoned: length_bucket, view_name",
+    "analysis_requested: analysis_type",
+    "analysis_completed: analysis_type, source, has_result_card",
+    "analysis_failed: analysis_type, error_code",
+    "result_viewed: analysis_type, source",
+    "dream_saved: analysis_type, sync_status",
+    "journal_opened: record_count_bucket",
+    "dream_detail_opened: analysis_type",
+    "signup_started: entry_point",
+    "signup_completed: method",
+    "login_completed: method",
+    "data_export_completed: record_count_bucket",
+    "dream_deleted: analysis_type",
+    "all_dreams_cleared: record_count_bucket"
+  ].forEach((line) => {
+    assert.match(docs, new RegExp(line.replace(/[+]/g, "\\+")));
+  });
+  assert.match(docs, /entry_point: nav, home, journal, auth, privacy-data/);
+  assert.match(docs, /source: ai_generated, fallback, generation_failed, mock_legacy/);
+  assert.match(docs, /sync_status: synced, pending_sync, local_only/);
+  assert.match(docs, /默认关闭/);
+  assert.match(docs, /随时关闭/);
+  assert.match(docs, /D1/);
+  assert.match(docs, /D7/);
+  assert.match(docs, /UTC/);
+  assert.match(docs, /当前版本不执行自动清理/);
+  assert.match(docs, /authenticated.*product_events/s);
+  assert.match(docs, /guest.*product_events.*不会被删除/s);
+  assert.match(docs, /基于已同意产品分析的用户样本/);
+  assert.doesNotMatch(docs, /永久保存|永不删除|完全匿名/);
 });

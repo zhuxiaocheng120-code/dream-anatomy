@@ -367,7 +367,7 @@
           <p class="eyebrow">运营概览</p>
           <h2 id="admin-title">运营后台</h2>
           <p class="summary">
-            查看 AI 使用趋势、成功率、耗时、Token 和预估成本。这里不会显示梦境正文、邮箱或真实用户身份。
+            查看 AI 使用趋势与已同意产品分析的聚合使用情况。这里不会显示梦境正文、邮箱、真实用户身份或标识哈希。
           </p>
           <p class="status" data-admin-status aria-live="polite"></p>
           <p class="status" data-admin-cost-note></p>
@@ -396,6 +396,39 @@
           <h3 id="admin-recent-title">最近请求</h3>
           <div class="admin-recent-list" data-admin-recent></div>
         </section>
+
+        <section class="admin-section admin-product-section" aria-labelledby="admin-product-title">
+          <div class="admin-section-heading">
+            <div>
+              <h3 id="admin-product-title">产品使用概览</h3>
+              <p class="admin-sample-note" data-admin-product-sample></p>
+            </div>
+          </div>
+          <div class="admin-card-grid" data-admin-product-cards></div>
+        </section>
+
+        <div class="admin-product-grid">
+          <section class="admin-section" aria-labelledby="admin-product-funnel-title">
+            <h3 id="admin-product-funnel-title">产品漏斗</h3>
+            <div class="admin-chart" data-admin-product-funnel></div>
+          </section>
+          <section class="admin-section" aria-labelledby="admin-product-retention-title">
+            <h3 id="admin-product-retention-title">产品回访</h3>
+            <div class="admin-chart" data-admin-product-retention></div>
+          </section>
+          <section class="admin-section" aria-labelledby="admin-product-principal-title">
+            <h3 id="admin-product-principal-title">主体类型</h3>
+            <div class="admin-chart" data-admin-product-principal-distribution></div>
+          </section>
+          <section class="admin-section" aria-labelledby="admin-product-page-title">
+            <h3 id="admin-product-page-title">页面查看</h3>
+            <div class="admin-chart" data-admin-product-page-distribution></div>
+          </section>
+          <section class="admin-section" aria-labelledby="admin-product-event-title">
+            <h3 id="admin-product-event-title">事件分布</h3>
+            <div class="admin-chart" data-admin-product-event-distribution></div>
+          </section>
+        </div>
       </section>
 
       <section class="view-panel work-panel privacy-data-panel" data-view="privacy-data" aria-labelledby="privacy-data-title" hidden>
@@ -486,6 +519,7 @@
     <script src="runtime-env.js"></script>
     <script src="featureFlags.js"></script>
     <script src="legalDocuments.js"></script>
+    <script src="productAnalytics.js"></script>
     <script src="privacyData.js"></script>
     <script src="dreamSync.js"></script>
     <script src="auth.js"></script>

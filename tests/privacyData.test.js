@@ -3,6 +3,7 @@ const test = require("node:test");
 
 const LegalDocuments = require("../src/legalDocuments");
 const PrivacyData = require("../src/privacyData");
+const ProductAnalytics = require("../src/productAnalytics");
 
 function createFakeElement(tagName = "div") {
   const listeners = new Map();
@@ -148,6 +149,7 @@ function createHarness(options = {}) {
     dreamSync,
     elements,
     legalDocuments: LegalDocuments,
+    productAnalytics: options.productAnalytics,
     runtimeEnv: { PUBLIC_SUPPORT_EMAIL: "support@example.com" },
     storage,
     storageKey: "dreamAnatomy.quickDecodeRecords",
@@ -207,6 +209,46 @@ function createLegalConsentClient(options = {}) {
   };
 }
 
+function createAnalyticsPreferenceClient(enabledByUser = {}) {
+  const state = { reads: [], upserts: [] };
+  return {
+    state,
+    from(tableName) {
+      if (tableName === "legal_consents") {
+        return {
+          select() { return { eq() { return { maybeSingle: async () => ({ data: null, error: null }) }; } }; }
+        };
+      }
+      assert.equal(tableName, "product_analytics_preferences");
+      return {
+        select() {
+          return {
+            eq(column, userId) {
+              state.reads.push({ column, userId });
+              return { maybeSingle: async () => ({ data: { enabled: Boolean(enabledByUser[userId]) }, error: null }) };
+            }
+          };
+        },
+        upsert(row, options) {
+          state.upserts.push({ row, options });
+          enabledByUser[row.user_id] = row.enabled;
+          return Promise.resolve({ error: null });
+        }
+      };
+    }
+  };
+}
+
+function createRealAnalyticsController(storage) {
+  let id = 0;
+  return ProductAnalytics.createProductAnalyticsController({
+    localStorage: storage,
+    sessionStorage: createStorage(),
+    createUuid: () => `00000000-0000-4000-8000-${String(++id).padStart(12, "0")}`,
+    fetch: async () => ({ ok: true })
+  });
+}
+
 test("renders privacy center entry and legal documents with Chinese text", () => {
   const { controller, elements } = createHarness();
 
@@ -221,8 +263,88 @@ test("renders privacy center entry and legal documents with Chinese text", () =>
   assert.match(viewText, /用户协议/);
   assert.match(viewText, /AI 使用说明/);
   assert.match(viewText, /导出我的数据/);
+  assert.match(viewText, /帮助改进 Dream Anatomy/);
+  assert.match(viewText, /删除我的产品分析数据/);
   assert.match(documentText, /support@example\.com/);
   assert.match(documentText, /Beta 技术版本/);
+});
+
+test("product analytics consent defaults off and saves only authenticated preferences", async () => {
+  const calls = [];
+  const productAnalytics = {
+    getAnalyticsConsent: () => false,
+    setAnalyticsConsent: async (enabled) => calls.push({ type: "set", enabled }),
+    loadPreferenceForSession: async (detail) => calls.push({ type: "load", detail })
+  };
+  const { controller, elements } = createHarness({ productAnalytics });
+
+  controller.render();
+  const toggle = elements.view.children[1].children[5].children[2].children[0];
+  assert.equal(toggle.checked, false);
+  await toggle.trigger("change", { target: { checked: true } });
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client: {} });
+
+  assert.deepEqual(calls[0], { type: "set", enabled: true });
+  assert.equal(calls[1].type, "load");
+  assert.equal(calls[1].detail.user.id, "user-1");
+});
+
+test("turning off analytics clears the queue and deletion uses the analytics controller", async () => {
+  const calls = [];
+  const productAnalytics = {
+    getAnalyticsConsent: () => true,
+    setAnalyticsConsent: async (enabled) => calls.push({ type: "set", enabled }),
+    deleteProductAnalyticsData: async () => calls.push({ type: "delete" })
+  };
+  const { controller, elements } = createHarness({ productAnalytics });
+
+  controller.render();
+  const analyticsCard = elements.view.children[1].children[5];
+  const toggle = analyticsCard.children[2].children[0];
+  await toggle.trigger("change", { target: { checked: false } });
+  await analyticsCard.children[3].trigger("click");
+
+  assert.deepEqual(calls, [{ type: "set", enabled: false }, { type: "delete" }]);
+  assert.match(elements.status.textContent, /产品分析数据/);
+});
+
+test("privacy controller upserts authenticated analytics preference through the dedicated table", async () => {
+  const storage = createStorage();
+  const client = createAnalyticsPreferenceClient({ "user-1": false });
+  const productAnalytics = createRealAnalyticsController(storage);
+  const { controller, elements } = createHarness({ productAnalytics, storage });
+
+  controller.render();
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
+  const toggle = elements.view.children[1].children[5].children[2].children[0];
+  await toggle.trigger("change", { target: { checked: true } });
+
+  assert.deepEqual(client.state.upserts, [{
+    row: { user_id: "user-1", enabled: true },
+    options: { onConflict: "user_id" }
+  }]);
+  assert.equal(storage.getItem("dreamAnatomy.productAnalytics.guestPreference"), null);
+});
+
+test("privacy controller keeps guest preference local and reloads preference on account switch", async () => {
+  const storage = createStorage();
+  const client = createAnalyticsPreferenceClient({ "user-1": true, "user-2": false });
+  const productAnalytics = createRealAnalyticsController(storage);
+  const { controller } = createHarness({ productAnalytics, storage });
+
+  await productAnalytics.setAnalyticsConsent(true);
+  assert.equal(storage.getItem("dreamAnatomy.productAnalytics.guestPreference"), "true");
+  assert.equal(client.state.upserts.length, 0);
+
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
+  assert.equal(productAnalytics.getAnalyticsConsent(), true);
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-2" }, client });
+
+  assert.deepEqual(client.state.reads, [
+    { column: "user_id", userId: "user-1" },
+    { column: "user_id", userId: "user-2" }
+  ]);
+  assert.equal(productAnalytics.getAnalyticsConsent(), false);
 });
 
 test("guest AI consent stores only current local legal versions after explicit confirmation", async () => {
@@ -285,6 +407,39 @@ test("export does not include full cloud record UUIDs", async () => {
   await controller.exportData();
 
   assert.doesNotMatch(JSON.stringify(downloads[0].data), new RegExp(cloudUuid));
+});
+
+test("tracks export, deletion, and clearing only after each data action succeeds", async () => {
+  const events = [];
+  const productAnalytics = {
+    trackEvent(name, properties) {
+      events.push({ name, properties });
+    }
+  };
+  const record = { id: "record-1", analysisType: "快速解析" };
+  const { controller } = createHarness({
+    confirmResult: "清空全部梦境",
+    productAnalytics,
+    records: [record],
+    dreamSync: {
+      getVisibleRecords: () => [record],
+      loadAllRecords: () => [record],
+      deleteRecord: async () => ({ deletedCount: 1, records: [] }),
+      clearCurrentRecords: async () => ({ deletedCount: 1, records: [] }),
+      clearCurrentLocalCache: () => ({ deletedCount: 0, records: [] }),
+      getCurrentUser: () => null
+    }
+  });
+
+  await controller.exportData();
+  await controller.deleteDreamRecord(record);
+  await controller.clearAllDreams();
+
+  assert.deepEqual(events, [
+    { name: "data_export_completed", properties: { record_count_bucket: "1" } },
+    { name: "dream_deleted", properties: { analysis_type: "quick" } },
+    { name: "all_dreams_cleared", properties: { record_count_bucket: "1" } }
+  ]);
 });
 
 test("clear all requires exact confirmation text before deleting records", async () => {
@@ -408,6 +563,32 @@ test("login checks current legal consent and prompts stale versions once", async
   });
 
   assert.equal(client.state.selects.length, 1);
+});
+
+test("analytics preference failures do not block legal consent checks", async () => {
+  const client = createLegalConsentClient({
+    row: {
+      privacy_policy_version: "old",
+      terms_version: "old",
+      ai_disclaimer_version: "old"
+    }
+  });
+  const productAnalytics = {
+    loadPreferenceForSession: async () => {
+      throw new Error("analytics preference unavailable");
+    },
+    getAnalyticsConsent: () => false
+  };
+  const { controller, elements } = createHarness({ productAnalytics });
+
+  await controller.handleSession({
+    authEvent: "SIGNED_IN",
+    user: { id: "user-1" },
+    client
+  });
+
+  assert.deepEqual(client.state.selects, [{ column: "user_id", value: "user-1" }]);
+  assert.match(elements.status.textContent, /请确认最新版本/);
 });
 
 test("acceptCurrentLegalVersions saves versions for the current authenticated user", async () => {

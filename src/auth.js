@@ -116,6 +116,33 @@
     return window.DreamPrivacyData.validateRegistrationConsent();
   }
 
+  function trackProductEvent(eventName, properties) {
+    const analytics = window.DreamProductAnalytics && window.DreamProductAnalytics.controller;
+    if (!analytics || typeof analytics.trackEvent !== "function") {
+      return;
+    }
+
+    analytics.trackEvent(eventName, properties);
+    if (typeof analytics.flushEvents === "function") {
+      Promise.resolve(analytics.flushEvents()).catch(() => {});
+    }
+  }
+
+  async function loadAnalyticsPreferenceForSession(session, authEvent) {
+    const analytics = window.DreamProductAnalytics && window.DreamProductAnalytics.controller;
+    const user = session && session.user ? session.user : null;
+    const client = getSupabaseClient();
+    if (!analytics || !user || !client || typeof analytics.loadPreferenceForSession !== "function") {
+      return false;
+    }
+
+    try {
+      return await analytics.loadPreferenceForSession({ authEvent, client, user });
+    } catch (error) {
+      return false;
+    }
+  }
+
   function showAuthPanel(mode) {
     authPanels.forEach((panel) => {
       const isActive = panel.dataset.authPanel === mode;
@@ -194,6 +221,8 @@
     const email = getFormEmail(registerForm);
     const password = getFormPassword(registerForm);
 
+    trackProductEvent("signup_started", { entry_point: "auth" });
+
     const { data, error } = await client.auth.signUp({
       email,
       password,
@@ -215,6 +244,7 @@
       return;
     }
 
+    trackProductEvent("signup_completed", { method: "email" });
     registerForm.reset();
     setStatus("验证邮件已发送，请完成邮箱验证后登录。\n梦境将能够安全保存并跨设备同步。", "success");
     showAuthPanel("login");
@@ -250,6 +280,10 @@
 
     renderSession(data ? data.session : null);
     notifyAuthUser(data ? data.session : null, "SIGNED_IN");
+    const analyticsEnabled = await loadAnalyticsPreferenceForSession(data ? data.session : null, "SIGNED_IN");
+    if (analyticsEnabled) {
+      trackProductEvent("login_completed", { method: "email" });
+    }
     loginForm.reset();
     setStatus("欢迎回来，继续探索你的梦境。", "success");
   }

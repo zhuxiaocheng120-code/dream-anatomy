@@ -147,11 +147,12 @@ Deletion order:
 
 1. If `ANALYTICS_HASH_SECRET` is configured, recalculate the authenticated analytics HMAC with `user:<verified user id>`.
 2. If the hash can be recalculated, delete matching `authenticated AI 使用统计` rows from `ai_usage_events`.
-3. Delete the Supabase Auth user through the server-only service role client.
-4. Perform scoped cleanup for this user’s `legal_consents`.
-5. Perform scoped cleanup for this user’s `dream_records`.
-6. Client clears current-account local cache.
-7. Client signs out and returns to the public home state.
+3. If the hash can be recalculated, delete matching authenticated `product_events`; guest product events are not selected.
+4. Delete the Supabase Auth user through the server-only service role client.
+5. Perform scoped cleanup for this user’s `legal_consents` and `product_analytics_preferences`.
+6. Perform scoped cleanup for this user’s `dream_records`.
+7. Client clears current-account local cache.
+8. Client signs out and returns to the public home state.
 
 If any server-side step fails, the endpoint returns a stable error and request id. It must not report success before all server-side deletion steps complete.
 If Supabase Auth deletion fails, dream records and legal consent are not deleted first, so the user can retry the account deletion flow. The `legal_consents` and `dream_records` foreign keys are expected to cascade after Auth deletion; the explicit scoped cleanup is retained as a server-side fallback.
@@ -161,6 +162,8 @@ If Supabase Auth deletion fails, dream records and legal consent are not deleted
 Account deletion deletes authenticated AI usage events that match the recalculated principal hash for the verified user when `ANALYTICS_HASH_SECRET` is configured. Configure this secret before Beta release; without it, the server cannot reliably match historical authenticated analytics rows to the verified user.
 
 `guest AI 使用统计不会被删除`, because historical guest signals cannot be reliably proven to belong to the account being deleted.
+
+The same HMAC boundary applies to product analytics: account deletion removes matching authenticated `product_events` and the verified user’s `product_analytics_preferences` when `ANALYTICS_HASH_SECRET` is configured. `guest product_events 不会被删除`, because historical guest events cannot be reliably tied to the account. Product analytics is optional and default off; its aggregate admin figures are labeled `基于已同意产品分析的用户样本`.
 
 AI usage statistics are stored for product operation analysis and service improvement for the necessary period. The current version does not run automatic cleanup. Future changes to retention behavior should be reflected in privacy documents and deployment docs.
 
@@ -181,6 +184,6 @@ Use synthetic test accounts and non-private dream text.
 9. Clear all dreams and confirm only the current user’s dream records are removed.
 10. Log in with a second account and confirm it cannot see or delete the first account’s data.
 11. Call `DELETE /api/v1/account` with the current account and exact confirmation text.
-12. Confirm the user’s dream records, legal consent row, Auth user, and authenticated AI usage events are removed.
-13. Confirm guest analytics rows are not deleted.
+12. Confirm the user’s dream records, legal consent row, product analytics preference, Auth user, authenticated AI usage events, and authenticated product events are removed.
+13. Confirm guest AI and product analytics rows are not deleted.
 14. Confirm the browser returns to the public home and cannot access Dream Journal, Dream Home, or admin data as the deleted user.

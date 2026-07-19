@@ -7,11 +7,19 @@ const DreamResultCard = require("./src/dreamResultCard");
 const { createAccountDeletionService } = require("./server/accountDeletion");
 const { createAdminAuth } = require("./server/adminAuth");
 const { getAnalyticsSummary, getRecentAnalyticsEvents } = require("./server/adminAnalytics");
+const { getProductAnalyticsFunnel, getProductAnalyticsRetention, getProductAnalyticsSummary } = require("./server/adminProductAnalytics");
 const { createAdminSupabaseClient } = require("./server/adminSupabase");
 const { createAiAccessControl } = require("./server/aiAccessControl");
 const { createAiAuthResolver } = require("./server/aiAuth");
 const { buildUsageEvent, createPrincipalHash, recordUsageEventSafely } = require("./server/aiAnalytics");
 const { createApiError, formatApiError } = require("./server/aiErrors");
+const {
+  PRODUCT_ANALYTICS_VERSION,
+  deleteProductEventsForIdentity,
+  hasEnabledProductAnalyticsPreference,
+  normalizeProductEventBatch,
+  recordProductEventsSafely
+} = require("./server/productAnalytics");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -61,6 +69,14 @@ function getAnalyticsClient() {
   }
 
   return createAdminSupabaseClient();
+}
+
+function getProductAnalyticsClient() {
+  if (Object.prototype.hasOwnProperty.call(app.locals, "productAnalyticsClient")) {
+    return app.locals.productAnalyticsClient;
+  }
+
+  return getAnalyticsClient();
 }
 
 function getAnalyticsEnv() {
@@ -1171,6 +1187,122 @@ async function handleAdminRecentRequest(request, response) {
   }
 }
 
+async function handleProductEventsRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    if (!request.body || request.body.analyticsConsent !== true) {
+      throw createApiError("PRODUCT_ANALYTICS_DISABLED", "产品分析尚未启用，未记录本次事件。", 403);
+    }
+
+    const identity = await getAiAuthResolver().resolveIdentity(request);
+    const client = getProductAnalyticsClient();
+    const analyticsEnv = getAnalyticsEnv();
+    if (!client || !analyticsEnv.ANALYTICS_HASH_SECRET) {
+      throw createApiError("ANALYTICS_UNAVAILABLE", "运营统计暂时不可用，请检查服务端配置。", 503);
+    }
+
+    if (!Array.isArray(request.body.events) || request.body.events.length < 1 || request.body.events.length > 20) {
+      throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);
+    }
+
+    if (identity.type === "authenticated" && request.body.installationId) {
+      throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);
+    }
+
+    if (identity.type === "authenticated") {
+      const preference = await hasEnabledProductAnalyticsPreference(client, identity.userId);
+      if (!preference.ok) {
+        throw createApiError("ANALYTICS_UNAVAILABLE", "运营统计暂时不可用，请检查服务端配置。", 503);
+      }
+      if (!preference.enabled) {
+        throw createApiError("PRODUCT_ANALYTICS_DISABLED", "产品分析尚未启用，未记录本次事件。", 403);
+      }
+    }
+
+    const normalized = normalizeProductEventBatch(request.body, {
+      identity,
+      secret: analyticsEnv.ANALYTICS_HASH_SECRET,
+      appVersion: PRODUCT_ANALYTICS_VERSION
+    });
+    if (normalized.rejected.length || normalized.events.length !== request.body.events.length) {
+      throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);
+    }
+
+    const result = await recordProductEventsSafely(client, normalized.events, getAnalyticsLogger());
+    if (!result.ok) {
+      throw createApiError("PRODUCT_ANALYTICS_WRITE_FAILED", "产品分析暂时无法记录，请稍后再试。", 503);
+    }
+
+    response.json({ ok: true, insertedCount: result.insertedCount, duplicateCount: result.duplicateCount });
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "服务暂时遇到问题，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleProductAnalyticsDeletionRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const identity = await getAiAuthResolver().resolveIdentity(request);
+    const client = getProductAnalyticsClient();
+    const analyticsEnv = getAnalyticsEnv();
+    if (!client || !analyticsEnv.ANALYTICS_HASH_SECRET) {
+      throw createApiError("ANALYTICS_UNAVAILABLE", "运营统计暂时不可用，请检查服务端配置。", 503);
+    }
+
+    const result = await deleteProductEventsForIdentity(
+      client,
+      identity,
+      request.body && request.body.installationId,
+      analyticsEnv.ANALYTICS_HASH_SECRET
+    );
+    if (!result.deleted) {
+      throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);
+    }
+
+    response.json({ ok: true });
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "产品分析数据暂时无法删除，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleAdminProductAnalyticsRequest(request, response, getReport) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    await getAdminAuth().requireAdminIdentity(request);
+    const client = getProductAnalyticsClient();
+    if (!client) {
+      throw createApiError("ANALYTICS_UNAVAILABLE", "运营统计暂时不可用，请检查服务端配置。", 503);
+    }
+    response.json(await getReport(client, { range: request.query ? request.query.range : "", now: new Date() }));
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "运营统计暂时不可用，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+function handleAdminProductSummaryRequest(request, response) {
+  return handleAdminProductAnalyticsRequest(request, response, getProductAnalyticsSummary);
+}
+
+function handleAdminProductFunnelRequest(request, response) {
+  return handleAdminProductAnalyticsRequest(request, response, getProductAnalyticsFunnel);
+}
+
+function handleAdminProductRetentionRequest(request, response) {
+  return handleAdminProductAnalyticsRequest(request, response, getProductAnalyticsRetention);
+}
+
 async function handleAccountDeletionRequest(request, response) {
   response.set("Cache-Control", "no-store");
 
@@ -1187,8 +1319,13 @@ async function handleAccountDeletionRequest(request, response) {
 
 app.post("/api/v1/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/dream-analysis", handleDreamAnalysisRequest);
+app.post("/api/v1/product-events", handleProductEventsRequest);
+app.delete("/api/v1/product-analytics", handleProductAnalyticsDeletionRequest);
 app.get("/api/v1/admin/analytics/summary", handleAdminSummaryRequest);
 app.get("/api/v1/admin/analytics/recent", handleAdminRecentRequest);
+app.get("/api/v1/admin/product-analytics/summary", handleAdminProductSummaryRequest);
+app.get("/api/v1/admin/product-analytics/funnel", handleAdminProductFunnelRequest);
+app.get("/api/v1/admin/product-analytics/retention", handleAdminProductRetentionRequest);
 app.delete("/api/v1/account", handleAccountDeletionRequest);
 
 app.use((error, request, response, next) => {
