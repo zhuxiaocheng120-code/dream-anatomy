@@ -411,6 +411,17 @@ function createAppIntegrationHarness(options = {}) {
     };
   }
 
+  if (options.dreamSyncController) {
+    windowRef.DreamSync = {
+      createDreamSyncController() {
+        return options.dreamSyncController;
+      },
+      mapSupabaseRowToLocalRecord(row) {
+        return row;
+      }
+    };
+  }
+
   const context = {
     document: documentRef,
     fetch: options.fetch || (async () => {
@@ -1491,7 +1502,7 @@ test("app bridge keeps opening existing Dream Detail from Dream Journal records"
   assert.match(detailText, /温和提醒/);
   assert.match(detailText, /这不是诊断、治疗或预言，只是一种自我探索视角。/);
   assert.match(detailText, /自我思考/);
-  assert.match(detailText, /这里先留给之后的自我思考记录。/);
+  assert.match(detailText, /写下你对这个梦的联想、理解，或醒来后仍留下的感受。/);
   assert.equal(analysisCards.length, 3);
   analysisCards.forEach((card) => {
     assert.notEqual(card.open, true);
@@ -1525,6 +1536,164 @@ test("Dream Detail renders a saved dream result card without replacing existing 
   assert.match(detailText, /梦境画像/);
   assert.match(detailText, /创造者/);
   assert.match(detailText, /一句话核心洞察/);
+});
+
+test("Dream Detail saves and restores user reflection without overwriting report content", async () => {
+  const record = createRecord({
+    id: "reflection-record",
+    reportContent: {
+      summary: "保留已有报告内容",
+      dreamResultCard: createResultCardFixture(),
+      dreamResultCardStatus: "ai_generated"
+    }
+  });
+  let fetchCount = 0;
+  const harness = createAppIntegrationHarness({
+    records: [record],
+    fetch: async () => {
+      fetchCount += 1;
+      throw new Error("Reflection save must not call AI");
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const textarea = findElements(harness.dreamDetailContent, (element) => element.tagName === "TEXTAREA")[0];
+  const saveButton = findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "保存自我思考")[0];
+
+  assert.ok(textarea);
+  assert.ok(saveButton);
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /写下你对这个梦的联想、理解，或醒来后仍留下的感受。它只属于你的梦境记录。/);
+
+  textarea.value = "这个场景让我想到正在学习如何停下来。";
+  await saveButton.trigger("click");
+
+  const saved = harness.getSavedRecords()[0];
+  assert.equal(saved.reportContent.summary, "保留已有报告内容");
+  assert.equal(saved.reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+  assert.equal(saved.reportContent.userReflection, "这个场景让我想到正在学习如何停下来。");
+  assert.match(saved.reportContent.userReflectionUpdatedAt, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(fetchCount, 0);
+  assert.doesNotMatch(JSON.stringify(harness.analyticsCalls), /正在学习如何停下来/);
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const restoredTextarea = findElements(harness.dreamDetailContent, (element) => element.tagName === "TEXTAREA")[0];
+  assert.equal(restoredTextarea.value, "这个场景让我想到正在学习如何停下来。");
+});
+
+test("Dream Detail updates and clears user reflection explicitly", async () => {
+  const record = createRecord({
+    id: "clear-reflection-record",
+    reportContent: {
+      summary: "梦境整理",
+      userReflection: "旧的自我思考",
+      userReflectionUpdatedAt: "2026-07-01T00:00:00.000Z"
+    }
+  });
+  const harness = createAppIntegrationHarness({ records: [record] });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  let textarea = findElements(harness.dreamDetailContent, (element) => element.tagName === "TEXTAREA")[0];
+  let saveButton = findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "保存自我思考")[0];
+  const clearButton = findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "清空")[0];
+
+  assert.equal(textarea.value, "旧的自我思考");
+
+  textarea.value = "新的理解。";
+  await saveButton.trigger("click");
+  assert.equal(harness.getSavedRecords()[0].reportContent.userReflection, "新的理解。");
+  assert.notEqual(harness.getSavedRecords()[0].reportContent.userReflectionUpdatedAt, "2026-07-01T00:00:00.000Z");
+
+  await clearButton.trigger("click");
+  assert.equal(textarea.value, "");
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /已清空输入，点击保存后更新记录。/);
+
+  await saveButton.trigger("click");
+  const saved = harness.getSavedRecords()[0];
+  assert.equal(saved.reportContent.userReflection, undefined);
+  assert.equal(saved.reportContent.userReflectionUpdatedAt, undefined);
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  textarea = findElements(harness.dreamDetailContent, (element) => element.tagName === "TEXTAREA")[0];
+  assert.equal(textarea.value, "");
+});
+
+test("Dream Detail reflection save failure and concurrent clicks stay safe", async () => {
+  const record = createRecord({
+    id: "cloud-reflection-record",
+    reportContent: { summary: "云端报告" }
+  });
+  let saveCalls = 0;
+  let rejectSave;
+  const pending = new Promise((resolve, reject) => {
+    rejectSave = reject;
+  });
+  const harness = createAppIntegrationHarness({
+    dreamSyncController: {
+      getCurrentUser() {
+        return { id: "user-one" };
+      },
+      getVisibleRecords() {
+        return [record];
+      },
+      saveRecord() {
+        saveCalls += 1;
+        return pending;
+      }
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const textarea = findElements(harness.dreamDetailContent, (element) => element.tagName === "TEXTAREA")[0];
+  const saveButton = findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "保存自我思考")[0];
+  textarea.value = "云端暂时保存失败。";
+  const firstSave = saveButton.trigger("click");
+  await saveButton.trigger("click");
+
+  assert.equal(saveCalls, 1);
+  assert.equal(saveButton.disabled, true);
+
+  rejectSave(new Error("cloud failed"));
+  await firstSave;
+
+  assert.equal(saveButton.disabled, false);
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /保存失败，请稍后再试。/);
+});
+
+test("stale Dream Detail reflection save cannot overwrite a newly opened record", async () => {
+  const recordOne = createRecord({ id: "record-one", dreamSummary: "第一条梦", reportContent: { summary: "第一条" } });
+  const recordTwo = createRecord({ id: "record-two", dreamSummary: "第二条梦", reportContent: { summary: "第二条" } });
+  let resolveSave;
+  const pending = new Promise((resolve) => {
+    resolveSave = resolve;
+  });
+  const harness = createAppIntegrationHarness({
+    dreamSyncController: {
+      getCurrentUser() {
+        return { id: "user-one" };
+      },
+      getVisibleRecords() {
+        return [recordOne, recordTwo];
+      },
+      saveRecord(recordToSave) {
+        return pending.then(() => ({ records: [recordToSave, recordTwo], syncStatus: "synced" }));
+      }
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail("record-one");
+  const textarea = findElements(harness.dreamDetailContent, (element) => element.tagName === "TEXTAREA")[0];
+  const saveButton = findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "保存自我思考")[0];
+  textarea.value = "第一条的自我思考。";
+  const savePromise = saveButton.trigger("click");
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail("record-two");
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /第二条梦/);
+
+  resolveSave();
+  await savePromise;
+
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /第二条梦/);
+  assert.doesNotMatch(collectText(harness.dreamDetailContent).join("\n"), /第一条的自我思考/);
 });
 
 test("Dream Detail generates, saves, and re-renders a missing dream result card", async () => {
@@ -1578,6 +1747,120 @@ test("Dream Detail generates, saves, and re-renders a missing dream result card"
   assert.equal(savedRecords[0].reportContent.summary, "保留已有报告内容");
   assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
   assert.match(collectText(harness.dreamDetailContent).join("\n"), /一句话核心洞察/);
+});
+
+test("Dream Detail reflection save preserves a card generated after the detail opened", async () => {
+  const record = createRecord({
+    id: "generate-then-reflect",
+    reportContent: { summary: "旧记录报告" }
+  });
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    records: [record],
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({ analysis: createResultCardFixture() })
+    })
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const generationButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "生成梦境画像"
+  )[0];
+  await generationButton.trigger("click");
+
+  const textarea = findElements(harness.dreamDetailContent, (element) => element.tagName === "TEXTAREA")[0];
+  const saveButton = findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "保存自我思考")[0];
+  textarea.value = "生成画像之后补充的自我思考。";
+  await saveButton.trigger("click");
+
+  const saved = harness.getSavedRecords()[0];
+  assert.equal(saved.reportContent.summary, "旧记录报告");
+  assert.equal(saved.reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+  assert.equal(saved.reportContent.dreamResultCardStatus, "ai_generated");
+  assert.equal(saved.reportContent.userReflection, "生成画像之后补充的自我思考。");
+});
+
+test("Dream Detail queues concurrent card and reflection saves for the same cloud record", async () => {
+  const record = createRecord({
+    id: "concurrent-cloud-record",
+    reportContent: { summary: "云端旧记录" }
+  });
+  let visibleRecords = [record];
+  const saveCalls = [];
+  const saveResolvers = [];
+  let firstSaveStarted;
+  let secondSaveStarted;
+  const firstSaveStartedPromise = new Promise((resolve) => {
+    firstSaveStarted = resolve;
+  });
+  const secondSaveStartedPromise = new Promise((resolve) => {
+    secondSaveStarted = resolve;
+  });
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    authSession: { access_token: "cloud-token", user: { id: "user-one" } },
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({ analysis: createResultCardFixture() })
+    }),
+    dreamSyncController: {
+      getCurrentUser() {
+        return { id: "user-one" };
+      },
+      getVisibleRecords() {
+        return visibleRecords;
+      },
+      saveRecord(recordToSave) {
+        saveCalls.push(recordToSave);
+        if (saveCalls.length === 1) {
+          firstSaveStarted();
+        }
+        if (saveCalls.length === 2) {
+          secondSaveStarted();
+        }
+        return new Promise((resolve) => {
+          saveResolvers.push(() => {
+            visibleRecords = [recordToSave];
+            resolve({ records: visibleRecords, syncStatus: "synced" });
+          });
+        });
+      }
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const generationButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "生成梦境画像"
+  )[0];
+  const generationSave = generationButton.trigger("click");
+  await firstSaveStartedPromise;
+
+  assert.equal(saveCalls.length, 1);
+  assert.equal(saveCalls[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+
+  const textarea = findElements(harness.dreamDetailContent, (element) => element.tagName === "TEXTAREA")[0];
+  const saveButton = findElements(harness.dreamDetailContent, (element) => element.tagName === "BUTTON" && element.textContent === "保存自我思考")[0];
+  textarea.value = "和画像同时保存的自我思考。";
+  const reflectionSave = saveButton.trigger("click");
+
+  assert.equal(saveCalls.length, 1);
+  saveResolvers.shift()();
+  await secondSaveStartedPromise;
+
+  assert.equal(saveCalls.length, 2);
+  assert.equal(saveCalls[1].reportContent.summary, "云端旧记录");
+  assert.equal(saveCalls[1].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+  assert.equal(saveCalls[1].reportContent.userReflection, "和画像同时保存的自我思考。");
+
+  saveResolvers.shift()();
+  await generationSave;
+  await reflectionSave;
+
+  assert.equal(visibleRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+  assert.equal(visibleRecords[0].reportContent.userReflection, "和画像同时保存的自我思考。");
 });
 
 test("Dream Detail keeps the missing-card fallback and shows a safe error when generation fails", async () => {

@@ -51,6 +51,9 @@ const saveDeepReportButton = document.querySelector("[data-save-deep-report]");
 const deepSaveStatus = document.querySelector("[data-deep-save-status]");
 const dreamJournalStorageKey = "dreamAnatomy.quickDecodeRecords";
 const maxDreamTextLength = 5000;
+const maxUserReflectionLength = 3000;
+let currentDreamDetailRecordKey = "";
+const dreamRecordSaveQueues = new Map();
 const canUseDreamJournal = window.DreamJournal
   && typeof window.DreamJournal.createDreamJournalController === "function";
 const canUseDreamResultCard = window.DreamResultCard
@@ -863,18 +866,47 @@ async function saveDreamRecord(record) {
   };
 }
 
-async function saveDreamResultCard(record, card) {
-  const updatedRecord = {
-    ...record,
-    reportContent: {
-      ...getReportContent(record),
-      dreamResultCard: card
+async function saveDreamDetailRecord(record, createUpdatedRecord) {
+  const queueKey = getDreamDetailScopeKey(record);
+  const userKey = getCurrentDreamDetailUserKey();
+  const previousSave = dreamRecordSaveQueues.get(queueKey) || Promise.resolve();
+  const queuedSave = previousSave.catch(() => {}).then(async () => {
+    if (getCurrentDreamDetailUserKey() !== userKey) {
+      const staleError = new Error("Dream detail save context changed.");
+      staleError.code = "STALE_DETAIL_SAVE";
+      throw staleError;
     }
-  };
-  const saveResult = await saveDreamRecord(updatedRecord);
 
-  renderDreamJournal(saveResult.records);
-  return saveResult;
+    const latestRecord = getLatestDreamRecord(record);
+    const updatedRecord = createUpdatedRecord(latestRecord);
+    const saveResult = await saveDreamRecord(updatedRecord);
+
+    renderDreamJournal(saveResult.records);
+    return {
+      ...saveResult,
+      record: updatedRecord
+    };
+  });
+
+  dreamRecordSaveQueues.set(queueKey, queuedSave);
+  queuedSave.finally(() => {
+    if (dreamRecordSaveQueues.get(queueKey) === queuedSave) {
+      dreamRecordSaveQueues.delete(queueKey);
+    }
+  }).catch(() => {});
+
+  return queuedSave;
+}
+
+async function saveDreamResultCard(record, card) {
+  return saveDreamDetailRecord(record, (latestRecord) => ({
+    ...latestRecord,
+    reportContent: {
+      ...getReportContent(latestRecord),
+      dreamResultCard: card,
+      dreamResultCardStatus: "ai_generated"
+    }
+  }));
 }
 
 function getSaveStatusMessage(syncStatus, prefix) {
@@ -952,6 +984,49 @@ function getReportContent(record) {
   return report && typeof report === "object" ? report : {};
 }
 
+function getRecordIdentityCandidates(record) {
+  if (!record || typeof record !== "object") {
+    return [];
+  }
+
+  return [
+    record.id,
+    record.localRecordId,
+    record.local_record_id,
+    record.cloudId,
+    record.cloud_id
+  ].map((value) => String(value || "")).filter(Boolean);
+}
+
+function getRecordIdentityKey(record) {
+  return getRecordIdentityCandidates(record)[0] || "";
+}
+
+function recordMatchesId(record, recordId) {
+  const id = String(recordId || "");
+  return Boolean(id) && getRecordIdentityCandidates(record).includes(id);
+}
+
+function getCurrentDreamDetailUserKey() {
+  const user = dreamSyncController && typeof dreamSyncController.getCurrentUser === "function"
+    ? dreamSyncController.getCurrentUser()
+    : null;
+  return user && user.id ? `user:${user.id}` : "guest";
+}
+
+function getDreamDetailScopeKey(record) {
+  return `${getCurrentDreamDetailUserKey()}:${getRecordIdentityKey(record)}`;
+}
+
+function getLatestDreamRecord(record) {
+  const ids = getRecordIdentityCandidates(record);
+  if (!ids.length) {
+    return record;
+  }
+
+  return loadDreamRecords().find((item) => ids.some((id) => recordMatchesId(item, id))) || record;
+}
+
 function getDreamTitle(record) {
   const rawDreamText = normalizeDetailText(getRecordField(record, "raw_dream_text", "rawDreamText"));
 
@@ -1020,6 +1095,114 @@ function createAnalysisCard(title, text) {
   card.append(summary, content);
 
   return card;
+}
+
+function normalizeUserReflection(value) {
+  const text = typeof value === "string" ? value.trim() : "";
+  return text.length > maxUserReflectionLength ? text.slice(0, maxUserReflectionLength) : text;
+}
+
+function buildReflectionRecord(record, value) {
+  const latestRecord = getLatestDreamRecord(record);
+  const reportContent = {
+    ...getReportContent(latestRecord)
+  };
+  const reflection = normalizeUserReflection(value);
+
+  if (reflection) {
+    reportContent.userReflection = reflection;
+    reportContent.userReflectionUpdatedAt = new Date().toISOString();
+  } else {
+    delete reportContent.userReflection;
+    delete reportContent.userReflectionUpdatedAt;
+  }
+
+  return {
+    ...latestRecord,
+    reportContent
+  };
+}
+
+function createReflectionSection(record) {
+  const section = document.createElement("section");
+  const title = document.createElement("h4");
+  const copy = document.createElement("p");
+  const textarea = document.createElement("textarea");
+  const actions = document.createElement("div");
+  const saveButton = document.createElement("button");
+  const clearButton = document.createElement("button");
+  const status = document.createElement("p");
+  const recordKey = getDreamDetailScopeKey(record);
+  const report = getReportContent(record);
+  let isSaving = false;
+  let saveSequence = 0;
+
+  section.className = "detail-reflection";
+  title.textContent = "自我思考";
+  copy.textContent = "写下你对这个梦的联想、理解，或醒来后仍留下的感受。它只属于你的梦境记录。";
+  textarea.rows = 6;
+  textarea.maxLength = maxUserReflectionLength;
+  textarea.placeholder = "例如：这个场景让我想到……";
+  textarea.value = typeof report.userReflection === "string" ? report.userReflection : "";
+  actions.className = "detail-reflection-actions";
+  saveButton.className = "primary-button";
+  saveButton.type = "button";
+  saveButton.textContent = "保存自我思考";
+  clearButton.className = "secondary-button";
+  clearButton.type = "button";
+  clearButton.textContent = "清空";
+  status.className = "detail-reflection-status";
+
+  clearButton.addEventListener("click", () => {
+    textarea.value = "";
+    status.textContent = "已清空输入，点击保存后更新记录。";
+  });
+
+  saveButton.addEventListener("click", async () => {
+    if (isSaving) {
+      return;
+    }
+
+    if (currentDreamDetailRecordKey !== recordKey) {
+      return;
+    }
+
+    if ((textarea.value || "").length > maxUserReflectionLength) {
+      status.textContent = `最多可以保存 ${maxUserReflectionLength} 字。`;
+      return;
+    }
+
+    isSaving = true;
+    saveSequence += 1;
+    const currentSequence = saveSequence;
+    saveButton.disabled = true;
+    status.textContent = "保存中……";
+
+    try {
+      const saveResult = await saveDreamDetailRecord(record, (latestRecord) => buildReflectionRecord(latestRecord, textarea.value));
+
+      if (currentDreamDetailRecordKey !== recordKey || currentSequence !== saveSequence) {
+        return;
+      }
+
+      status.textContent = getReportContent(saveResult.record).userReflection
+        ? (saveResult.syncStatus === "pending_sync" ? "已保存，云端同步稍后重试。" : "已保存")
+        : "已清空自我思考";
+    } catch (error) {
+      if (currentDreamDetailRecordKey === recordKey && currentSequence === saveSequence) {
+        status.textContent = "保存失败，请稍后再试。";
+      }
+    } finally {
+      if (currentDreamDetailRecordKey === recordKey && currentSequence === saveSequence) {
+        isSaving = false;
+        saveButton.disabled = false;
+      }
+    }
+  });
+
+  actions.append(saveButton, clearButton);
+  section.append(title, copy, textarea, actions, status);
+  return section;
 }
 
 function buildDetailAnalysis(record) {
@@ -1134,7 +1317,7 @@ function renderDreamDetail(recordId, fallbackRow) {
     return;
   }
 
-  let record = loadDreamRecords().find((item) => item.id === recordId);
+  let record = loadDreamRecords().find((item) => recordMatchesId(item, recordId));
 
   if (!record && fallbackRow) {
     record = window.DreamSync
@@ -1145,6 +1328,7 @@ function renderDreamDetail(recordId, fallbackRow) {
   dreamDetailContent.textContent = "";
 
   if (!record) {
+    currentDreamDetailRecordKey = "";
     const message = document.createElement("div");
     const title = document.createElement("h4");
     const copy = document.createElement("p");
@@ -1173,11 +1357,11 @@ function renderDreamDetail(recordId, fallbackRow) {
   const analysisSection = document.createElement("section");
   const analysisTitle = document.createElement("h4");
   const analysisCards = document.createElement("div");
-  const reflection = document.createElement("section");
-  const reflectionTitle = document.createElement("h4");
-  const reflectionCopy = document.createElement("p");
+  const reflection = createReflectionSection(record);
   const dreamResultCard = document.createElement("div");
   const detailActions = document.createElement("div");
+
+  currentDreamDetailRecordKey = getDreamDetailScopeKey(record);
 
   hero.className = "detail-hero";
   heroTitle.textContent = getDreamTitle(record);
@@ -1210,11 +1394,6 @@ function renderDreamDetail(recordId, fallbackRow) {
   });
   analysisSection.append(analysisTitle, analysisCards);
 
-  reflection.className = "detail-reflection";
-  reflectionTitle.textContent = "自我思考";
-  reflectionCopy.textContent = "这里先留给之后的自我思考记录。你可以在下一步功能里慢慢补充自己的理解。";
-  reflection.append(reflectionTitle, reflectionCopy);
-
   dreamResultCard.className = "dream-result-card";
   if (dreamResultCardController) {
     dreamResultCardController.render(dreamResultCard, record);
@@ -1244,7 +1423,7 @@ function openDreamDetail(recordId, fallbackRow) {
   }
 
   renderDreamDetail(recordId, fallbackRow);
-  const record = loadDreamRecords().find((item) => String(item.id) === String(recordId)) || fallbackRow;
+  const record = loadDreamRecords().find((item) => recordMatchesId(item, recordId)) || fallbackRow;
   if (record) {
     trackProductEvent("dream_detail_opened", { analysis_type: getAnalyticsAnalysisType(record) });
   }
