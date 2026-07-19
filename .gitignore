@@ -19,6 +19,10 @@ out/
 src/runtime-env.js
 src/vendor/supabase.js
 
+# WeChat Mini Program local/private config
+miniprogram/project.config.json
+miniprogram/config/config.js
+
 # Logs
 *.log
 npm-debug.log*

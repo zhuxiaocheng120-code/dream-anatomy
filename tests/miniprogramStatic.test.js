@@ -102,3 +102,32 @@ test("mini program source does not include forbidden secrets or disallowed platf
   assert.doesNotMatch(source, /Authorization\s*:/i);
   assert.doesNotMatch(source, /product-events|product_analytics|trackProductEvent/i);
 });
+
+test("mini program docs and private config boundaries are explicit", () => {
+  assert.equal(exists("docs/MINIPROGRAM_SETUP.md"), true);
+  assert.equal(exists("docs/MINIPROGRAM_ARCHITECTURE.md"), true);
+  assert.equal(exists("miniprogram/project.config.example.json"), true);
+
+  const gitignore = read(".gitignore");
+  assert.match(gitignore, /miniprogram\/project\.config\.json/);
+  assert.match(gitignore, /miniprogram\/config\/config\.js/);
+
+  const setup = read("docs/MINIPROGRAM_SETUP.md");
+  assert.match(setup, /微信开发者工具/);
+  assert.match(setup, /AppID/);
+  assert.match(setup, /request 合法域名/);
+  assert.match(setup, /API_BASE_URL/);
+  assert.match(setup, /开发版/);
+  assert.match(setup, /体验版/);
+  assert.match(setup, /正式版/);
+  assert.match(setup, /不要在小程序中配置 AppSecret/);
+  assert.match(setup, /尚未完成真机验收/);
+
+  const architecture = read("docs/MINIPROGRAM_ARCHITECTURE.md");
+  assert.match(architecture, /游客版核心闭环/);
+  assert.match(architecture, /不调用 DeepSeek/);
+  assert.match(architecture, /不接入微信登录/);
+  assert.match(architecture, /本机存储/);
+  assert.match(architecture, /dream_anatomy_guest_records_v1/);
+  assert.match(architecture, /深度引导.*正在开发中/);
+});

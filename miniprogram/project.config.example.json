@@ -1,0 +1,15 @@
+{
+  "description": "Dream Anatomy WeChat Mini Program guest foundation example config",
+  "setting": {
+    "urlCheck": true,
+    "es6": true,
+    "enhance": true,
+    "postcss": true,
+    "minified": true
+  },
+  "compileType": "miniprogram",
+  "libVersion": "latest",
+  "appid": "replace-with-your-wechat-mini-program-appid",
+  "projectname": "dream-anatomy-miniprogram",
+  "miniprogramRoot": "miniprogram/"
+}
