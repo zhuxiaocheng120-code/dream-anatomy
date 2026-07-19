@@ -65,3 +65,15 @@ Authenticated product-event deletion requires a stable `ANALYTICS_HASH_SECRET` t
 ### GREEN Evidence
 
 After adding `principal_type` to product event deletion filters and documenting the full event/property/value allowlist, `npm test -- tests/adminAnalyticsFrontend.test.js tests/accountDeletion.test.js tests/supabaseSecurity.test.js` reported 25 passing and 0 failing. `node --check server/productAnalytics.js && node --check server/accountDeletion.js && node --check src/adminAnalytics.js` and `git diff --check` also passed.
+
+---
+
+## Full-Suite Regression Fix
+
+### RED Evidence
+
+The Task 5 re-review found the implementation fix was correct, but two older tests still expected product analytics deletion to filter only by `principal_hash`. The elevated full suite reported 268 passing and 2 failing in `tests/productAnalytics.test.js` and `tests/server.test.js`.
+
+### GREEN Evidence
+
+After updating those tests to expect both `principal_type` and `principal_hash`, `npm test -- tests/productAnalytics.test.js tests/server.test.js tests/adminAnalyticsFrontend.test.js tests/accountDeletion.test.js tests/supabaseSecurity.test.js` reported 77 passing and 0 failing with localhost listener permission. `node --check server/productAnalytics.js && node --check server/accountDeletion.js && node --check src/adminAnalytics.js` and `git diff --check` also passed.

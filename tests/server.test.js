@@ -1601,16 +1601,21 @@ test("product events accept duplicate event ids without a second insertion", { c
 });
 
 test("product analytics deletion verifies identity and deletes only the matching hashed principal", { concurrency: false }, async () => {
-  const deletedHashes = [];
+  const deletes = [];
   const client = {
     from(tableName) {
       assert.equal(tableName, "product_events");
       return {
         delete() { return this; },
         eq(column, value) {
-          assert.equal(column, "principal_hash");
-          deletedHashes.push(value);
-          return Promise.resolve({ error: null });
+          const filters = [{ column, value }];
+          return {
+            eq(nextColumn, nextValue) {
+              filters.push({ column: nextColumn, value: nextValue });
+              deletes.push(filters);
+              return Promise.resolve({ error: null });
+            }
+          };
         }
       };
     }
@@ -1639,8 +1644,12 @@ test("product analytics deletion verifies identity and deletes only the matching
     analyticsClient: client,
     analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" }
   });
-  assert.equal(deletedHashes.length, 2);
-  assert.doesNotMatch(JSON.stringify(deletedHashes), /00000000-0000-4000-8000-000000000103|00000000-0000-4000-8000-000000000104/);
+  assert.deepEqual(deletes.map((filters) => filters.map((filter) => filter.column)), [
+    ["principal_type", "principal_hash"],
+    ["principal_type", "principal_hash"]
+  ]);
+  assert.deepEqual(deletes.map((filters) => filters[0].value), ["guest", "authenticated"]);
+  assert.doesNotMatch(JSON.stringify(deletes), /00000000-0000-4000-8000-000000000103|00000000-0000-4000-8000-000000000104/);
 });
 
 test("admin product analytics endpoints require admin auth and return sample-ready payloads", { concurrency: false }, async () => {

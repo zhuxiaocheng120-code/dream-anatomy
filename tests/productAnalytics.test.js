@@ -225,16 +225,21 @@ test("swallows product analytics write failures without logging event data", asy
 });
 
 test("deletes product events by authenticated and guest principals", async () => {
-  const deletedHashes = [];
+  const deletes = [];
   const client = {
     from(table) {
       assert.equal(table, "product_events");
       return {
         delete() { return this; },
         eq(column, value) {
-          assert.equal(column, "principal_hash");
-          deletedHashes.push(value);
-          return Promise.resolve({ error: null });
+          const filters = [{ column, value }];
+          return {
+            eq(nextColumn, nextValue) {
+              filters.push({ column: nextColumn, value: nextValue });
+              deletes.push(filters);
+              return Promise.resolve({ error: null });
+            }
+          };
         }
       };
     }
@@ -256,7 +261,16 @@ test("deletes product events by authenticated and guest principals", async () =>
     deleted: true,
     principalHash: crypto.createHmac("sha256", secret).update(`installation:${installationId}`).digest("hex")
   });
-  assert.deepEqual(deletedHashes, [authenticated.principalHash, guest.principalHash]);
+  assert.deepEqual(deletes, [
+    [
+      { column: "principal_type", value: "authenticated" },
+      { column: "principal_hash", value: authenticated.principalHash }
+    ],
+    [
+      { column: "principal_type", value: "guest" },
+      { column: "principal_hash", value: guest.principalHash }
+    ]
+  ]);
 });
 
 test("does not delete guest events for a malformed authenticated identity", async () => {
