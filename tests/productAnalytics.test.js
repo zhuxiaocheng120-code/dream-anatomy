@@ -83,6 +83,18 @@ test("allows only known entry points and stable error codes", () => {
   });
 });
 
+test("rejects unapproved error codes even when they look stable", () => {
+  const failed = sanitizeProductEvent(createEvent({
+    eventName: "analysis_failed",
+    properties: {
+      analysis_type: "quick",
+      error_code: "PRIVATE_EMAIL_LEAK"
+    }
+  }));
+
+  assert.deepEqual(failed.event.properties, { analysis_type: "quick" });
+});
+
 test("strips emails, tokens, and free text from entry point and error code", () => {
   const started = sanitizeProductEvent(createEvent({
     eventName: "signup_started",
@@ -149,7 +161,7 @@ test("normalizes at most 20 events and derives the authenticated principal from 
     {
       identity: { type: "authenticated", userId: "00000000-0000-4000-8000-000000000004" },
       secret: "analytics-secret",
-      appVersion: "web-beta"
+      appVersion: PRODUCT_ANALYTICS_VERSION
     }
   );
 
@@ -160,7 +172,7 @@ test("normalizes at most 20 events and derives the authenticated principal from 
     result.events[0].principal_hash,
     crypto.createHmac("sha256", "analytics-secret").update("user:00000000-0000-4000-8000-000000000004").digest("hex")
   );
-  assert.equal(result.events[0].app_version, "web-beta");
+  assert.equal(result.events[0].app_version, PRODUCT_ANALYTICS_VERSION);
   assert.doesNotMatch(JSON.stringify(result), /attacker-controlled-user-id|00000000-0000-4000-8000-000000000002/);
 });
 

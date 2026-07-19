@@ -166,9 +166,13 @@
       return trackEvent("view_opened", { view_name: viewName });
     }
 
-    async function getAccessToken() {
+    async function getAccessToken(expectedUserId) {
+      if (!expectedUserId) return "";
       const result = await getSession();
       const activeSession = result && result.data ? result.data.session : result;
+      if (!activeSession || !activeSession.user || activeSession.user.id !== expectedUserId) {
+        return "";
+      }
       return activeSession && activeSession.access_token ? activeSession.access_token : "";
     }
 
@@ -182,11 +186,12 @@
       const installationId = !currentUser ? getInstallationId() : "";
       try {
         const headers = { "Content-Type": "application/json" };
-        const token = await getAccessToken();
+        const token = await getAccessToken(flushUserId);
         const identityIsCurrent = consentEnabled
           && flushIdentityGeneration === identityGeneration
           && (currentUser ? currentUser.id : "") === flushUserId;
         if (!identityIsCurrent) return false;
+        if (flushUserId && !token) return false;
         if (token) headers.Authorization = `Bearer ${token}`;
         if (!sessionId || (!flushUserId && !installationId)) return false;
         const response = await request("/api/v1/product-events", {

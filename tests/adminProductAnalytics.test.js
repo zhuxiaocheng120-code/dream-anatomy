@@ -16,14 +16,14 @@ function createQueryClient(rows = []) {
       let upperBound = null;
       const builder = {
         select() { return builder; },
-        gte(column, value) {
-          assert.equal(column, "occurred_at");
-          lowerBound = value;
-          return builder;
-        },
         lte(column, value) {
           assert.equal(column, "occurred_at");
           upperBound = value;
+          return builder;
+        },
+        gte(column, value) {
+          assert.equal(column, "occurred_at");
+          lowerBound = value;
           return builder;
         },
         order() { return builder; },
@@ -124,6 +124,31 @@ test("calculates D1 and D7 retention using UTC dates", async () => {
   assert.deepEqual(retention.d1, { status: "ok", cohortSize: 5, retainedPrincipals: 1, rate: 0.2 });
   assert.deepEqual(retention.d7, { status: "ok", cohortSize: 5, retainedPrincipals: 1, rate: 0.2 });
   assert.doesNotMatch(JSON.stringify(retention), /principal-/);
+});
+
+test("retention uses each principal's first event instead of first event in the selected range", async () => {
+  const events = [
+    ...Array.from({ length: 5 }, (_, index) => createEvent({
+      principal_hash: `historical-principal-${index}`,
+      occurred_at: "2026-05-01T00:00:00.000Z"
+    })),
+    ...Array.from({ length: 5 }, (_, index) => createEvent({
+      principal_hash: `historical-principal-${index}`,
+      occurred_at: "2026-07-18T00:00:00.000Z"
+    })),
+    ...Array.from({ length: 5 }, (_, index) => createEvent({
+      principal_hash: `historical-principal-${index}`,
+      occurred_at: "2026-07-19T00:00:00.000Z"
+    }))
+  ];
+
+  const retention = await getProductAnalyticsRetention(createQueryClient(events), {
+    range: "7d",
+    now: new Date("2026-07-19T12:00:00.000Z")
+  });
+
+  assert.deepEqual(retention.d1, { status: "ok", cohortSize: 5, retainedPrincipals: 0, rate: 0 });
+  assert.deepEqual(retention.d7, { status: "ok", cohortSize: 5, retainedPrincipals: 0, rate: 0 });
 });
 
 test("withholds retention percentages below the minimum cohort size", async () => {

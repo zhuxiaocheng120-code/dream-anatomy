@@ -2,7 +2,22 @@ const crypto = require("node:crypto");
 
 const PRODUCT_ANALYTICS_VERSION = "2026-07-19";
 const ENTRY_POINTS = new Set(["nav", "home", "journal", "auth", "privacy-data"]);
-const ERROR_CODE_PATTERN = /^[A-Z][A-Z_]{0,63}$/;
+const ERROR_CODES = new Set([
+  "AUTH_INVALID",
+  "ANALYSIS_TIMEOUT",
+  "DAILY_LIMIT_REACHED",
+  "FEATURE_DISABLED",
+  "GENERATION_INCOMPLETE",
+  "INTERNAL_ERROR",
+  "INVALID_REQUEST",
+  "PRODUCT_ANALYTICS_DISABLED",
+  "PRODUCT_ANALYTICS_WRITE_FAILED",
+  "RATE_LIMITED",
+  "REQUEST_FAILED",
+  "REQUEST_IN_PROGRESS",
+  "UPSTREAM_TIMEOUT",
+  "UPSTREAM_UNAVAILABLE"
+]);
 
 const EVENT_PROPERTIES = {
   app_opened: {},
@@ -11,7 +26,7 @@ const EVENT_PROPERTIES = {
   dream_input_abandoned: { length_bucket: new Set(["1-50", "51-150", "151-500", "500+"]), view_name: new Set(["home", "quick", "quick-result", "journal", "dream-detail", "privacy-data", "auth"]) },
   analysis_requested: { analysis_type: new Set(["quick", "deep", "result_card"]) },
   analysis_completed: { analysis_type: new Set(["quick", "deep", "result_card"]), source: new Set(["ai_generated", "fallback", "generation_failed", "mock_legacy"]), has_result_card: "boolean" },
-  analysis_failed: { analysis_type: new Set(["quick", "deep", "result_card"]), error_code: ERROR_CODE_PATTERN },
+  analysis_failed: { analysis_type: new Set(["quick", "deep", "result_card"]), error_code: ERROR_CODES },
   result_viewed: { analysis_type: new Set(["quick", "deep", "result_card"]), source: new Set(["ai_generated", "fallback", "generation_failed", "mock_legacy"]) },
   dream_saved: { analysis_type: new Set(["quick", "deep", "result_card"]), sync_status: new Set(["synced", "pending_sync", "local_only"]) },
   journal_opened: { record_count_bucket: new Set(["0", "1", "2-5", "6-20", "21+"]) },
@@ -129,7 +144,7 @@ function normalizeProductEventBatch(body, context = {}) {
       session_hash: sessionHash,
       client_platform: "web",
       properties: sanitized.event.properties,
-      app_version: typeof context.appVersion === "string" && context.appVersion.length <= 64 ? context.appVersion : null
+      app_version: context.appVersion === PRODUCT_ANALYTICS_VERSION ? context.appVersion : null
     });
   });
 

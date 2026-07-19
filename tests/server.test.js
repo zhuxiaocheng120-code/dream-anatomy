@@ -1540,6 +1540,59 @@ test("product events derive logged-in identity from a valid Bearer token", { con
   });
 });
 
+test("product events reject mixed authenticated and guest identity payloads", { concurrency: false }, async () => {
+  const inserted = [];
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/v1/product-events`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: "Bearer member-token" },
+      body: JSON.stringify({
+        analyticsConsent: true,
+        sessionId: "00000000-0000-4000-8000-000000000102",
+        installationId: "00000000-0000-4000-8000-000000000103",
+        events: [createProductEvent()]
+      })
+    });
+
+    const payload = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(payload.error.code, "INVALID_REQUEST");
+    assert.equal(inserted.length, 0);
+  }, {
+    authResolver: {
+      resolveIdentity: async () => ({ type: "authenticated", userId: "00000000-0000-4000-8000-000000000104" })
+    },
+    analyticsClient: createProductAnalyticsQueryClient([], inserted),
+    analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" }
+  });
+});
+
+test("product events do not persist arbitrary client app versions", { concurrency: false }, async () => {
+  const inserted = [];
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/v1/product-events`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        "X-App-Version": "private@example.com"
+      },
+      body: JSON.stringify({
+        analyticsConsent: true,
+        sessionId: "00000000-0000-4000-8000-000000000102",
+        installationId: "00000000-0000-4000-8000-000000000103",
+        events: [createProductEvent()]
+      })
+    });
+
+    assert.equal(response.status, 200);
+    assert.equal(inserted[0].app_version, "2026-07-19");
+    assert.doesNotMatch(JSON.stringify(inserted), /private@example\.com/);
+  }, {
+    analyticsClient: createProductAnalyticsQueryClient([], inserted),
+    analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" }
+  });
+});
+
 test("product events return stable request errors", { concurrency: false }, async () => {
   await withServer(async (baseUrl) => {
     const invalidAuth = await fetch(`${baseUrl}/api/v1/product-events`, {

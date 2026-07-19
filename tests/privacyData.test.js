@@ -565,6 +565,32 @@ test("login checks current legal consent and prompts stale versions once", async
   assert.equal(client.state.selects.length, 1);
 });
 
+test("analytics preference failures do not block legal consent checks", async () => {
+  const client = createLegalConsentClient({
+    row: {
+      privacy_policy_version: "old",
+      terms_version: "old",
+      ai_disclaimer_version: "old"
+    }
+  });
+  const productAnalytics = {
+    loadPreferenceForSession: async () => {
+      throw new Error("analytics preference unavailable");
+    },
+    getAnalyticsConsent: () => false
+  };
+  const { controller, elements } = createHarness({ productAnalytics });
+
+  await controller.handleSession({
+    authEvent: "SIGNED_IN",
+    user: { id: "user-1" },
+    client
+  });
+
+  assert.deepEqual(client.state.selects, [{ column: "user_id", value: "user-1" }]);
+  assert.match(elements.status.textContent, /请确认最新版本/);
+});
+
 test("acceptCurrentLegalVersions saves versions for the current authenticated user", async () => {
   const client = createLegalConsentClient();
   const { controller } = createHarness();

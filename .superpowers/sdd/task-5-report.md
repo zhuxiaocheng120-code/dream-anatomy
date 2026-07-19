@@ -77,3 +77,15 @@ The Task 5 re-review found the implementation fix was correct, but two older tes
 ### GREEN Evidence
 
 After updating those tests to expect both `principal_type` and `principal_hash`, `npm test -- tests/productAnalytics.test.js tests/server.test.js tests/adminAnalyticsFrontend.test.js tests/accountDeletion.test.js tests/supabaseSecurity.test.js` reported 77 passing and 0 failing with localhost listener permission. `node --check server/productAnalytics.js && node --check server/accountDeletion.js && node --check src/adminAnalytics.js` and `git diff --check` also passed.
+
+---
+
+## Final Whole-Branch Review Fix
+
+### RED Evidence
+
+The final reviewer reported four Important findings. New regression tests reproduced three module-level failures: arbitrary stable-looking `error_code` values were accepted, product analytics preference-read failures aborted legal consent checks, and retention used the first event inside the selected range rather than the principal's true first event. Additional route coverage asserted that mixed authenticated/guest product event payloads must be rejected and client-supplied `X-App-Version` must not be persisted.
+
+### GREEN Evidence
+
+After tightening the product event allowlists, rejecting authenticated payloads with guest installation IDs, gating frontend Bearer headers to the controller's active authenticated user, isolating product analytics preference-read failures, and calculating retention from historical first events, `npm test` reported 275 passing and 0 failing with localhost listener permission. The final verification syntax checks and `git diff --check` also passed.

@@ -585,7 +585,11 @@
       currentUser = nextUser;
       currentClient = nextUser ? nextClient : null;
       if (productAnalytics && typeof productAnalytics.loadPreferenceForSession === "function") {
-        await productAnalytics.loadPreferenceForSession({ user: nextUser, client: currentClient, authEvent: detail.authEvent });
+        try {
+          await productAnalytics.loadPreferenceForSession({ user: nextUser, client: currentClient, authEvent: detail.authEvent });
+        } catch (error) {
+          setStatus("产品分析偏好暂时无法读取，不影响隐私与数据设置。");
+        }
         if (analyticsToggle) analyticsToggle.checked = Boolean(productAnalytics.getAnalyticsConsent && productAnalytics.getAnalyticsConsent());
         if (typeof onAnalyticsPreferenceLoaded === "function") {
           onAnalyticsPreferenceLoaded();

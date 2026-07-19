@@ -60,15 +60,19 @@ function summarizeProductEvents(events = []) {
   };
 }
 
-async function loadProductEvents(client, options = {}) {
+async function loadProductEvents(client, options = {}, loadOptions = {}) {
   const range = normalizeRange(options.range);
   const now = options.now || new Date();
-  const response = await client
+  let query = client
     .from("product_events")
     .select("*")
-    .gte("occurred_at", getRangeStart(range, now))
-    .lte("occurred_at", now.toISOString())
-    .order("occurred_at", { ascending: true });
+    .lte("occurred_at", now.toISOString());
+
+  if (!loadOptions.includeHistorical) {
+    query = query.gte("occurred_at", getRangeStart(range, now));
+  }
+
+  const response = await query.order("occurred_at", { ascending: true });
 
   if (response.error) throw response.error;
   return { range, events: Array.isArray(response.data) ? response.data : [] };
@@ -136,7 +140,7 @@ function summarizeRetention(events = []) {
 }
 
 async function getProductAnalyticsRetention(client, options = {}) {
-  const { range, events } = await loadProductEvents(client, options);
+  const { range, events } = await loadProductEvents(client, options, { includeHistorical: true });
   return { sampleLabel: SAMPLE_LABEL, range, ...summarizeRetention(events) };
 }
 

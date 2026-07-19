@@ -13,7 +13,12 @@ const { createAiAccessControl } = require("./server/aiAccessControl");
 const { createAiAuthResolver } = require("./server/aiAuth");
 const { buildUsageEvent, createPrincipalHash, recordUsageEventSafely } = require("./server/aiAnalytics");
 const { createApiError, formatApiError } = require("./server/aiErrors");
-const { deleteProductEventsForIdentity, normalizeProductEventBatch, recordProductEventsSafely } = require("./server/productAnalytics");
+const {
+  PRODUCT_ANALYTICS_VERSION,
+  deleteProductEventsForIdentity,
+  normalizeProductEventBatch,
+  recordProductEventsSafely
+} = require("./server/productAnalytics");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -1200,10 +1205,14 @@ async function handleProductEventsRequest(request, response) {
       throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);
     }
 
+    if (identity.type === "authenticated" && request.body.installationId) {
+      throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);
+    }
+
     const normalized = normalizeProductEventBatch(request.body, {
       identity,
       secret: analyticsEnv.ANALYTICS_HASH_SECRET,
-      appVersion: request.get("X-App-Version") || ""
+      appVersion: PRODUCT_ANALYTICS_VERSION
     });
     if (normalized.rejected.length || normalized.events.length !== request.body.events.length) {
       throw createApiError("INVALID_REQUEST", "请求内容不完整，请检查后再试。", 400);

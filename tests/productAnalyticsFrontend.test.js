@@ -312,10 +312,9 @@ test("a stale authenticated preference read cannot override a later opt-out for 
   assert.equal(controller.trackEvent("app_opened"), false);
 });
 
-test("a guest flush is aborted when authentication starts before session resolution", async () => {
-  let resolveSession;
+test("a guest flush never uses a later authenticated browser session", async () => {
   const { controller, requests, sessionStorage } = createHarness({
-    getSession: () => new Promise((resolve) => { resolveSession = resolve; })
+    getSession: async () => ({ data: { session: { access_token: "account-b-token", user: { id: "account-b" } } } })
   });
   const client = {
     from() {
@@ -329,14 +328,14 @@ test("a guest flush is aborted when authentication starts before session resolut
   await controller.setAnalyticsConsent(true);
   controller.trackEvent("app_opened");
   const guestSessionId = sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId");
-  const flush = controller.flushEvents();
-  await new Promise((resolve) => setImmediate(resolve));
+  const sent = await controller.flushEvents();
 
   await controller.loadPreferenceForSession({ user: { id: "account-b" }, client });
-  resolveSession({ access_token: "account-b-token" });
 
-  assert.equal(await flush, false);
-  assert.equal(requests.length, 0);
+  assert.equal(sent, true);
+  assert.equal(requests.length, 1);
+  assert.equal(Object.hasOwn(requests[0].request.headers, "Authorization"), false);
+  assert.match(JSON.parse(requests[0].request.body).installationId, /^[0-9a-f-]{36}$/i);
   assert.equal(controller.getQueueLength(), 0);
   assert.notEqual(sessionStorage.getItem("dreamAnatomy.productAnalytics.sessionId"), guestSessionId);
 });
@@ -383,14 +382,21 @@ test("flush sends consent and request-level identifiers without raw ids in event
   assert.equal(Object.hasOwn(payload.events[0], "installationId"), false);
 });
 
-test("flush adds a Bearer token only for an active session", async () => {
-  const withSession = createHarness({ getSession: async () => ({ access_token: "safe-token" }) });
-  await withSession.controller.setAnalyticsConsent(true);
+test("flush adds a Bearer token only for the active authenticated controller user", async () => {
+  const withSession = createHarness({
+    getSession: async () => ({ data: { session: { access_token: "safe-token", user: { id: "user-1" } } } })
+  });
+  await withSession.controller.loadPreferenceForSession({
+    user: { id: "user-1" },
+    client: { from: () => ({ select() { return this; }, eq() { return { maybeSingle: async () => ({ data: { enabled: true }, error: null }) }; } }) }
+  });
   withSession.controller.trackEvent("app_opened");
   await withSession.controller.flushEvents();
   assert.equal(withSession.requests[0].request.headers.Authorization, "Bearer safe-token");
 
-  const guest = createHarness();
+  const guest = createHarness({
+    getSession: async () => ({ data: { session: { access_token: "guest-should-not-use", user: { id: "user-1" } } } })
+  });
   await guest.controller.setAnalyticsConsent(true);
   guest.controller.trackEvent("app_opened");
   await guest.controller.flushEvents();
