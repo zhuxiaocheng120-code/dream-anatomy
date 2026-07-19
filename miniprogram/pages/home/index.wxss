@@ -1,0 +1,9 @@
+.small-button {
+  min-height: 60rpx;
+  font-size: 24rpx;
+}
+
+.record,
+.empty {
+  margin-top: 18rpx;
+}

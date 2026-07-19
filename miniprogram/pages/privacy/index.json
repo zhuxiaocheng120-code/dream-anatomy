@@ -1,0 +1,7 @@
+{
+  "navigationBarTitleText": "隐私与数据",
+  "usingComponents": {
+    "confirmation-modal": "/components/confirmation-modal/index",
+    "legal-document": "/components/legal-document/index"
+  }
+}

@@ -1,0 +1,30 @@
+<view class="page">
+  <view class="eyebrow">Dream Anatomy</view>
+  <view class="title">隐私与数据</view>
+  <view class="subtitle">你可以查看法律文件，导出或清除本机游客数据。</view>
+
+  <view class="section stack">
+    <button class="button secondary" data-type="privacy" bindtap="openDocument">隐私政策</button>
+    <button class="button secondary" data-type="terms" bindtap="openDocument">用户协议</button>
+    <button class="button secondary" data-type="ai" bindtap="openDocument">AI 使用说明</button>
+  </view>
+
+  <legal-document wx:if="{{activeDocument}}" document="{{activeDocument}}"></legal-document>
+
+  <view class="section stack">
+    <button class="button" bindtap="exportData">导出我的数据</button>
+    <button class="button secondary" bindtap="showClearConfirm">清除本机梦境数据</button>
+  </view>
+
+  <view wx:if="{{message}}" class="section card small muted">{{message}}</view>
+  <view wx:if="{{exportText}}" class="section card export-text">{{exportText}}</view>
+
+  <confirmation-modal
+    visible="{{confirmVisible}}"
+    title="清除本机梦境数据"
+    message="这只会清除当前微信本机保存的游客梦境记录，操作不可恢复。"
+    confirmText="确认清除"
+    bind:cancel="hideClearConfirm"
+    bind:confirm="clearLocalData"
+  />
+</view>

@@ -1,0 +1,4 @@
+result-card {
+  display: block;
+  margin-top: 32rpx;
+}

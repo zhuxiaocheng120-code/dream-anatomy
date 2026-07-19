@@ -1,0 +1,31 @@
+<view class="page">
+  <view class="eyebrow">梦境详情</view>
+  <view class="title">{{record.analysisType || '本机梦境'}}</view>
+  <view class="subtitle">{{displayDate}}</view>
+
+  <error-state message="{{errorMessage}}"></error-state>
+
+  <view wx:if="{{record}}" class="section card stack">
+    <view>
+      <view class="eyebrow">梦境原文</view>
+      <view>{{record.dreamText}}</view>
+    </view>
+    <view>
+      <view class="eyebrow">AI 分析</view>
+      <view>{{record.reportContent.analysis.coreInterpretation || record.reportContent.analysis.dreamSummary}}</view>
+    </view>
+  </view>
+
+  <result-card wx:if="{{resultCard}}" card="{{resultCard}}"></result-card>
+  <view wx:elif="{{record}}" class="section card small muted">梦境画像暂未生成。</view>
+
+  <button wx:if="{{record}}" class="button secondary section" bindtap="showDeleteConfirm">删除这条梦境</button>
+  <confirmation-modal
+    visible="{{confirmVisible}}"
+    title="删除这条梦境"
+    message="这会从本机删除该梦境记录，操作不可恢复。"
+    confirmText="确认删除"
+    bind:cancel="hideDeleteConfirm"
+    bind:confirm="deleteRecord"
+  />
+</view>

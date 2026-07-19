@@ -1,0 +1,14 @@
+.loading-state {
+  display: flex;
+  align-items: center;
+  gap: 18rpx;
+  color: #6d6257;
+  font-size: 26rpx;
+}
+
+.loading-dot {
+  width: 18rpx;
+  height: 18rpx;
+  border-radius: 50%;
+  background: #8b7764;
+}

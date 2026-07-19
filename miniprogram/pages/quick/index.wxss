@@ -1,0 +1,10 @@
+.consent {
+  padding: 24rpx;
+  border-radius: 18rpx;
+  background: rgba(255, 252, 246, 0.7);
+}
+
+.link {
+  color: #5d4b3e;
+  text-decoration: underline;
+}

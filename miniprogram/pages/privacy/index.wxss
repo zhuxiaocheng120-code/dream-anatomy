@@ -1,0 +1,12 @@
+legal-document {
+  display: block;
+  margin-top: 32rpx;
+}
+
+.export-text {
+  max-height: 420rpx;
+  overflow: auto;
+  white-space: pre-wrap;
+  font-size: 22rpx;
+  color: #5f564e;
+}

@@ -1,0 +1,4 @@
+<view class="loading-state card">
+  <view class="loading-dot"></view>
+  <text>{{text}}</text>
+</view>

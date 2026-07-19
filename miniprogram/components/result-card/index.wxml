@@ -1,0 +1,33 @@
+<view class="result-card card">
+  <view class="eyebrow">梦境画像</view>
+  <view class="archetype">梦境原型：{{normalized.archetype.nameZh}}</view>
+  <view class="small muted">{{normalized.archetype.nameEn}}</view>
+  <view class="insight">一句话洞察：{{normalized.coreInsight}}</view>
+
+  <view class="section-title">梦境维度</view>
+  <view wx:for="{{normalized.dimensions}}" wx:key="id" class="dimension">
+    <view class="row">
+      <text>{{item.name}}</text>
+      <text>{{item.score === null ? '信息不足' : item.score}}</text>
+    </view>
+    <view class="bar">
+      <view class="bar-fill" style="width: {{item.score || 0}}%;"></view>
+    </view>
+    <view class="small muted">{{item.summary}}</view>
+  </view>
+
+  <view class="section-title">主要意象</view>
+  <view wx:for="{{normalized.symbols}}" wx:key="name" class="symbol">
+    <view class="symbol-name">{{item.name}}</view>
+    <view class="small muted">{{item.contextMeaning}}</view>
+    <view class="small">{{item.reflectionQuestion}}</view>
+  </view>
+
+  <view class="section-title">分享卡片预览</view>
+  <view class="share-preview">
+    <view>Dream Anatomy</view>
+    <view>梦境画像</view>
+    <view>{{normalized.archetype.nameZh}}</view>
+    <view class="small">{{normalized.safetyReminder}}</view>
+  </view>
+</view>

@@ -1,0 +1,56 @@
+.result-card {
+  display: block;
+}
+
+.archetype {
+  margin-top: 16rpx;
+  font-size: 36rpx;
+  font-weight: 600;
+}
+
+.insight {
+  margin-top: 24rpx;
+  font-size: 28rpx;
+  line-height: 1.7;
+}
+
+.section-title {
+  margin-top: 32rpx;
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.dimension,
+.symbol {
+  margin-top: 18rpx;
+  padding-top: 18rpx;
+  border-top: 1rpx solid rgba(78, 63, 49, 0.1);
+}
+
+.bar {
+  height: 12rpx;
+  margin: 12rpx 0;
+  border-radius: 999rpx;
+  background: rgba(68, 56, 47, 0.1);
+  overflow: hidden;
+}
+
+.bar-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: #8b7764;
+}
+
+.symbol-name {
+  font-size: 28rpx;
+  font-weight: 600;
+}
+
+.share-preview {
+  margin-top: 18rpx;
+  padding: 26rpx;
+  border-radius: 18rpx;
+  background: #f2eadf;
+  font-size: 26rpx;
+  line-height: 1.7;
+}

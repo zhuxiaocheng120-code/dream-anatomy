@@ -1,0 +1,10 @@
+.moon {
+  width: 72rpx;
+  height: 72rpx;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(139, 119, 100, 0.12);
+  color: #8b7764;
+}

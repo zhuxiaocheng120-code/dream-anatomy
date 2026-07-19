@@ -1,0 +1,25 @@
+<view class="page">
+  <view class="eyebrow">析梦 Dream Anatomy</view>
+  <view class="title">把醒来的碎片，轻轻收好。</view>
+  <view class="subtitle">这里是游客版小程序雏形。你可以快速解析梦境，并把结果保存在本机。</view>
+
+  <view class="section stack">
+    <button class="button" bindtap="goQuick">快速解析</button>
+    <button class="button disabled" disabled bindtap="showDeepComingSoon">深度引导 <text class="tag">正在开发中</text></button>
+    <button class="button secondary" bindtap="goJournal">梦境日记</button>
+  </view>
+
+  <view wx:if="{{deepHint}}" class="section card small muted">{{deepHint}}</view>
+
+  <view class="section">
+    <view class="row">
+      <view class="eyebrow">最近梦境</view>
+      <button class="button secondary small-button" bindtap="goPrivacy">隐私与数据</button>
+    </view>
+    <view wx:if="{{recentRecords.length === 0}}" class="card empty">还没有本机梦境记录。</view>
+    <view wx:for="{{recentRecords}}" wx:key="localRecordId" class="card record" data-id="{{item.localRecordId}}" bindtap="openRecord">
+      <view>{{item.title}}</view>
+      <view class="small muted">{{item.displayDate}} · {{item.analysisType}}</view>
+    </view>
+  </view>
+</view>
