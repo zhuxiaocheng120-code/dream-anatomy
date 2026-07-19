@@ -19,6 +19,7 @@
   </view>
 
   <result-card wx:if="{{resultCard}}" card="{{resultCard}}"></result-card>
+  <view wx:else class="section card small muted">梦境画像暂未生成。你仍然可以阅读本次文字解析。</view>
 
   <view class="section stack">
     <button class="button" bindtap="saveToJournal">保存到本机梦境日记</button>

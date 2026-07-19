@@ -16,7 +16,8 @@
     </view>
   </view>
 
-  <result-card wx:if="{{record}}" card="{{resultCard}}"></result-card>
+  <result-card wx:if="{{resultCard}}" card="{{resultCard}}"></result-card>
+  <view wx:elif="{{record}}" class="section card small muted">梦境画像暂未生成。</view>
 
   <button wx:if="{{record}}" class="button secondary section" bindtap="showDeleteConfirm">删除这条梦境</button>
   <confirmation-modal

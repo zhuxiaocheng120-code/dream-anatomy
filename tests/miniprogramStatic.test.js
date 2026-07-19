@@ -69,6 +69,7 @@ test("mini program pages expose guest core loop and disabled deep guidance", () 
   assert.match(result, /梦境原型/);
   assert.match(result, /一句话洞察/);
   assert.match(result, /分享卡片预览/);
+  assert.match(result, /梦境画像暂未生成/);
 
   assert.match(read("miniprogram/pages/journal/index.wxml"), /本机梦境日记/);
   assert.match(read("miniprogram/pages/detail/index.wxml"), /删除这条梦境/);
@@ -101,6 +102,7 @@ test("mini program source does not include forbidden secrets or disallowed platf
   assert.doesNotMatch(source, /\/chat\/completions|api\.deepseek\.com/i);
   assert.doesNotMatch(source, /Authorization\s*:/i);
   assert.doesNotMatch(source, /product-events|product_analytics|trackProductEvent/i);
+  assert.doesNotMatch(source, /\.\.\/\.\.\/src\//);
 });
 
 test("mini program docs and private config boundaries are explicit", () => {

@@ -19,6 +19,15 @@ function normalizeScore(value) {
   return Number.isFinite(number) ? Math.max(0, Math.min(100, number)) : null;
 }
 
+function hasResultCard(raw) {
+  if (!raw || typeof raw !== "object") return false;
+  const hasArchetype = Boolean(raw.archetype && typeof raw.archetype === "object" && raw.archetype.id);
+  const hasInsight = typeof raw.coreInsight === "string" && raw.coreInsight.trim().length > 0;
+  const hasDimension = Array.isArray(raw.dimensions)
+    && raw.dimensions.some((dimension) => dimension && dimension.id && normalizeScore(dimension.score) !== null);
+  return hasArchetype && hasInsight && hasDimension;
+}
+
 function normalizeResultCard(raw = {}) {
   const input = raw && typeof raw === "object" ? raw : {};
   const selected = archetypes[input.archetype && input.archetype.id] || archetypes.seeker;
@@ -61,4 +70,4 @@ function normalizeResultCard(raw = {}) {
   };
 }
 
-module.exports = { normalizeResultCard };
+module.exports = { hasResultCard, normalizeResultCard };

@@ -180,8 +180,10 @@ test("dream storage saves, reads, exports, deletes, clears, and enforces schema 
 test("mini program legal versions match Web and guest consent follows versions", () => {
   const webLegal = require("../src/legalDocuments");
   const miniLegal = require("../miniprogram/services/legalDocuments");
+  const miniSource = require("node:fs").readFileSync(require("node:path").join(__dirname, "../miniprogram/services/legalDocuments.js"), "utf8");
   const { wx } = createWxHarness();
 
+  assert.doesNotMatch(miniSource, /\.\.\/\.\.\/src\/legalDocuments/);
   assert.deepEqual(miniLegal.getLegalVersions(), {
     privacyPolicyVersion: webLegal.PRIVACY_POLICY_VERSION,
     termsVersion: webLegal.TERMS_VERSION,
@@ -203,7 +205,15 @@ test("mini program legal versions match Web and guest consent follows versions",
 });
 
 test("result card normalization avoids fake zero scores and unsafe text", () => {
-  const { normalizeResultCard } = require("../miniprogram/services/resultCard");
+  const { hasResultCard, normalizeResultCard } = require("../miniprogram/services/resultCard");
+  assert.equal(hasResultCard({}), false);
+  assert.equal(hasResultCard({ coreInsight: "只有一句话" }), false);
+  assert.equal(hasResultCard({
+    archetype: { id: "seeker" },
+    coreInsight: "这个梦可能与你正在寻找方向有关。",
+    dimensions: [{ id: "symbol_depth", score: 55, rationale: ["门出现在梦里。"] }]
+  }), true);
+
   const card = normalizeResultCard({
     archetype: { id: "seeker", summary: "你就是寻路者", evidence: ["梦里有一扇门。"] },
     coreInsight: "这个梦可能与你正在寻找方向有关。",

@@ -1,5 +1,5 @@
 const { createDreamStorage } = require("../../services/dreamStorage");
-const { normalizeResultCard } = require("../../services/resultCard");
+const { hasResultCard, normalizeResultCard } = require("../../services/resultCard");
 
 const PENDING_RESULT_KEY = "dream_anatomy_pending_result_v1";
 
@@ -21,7 +21,7 @@ Page({
     this.setData({
       dreamText: pending.dreamText || "",
       analysis: response.analysis || null,
-      resultCard: normalizeResultCard(response.dreamResultCard || {}),
+      resultCard: hasResultCard(response.dreamResultCard) ? normalizeResultCard(response.dreamResultCard) : null,
       errorMessage: response.analysis ? "" : "没有找到本次解析结果，请重新输入梦境。"
     });
   },

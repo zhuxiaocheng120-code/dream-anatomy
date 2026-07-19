@@ -1,6 +1,6 @@
 const { createDreamStorage } = require("../../services/dreamStorage");
 const { formatDisplayDate } = require("../../utils/dates");
-const { normalizeResultCard } = require("../../services/resultCard");
+const { hasResultCard, normalizeResultCard } = require("../../services/resultCard");
 
 Page({
   data: {
@@ -19,7 +19,9 @@ Page({
     this.setData({
       record,
       displayDate: formatDisplayDate(record.createdAt),
-      resultCard: normalizeResultCard(record.dreamResultCard || (record.reportContent && record.reportContent.dreamResultCard) || {})
+      resultCard: hasResultCard(record.dreamResultCard || (record.reportContent && record.reportContent.dreamResultCard))
+        ? normalizeResultCard(record.dreamResultCard || (record.reportContent && record.reportContent.dreamResultCard))
+        : null
     });
   },
   showDeleteConfirm() {
