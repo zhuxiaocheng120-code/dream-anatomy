@@ -18,6 +18,8 @@ const syntheticDreams = [
   { id: "confused-emotion", dream: "梦里很多画面混在一起：雨、车站、蓝色灯光，我醒来很慌。", anchor: "车站", other: "教室" }
 ];
 
+const limitedShortCase = { id: "short-simple", dream: "梦见门。", anchor: "门", other: "黑狗" };
+
 function createSyntheticAnalysis({ dream, anchor }) {
   return {
     dreamSummary: `这次梦里，“${anchor}”是最清楚的线索之一，梦境围绕它展开，并带出一种正在靠近又有些停顿的感受。整体画面不需要被解释成单一答案，而可以先被整理为一组值得观察的梦境片段。`,
@@ -54,6 +56,42 @@ function createSyntheticAnalysis({ dream, anchor }) {
       `最近有没有什么事情让你产生和“${anchor}”类似的停顿或靠近感？`
     ],
     gentleAction: `你可以用两分钟写下：梦中关于“${anchor}”的一个画面，以及醒来后残留的一个感受。`,
+    safetyReminder
+  };
+}
+
+function createLimitedSyntheticAnalysis({ anchor }) {
+  return {
+    dreamSummary: `这次梦里只留下“${anchor}”这个清楚线索，适合先做温和整理。`,
+    coreTheme: `围绕“${anchor}”的暂定线索`,
+    coreInterpretation: `当前梦境信息较少，主要能确认的是“${anchor}”这个片段。它可能只是一个值得继续观察的入口线索，不适合被扩展成更多故事。你可以先留意它带来的感受或联想。`,
+    evidence: [
+      {
+        dreamFragment: anchor,
+        interpretation: `“${anchor}”直接来自这次梦境，因此可以作为当前分析的主要依据。`
+      }
+    ],
+    emotionalReading: {
+      primaryEmotion: "情绪未明",
+      secondaryEmotions: ["留意"],
+      intensity: 20,
+      evidence: `当前文本只描述“${anchor}”，没有呈现强烈情绪，因此情绪强度适合保持谨慎。`
+    },
+    symbolReading: [
+      {
+        symbol: anchor,
+        context: `“${anchor}”是这次短梦中唯一清楚的画面。`,
+        possibleMeaning: "它可能是一条值得继续观察的个人线索。",
+        evidence: `梦境原文中出现了“${anchor}”。`,
+        reflectionQuestion: `“${anchor}”让你想到什么具体感受？`
+      }
+    ],
+    reflectionQuestions: [
+      `“${anchor}”在梦里最让你注意到什么？`,
+      `如果只保留“${anchor}”，它和最近哪种感受有一点相似？`,
+      `醒来后再想起“${anchor}”，身体或情绪有什么轻微变化？`
+    ],
+    gentleAction: `你可以用一分钟补充“${anchor}”的颜色、位置或第一感觉。`,
     safetyReminder
   };
 }
@@ -109,17 +147,16 @@ test("synthetic quick-analysis dataset passes V2 quality without cross-dream lea
 });
 
 test("limited-evidence quick generation defaults missing confidence to low", () => {
-  const caseItem = syntheticDreams.find((item) => item.id === "short");
   const result = normalizeQuickCombinedOutput({
-    analysis: createSyntheticAnalysis(caseItem),
-    dreamResultCard: createSyntheticCard(caseItem),
+    analysis: createLimitedSyntheticAnalysis(limitedShortCase),
+    dreamResultCard: createSyntheticCard(limitedShortCase),
     generationMeta: {
       source: "ai_generated",
       promptVersion: "quick-analysis-v2",
       qualityStatus: "passed",
       limitedEvidence: true
     }
-  }, caseItem.dream);
+  }, limitedShortCase.dream);
 
   assert.equal(result.output.dreamResultCardStatus, "ai_generated");
   assert.equal(result.output.generationMeta.limitedEvidence, true);

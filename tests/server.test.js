@@ -20,7 +20,8 @@ const {
   buildQuickRetryUserPrompt,
   buildResultCardRetryUserPrompt,
   buildResultCardUserPrompt,
-  buildUserPrompt
+  buildUserPrompt,
+  getDreamEvidenceProfile
 } = require("../server");
 const { createAiAccessControl } = require("../server/aiAccessControl");
 
@@ -97,6 +98,79 @@ function createQuickAnalysisPayload() {
   };
 }
 
+function createLimitedQuickAnalysisPayload({ fragment, symbol, theme }) {
+  return {
+    dreamSummary: `这次梦里最清楚的线索是“${fragment}”。画面很短，适合先围绕这个真实片段做温和整理。`,
+    coreTheme: theme || `围绕“${symbol}”的暂定线索`,
+    coreInterpretation: `目前能确认的梦境内容很少，主要是“${fragment}”这个片段。它可能提供了一个可以观察的入口，但不适合强行扩展成更复杂的故事。你可以先把“${symbol}”当作本次记录中已经出现的线索，看看它带来的感受、停顿或联想，而不是把它解释成固定结论。`,
+    evidence: [
+      {
+        dreamFragment: fragment,
+        interpretation: `“${fragment}”是当前输入中真实出现的梦境线索，因此可以作为这次解析的主要依据。`
+      }
+    ],
+    emotionalReading: {
+      primaryEmotion: "情绪未明",
+      secondaryEmotions: ["留意"],
+      intensity: 25,
+      evidence: `当前文本只描述了“${fragment}”，没有呈现强烈情绪，因此情绪强度适合保持谨慎。`
+    },
+    symbolReading: [
+      {
+        symbol,
+        context: `“${symbol}”是这次短梦中最明确的意象。`,
+        possibleMeaning: `在这次语境里，它可能是一条值得继续观察的线索。`,
+        evidence: `梦境文本中出现了“${fragment}”。`,
+        reflectionQuestion: `“${symbol}”让你想到什么具体画面或感受？`
+      }
+    ],
+    reflectionQuestions: [
+      `“${symbol}”在梦里最先让你注意到什么？`,
+      `如果只保留“${symbol}”这个线索，它和最近哪种感受有一点相似？`,
+      `醒来后再想起“${symbol}”，身体或情绪有什么轻微变化？`
+    ],
+    gentleAction: `你可以用一分钟补充“${symbol}”的颜色、位置或醒来后的第一感觉。`,
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+}
+
+function createLimitedResultCardPayload({ fragment, symbol }) {
+  return {
+    archetype: {
+      id: "observer",
+      summary: `本次梦境更接近观察者，因为你记录下了“${symbol}”这个线索，并适合先停下来观察。`,
+      evidence: [`梦境文本中出现了“${fragment}”。`, `当前记录围绕“${symbol}”这个单一线索展开。`]
+    },
+    coreInsight: `这个梦也许先邀请你温和地看见“${symbol}”。`,
+    dimensions: [
+      { id: "symbol_depth", score: 35, summary: `“${symbol}”提供了单一但清楚的象征线索。`, rationale: [`“${fragment}”是本次记录中最明确的画面。`] },
+      { id: "emotion_intensity", score: 20, summary: "情绪线索较轻。", rationale: [`当前文本只描述“${fragment}”，没有出现强烈情绪。`] },
+      { id: "self_awareness", score: 25, summary: "自我观察线索仍然有限。", rationale: [`你记录了“${fragment}”，但还没有补充梦中反应。`] },
+      { id: "growth_signal", score: 30, summary: "变化线索适合保持谨慎。", rationale: [`“${symbol}”可以被继续观察，但文本还没有展开后续变化。`] }
+    ],
+    symbols: [
+      {
+        name: symbol,
+        generalPossibility: `“${symbol}”有时可以作为个人联想的起点。`,
+        contextMeaning: `在这次短梦里，它更像一个有限但清楚的观察线索。`,
+        evidence: `梦境文本中出现了“${fragment}”。`,
+        reflectionQuestion: `“${symbol}”让你想到什么还没被说出的细节？`
+      }
+    ],
+    emotionalProfile: {
+      primary: "情绪未明",
+      secondary: ["留意"],
+      intensity: 20,
+      evidence: `当前文本只描述“${fragment}”，情绪线索较轻。`
+    },
+    reflectionQuestions: [
+      `“${symbol}”最让你想继续补充哪一点？`,
+      `如果把“${symbol}”当作线索，它和最近哪种经验有轻微联系？`
+    ],
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+}
+
 function createDeepAnalysisPayload() {
   return {
     summary: "你梦见在学校走廊寻找教室，并在门前停下。",
@@ -140,6 +214,46 @@ test("quick combined prompt schema explicitly contains all required result-card 
   assert.match(prompt, /"generationMeta"/);
   assertPromptContainsCompleteDimensionSchema(prompt);
   assertPromptContainsStableArchetypeIds(prompt);
+});
+
+test("quick prompt uses limited-evidence requirements for short simple dreams", () => {
+  const profile = getDreamEvidenceProfile("我梦见一扇门。");
+  const prompt = buildUserPrompt("我梦见一扇门。");
+
+  assert.equal(profile.limitedEvidence, true);
+  assert.match(prompt, /有限线索模式/);
+  assert.match(prompt, /不要强行提供两个不存在的梦境细节/);
+  assert.match(prompt, /"limitedEvidence": true/);
+  assert.match(prompt, /"evidenceConfidence": "low"/);
+});
+
+test("quick prompt keeps standard requirements for richer dreams", () => {
+  const dreams = [
+    "我在学校走廊里反复寻找教室，外面下着雨，最后停在一扇发光的门前。",
+    "我在办公室和老板开会，文件散落一地，然后手机一直响。",
+    "我坐在飞机上穿过云层，旁边的陌生人递给我一封信。"
+  ];
+
+  dreams.forEach((dream) => {
+    const profile = getDreamEvidenceProfile(dream);
+    const prompt = buildUserPrompt(dream);
+
+    assert.equal(profile.limitedEvidence, false, dream);
+    assert.match(prompt, /标准线索模式/);
+    assert.match(prompt, /至少引用两个梦中的具体场景/);
+    assert.match(prompt, /"limitedEvidence": false/);
+    assert.match(prompt, /"evidenceConfidence": "high"/);
+  });
+});
+
+test("limited-evidence detection does not inflate overlapping anchors", () => {
+  const profile = getDreamEvidenceProfile("下雨了。");
+  const prompt = buildUserPrompt("下雨了。");
+
+  assert.equal(profile.limitedEvidence, true);
+  assert.equal(profile.meaningfulAnchorCount, 1);
+  assert.deepEqual(profile.meaningfulAnchors, ["下雨"]);
+  assert.match(prompt, /有限线索模式/);
 });
 
 test("standalone result-card prompt uses card root schema with all required dimensions", () => {
@@ -1402,7 +1516,7 @@ test("repair stage receives its own timeout after a slow initial quick response"
   }
 });
 
-test("uses a limited-evidence final card when quick card repair is still incomplete", { concurrency: false }, async () => {
+test("final quick card repair keeps standard metadata for richer dreams", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   let upstreamCalls = 0;
   const upstreamBodies = [];
@@ -1453,8 +1567,8 @@ test("uses a limited-evidence final card when quick card repair is still incompl
       assert.equal(response.status, 200);
       assert.equal(payload.analysis.coreTheme, createQuickAnalysisPayload().coreTheme);
       assert.equal(payload.dreamResultCardStatus, "ai_generated");
-      assert.equal(payload.generationMeta.limitedEvidence, true);
-      assert.equal(payload.generationMeta.evidenceConfidence, "low");
+      assert.equal(payload.generationMeta.limitedEvidence, false);
+      assert.equal(payload.generationMeta.evidenceConfidence, "high");
       assert.equal(payload.dreamResultCard.dimensions.length, 4);
       payload.dreamResultCard.dimensions.forEach((dimension) => {
         assert.equal(typeof dimension.score, "number");
@@ -1594,6 +1708,128 @@ test("short dream can complete through limited-evidence result card with all fou
       assert.deepEqual(payload.dreamResultCard.dimensions.map((dimension) => dimension.id), resultCardDimensionIds);
       assert.equal(upstreamCalls, 3);
       assertPromptContainsCompleteDimensionSchema(upstreamBodies[2].messages[1].content);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("short quick dreams succeed in limited-evidence mode without invented details", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const shortCases = [
+    { dreamText: "我梦见一扇门。", fragment: "一扇门", symbol: "门", theme: "围绕门这个入口线索展开", forbidden: ["学校", "教室", "前女友", "下雨", "考试", "狗"] },
+    { dreamText: "我一直在跑。", fragment: "一直在跑", symbol: "跑", theme: "围绕持续移动的感受展开", forbidden: ["学校", "教室", "前女友", "下雨", "考试", "门", "狗"] },
+    { dreamText: "下雨了。", fragment: "下雨了", symbol: "雨", theme: "围绕雨这个环境线索展开", forbidden: ["学校", "教室", "前女友", "考试", "门", "狗"] },
+    { dreamText: "我看到前女友。", fragment: "看到前女友", symbol: "前女友", theme: "围绕熟悉关系的短暂出现展开", forbidden: ["学校", "教室", "下雨", "考试", "门", "狗"] },
+    { dreamText: "我在考试。", fragment: "考试", symbol: "考试", theme: "围绕考试这个情境线索展开", forbidden: ["教室", "前女友", "下雨", "门", "狗"] }
+  ];
+  let upstreamCalls = 0;
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    const prompt = JSON.parse(options.body).messages[1].content;
+    const caseItem = shortCases.find((item) => prompt.includes(item.dreamText));
+    assert.ok(caseItem, "prompt should include one of the short dream inputs");
+
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createLimitedQuickAnalysisPayload(caseItem),
+              dreamResultCard: createLimitedResultCardPayload(caseItem),
+              generationMeta: {
+                source: "ai_generated",
+                promptVersion: "quick-analysis-v2",
+                qualityStatus: "passed",
+                limitedEvidence: false,
+                evidenceConfidence: "high"
+              }
+            })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      for (const caseItem of shortCases) {
+        const response = await postDreamAnalysis(baseUrl, {
+          dreamText: caseItem.dreamText,
+          analysisType: "quick"
+        });
+        const payload = await response.json();
+
+        assert.equal(response.status, 200, `${caseItem.dreamText}: ${JSON.stringify(payload.error || payload)}`);
+        assert.ok(payload.analysis);
+        assert.ok(payload.dreamResultCard);
+        assert.equal(payload.dreamResultCardStatus, "ai_generated");
+        assert.equal(payload.generationMeta.limitedEvidence, true);
+        assert.equal(payload.generationMeta.evidenceConfidence, "low");
+        assert.deepEqual(payload.dreamResultCard.dimensions.map((dimension) => dimension.id).sort(), [...resultCardDimensionIds].sort());
+        payload.dreamResultCard.dimensions.forEach((dimension) => {
+          assert.equal(typeof dimension.score, "number");
+          assert.ok(dimension.score >= 0 && dimension.score <= 100);
+          assert.ok(dimension.rationale.length >= 1);
+        });
+        assert.equal(payload.analysis.evidence.length, 1);
+        assert.equal(payload.analysis.reflectionQuestions.length, 3);
+        assert.doesNotMatch(JSON.stringify(payload), /generation_failed|GENERATION_INCOMPLETE/);
+        caseItem.forbidden.forEach((term) => {
+          assert.doesNotMatch(JSON.stringify(payload), new RegExp(term), `${caseItem.dreamText} should not invent ${term}`);
+        });
+      }
+      assert.equal(upstreamCalls, shortCases.length);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("complex quick dreams keep standard evidence mode and full quality requirements", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload(),
+              generationMeta: {
+                source: "ai_generated",
+                promptVersion: "quick-analysis-v2",
+                qualityStatus: "passed",
+                limitedEvidence: true,
+                evidenceConfidence: "low"
+              }
+            })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里反复寻找教室，外面下着雨，最后停在一扇发光的门前。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.generationMeta.limitedEvidence, false);
+      assert.equal(payload.generationMeta.evidenceConfidence, "high");
+      assert.equal(payload.analysis.evidence.length, 2);
+      assert.equal(upstreamCalls, 1);
     });
   } finally {
     global.fetch = nativeFetch;
