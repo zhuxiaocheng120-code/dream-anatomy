@@ -1026,15 +1026,29 @@ input {
   gap: 10px;
 }
 
-.sleep-quality-range {
+.sleep-quality-slider-shell {
   --sleep-quality-progress: 50%;
+  --sleep-quality-cloud-position: 50%;
   --sleep-quality-track-height: 12px;
   --sleep-quality-thumb-width: 40px;
   --sleep-quality-thumb-height: 28px;
   --sleep-quality-thumb-shadow: 0 8px 18px rgba(76, 61, 45, 0.14);
   --sleep-quality-thumb-shadow-active: 0 12px 26px rgba(76, 61, 45, 0.2);
-  --sleep-quality-cloud-thumb-style: dream-guide-slider-thumb-v2;
-  --sleep-quality-cloud-thumb: url("data:image/svg+xml,%3Csvg width='48' height='34' viewBox='0 0 48 34' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.4 25.8C8.4 25.8 4.6 22.6 4.6 18.4c0-4.1 3.3-7.2 7.4-7.2.8 0 1.6.1 2.3.4C16.2 7.4 20.1 5 24.5 5c5.4 0 9.7 3.4 11 8.2.5-.1 1.1-.2 1.7-.2 3.5 0 6.2 2.6 6.2 5.9 0 4-3.4 6.9-7.9 6.9H13.4Z' fill='%23fff8eb'/%3E%3Cpath d='M13.4 25.8C8.4 25.8 4.6 22.6 4.6 18.4c0-4.1 3.3-7.2 7.4-7.2.8 0 1.6.1 2.3.4C16.2 7.4 20.1 5 24.5 5c5.4 0 9.7 3.4 11 8.2.5-.1 1.1-.2 1.7-.2 3.5 0 6.2 2.6 6.2 5.9 0 4-3.4 6.9-7.9 6.9H13.4Z' fill='none' stroke='%235f6549' stroke-opacity='.72' stroke-width='1.28' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M15 23.2h18.4' stroke='%238a6f52' stroke-opacity='.24' stroke-width='1.1' stroke-linecap='round'/%3E%3Cpath d='M31.8 11.8c-1.8 1-1.7 3.9.3 4.7-2 .7-2.1 3.5-.3 4.6-2.9-.3-5.1-2.2-5.1-4.6 0-2.5 2.2-4.4 5.1-4.7Z' fill='%23a7ad8f' opacity='.38'/%3E%3Ccircle cx='36.5' cy='12.5' r='1.15' fill='%238a6f52' opacity='.5'/%3E%3C/svg%3E");
+  --sleep-quality-cloud-left: clamp(
+    calc((var(--sleep-quality-thumb-width) / 2) + 2px),
+    var(--sleep-quality-cloud-position),
+    calc(100% - (var(--sleep-quality-thumb-width) / 2) - 2px)
+  );
+  position: relative;
+  display: grid;
+  align-items: center;
+  width: 100%;
+  min-height: 34px;
+}
+
+.sleep-quality-range {
+  position: relative;
+  z-index: 2;
   width: 100%;
   min-height: 34px;
   padding: 0;
@@ -1043,6 +1057,8 @@ input {
   background: transparent;
   cursor: pointer;
   accent-color: var(--muted-olive);
+  -webkit-appearance: none;
+  appearance: none;
 }
 
 .sleep-quality-range:focus {
@@ -1077,30 +1093,14 @@ input {
   margin-top: calc((var(--sleep-quality-track-height) - var(--sleep-quality-thumb-height)) / 2);
   border: 0;
   border-radius: 0;
-  background: var(--sleep-quality-cloud-thumb) center / 100% 100% no-repeat;
-  box-shadow: var(--sleep-quality-thumb-shadow);
+  background: transparent;
+  box-shadow: none;
+  opacity: 0;
   cursor: grab;
-  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
   appearance: none;
 }
 
-.sleep-quality-range:hover::-webkit-slider-thumb {
-  transform: scale(1.04);
-  box-shadow: var(--sleep-quality-thumb-shadow-active);
-}
-
-.sleep-quality-range:focus-visible::-webkit-slider-thumb {
-  transform: scale(1.05);
-  box-shadow:
-    0 0 0 4px rgba(159, 165, 139, 0.22),
-    var(--sleep-quality-thumb-shadow-active);
-}
-
 .sleep-quality-range:active::-webkit-slider-thumb {
-  transform: scale(1.08);
-  box-shadow:
-    0 0 0 5px rgba(95, 101, 73, 0.16),
-    var(--sleep-quality-thumb-shadow-active);
   cursor: grabbing;
 }
 
@@ -1126,37 +1126,96 @@ input {
   height: var(--sleep-quality-thumb-height);
   border: 0;
   border-radius: 0;
-  background: var(--sleep-quality-cloud-thumb) center / 100% 100% no-repeat;
-  box-shadow: var(--sleep-quality-thumb-shadow);
+  background: transparent;
+  box-shadow: none;
+  opacity: 0;
   cursor: grab;
-  transition: transform 160ms ease, box-shadow 160ms ease, filter 160ms ease;
-}
-
-.sleep-quality-range:hover::-moz-range-thumb {
-  transform: scale(1.04);
-  box-shadow: var(--sleep-quality-thumb-shadow-active);
-}
-
-.sleep-quality-range:focus-visible::-moz-range-thumb {
-  transform: scale(1.05);
-  box-shadow:
-    0 0 0 4px rgba(159, 165, 139, 0.22),
-    var(--sleep-quality-thumb-shadow-active);
 }
 
 .sleep-quality-range:active::-moz-range-thumb {
-  transform: scale(1.08);
-  box-shadow:
-    0 0 0 5px rgba(95, 101, 73, 0.16),
-    var(--sleep-quality-thumb-shadow-active);
   cursor: grabbing;
 }
 
-/* cloud-shaped sleep quality slider thumb keeps the native range behavior intact. */
+.sleep-quality-cloud-visual {
+  position: absolute;
+  top: 50%;
+  left: var(--sleep-quality-cloud-left);
+  z-index: 3;
+  width: var(--sleep-quality-thumb-width);
+  height: var(--sleep-quality-thumb-height);
+  pointer-events: none;
+  filter: drop-shadow(var(--sleep-quality-thumb-shadow));
+  transform: translate(-50%, -50%);
+  transform-origin: center;
+  transition: transform 160ms ease, filter 160ms ease;
+}
+
+.sleep-quality-cloud-visual svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+  overflow: visible;
+}
+
+.sleep-cloud-fill {
+  fill: var(--paper);
+}
+
+.sleep-cloud-line {
+  fill: none;
+  stroke: var(--muted-olive);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-opacity: 0.78;
+  stroke-width: 1.35;
+}
+
+.sleep-cloud-shadow {
+  fill: none;
+  stroke: var(--sepia);
+  stroke-linecap: round;
+  stroke-opacity: 0.26;
+  stroke-width: 1.15;
+}
+
+.sleep-cloud-moon {
+  fill: var(--dusty-sage);
+  opacity: 0.42;
+}
+
+.sleep-cloud-star {
+  fill: var(--sepia);
+  opacity: 0.52;
+}
+
+.sleep-quality-slider-shell:hover .sleep-quality-cloud-visual {
+  filter: drop-shadow(var(--sleep-quality-thumb-shadow-active));
+  transform: translate(-50%, -50%) scale(1.04);
+}
+
+.sleep-quality-slider-shell:focus-within .sleep-quality-cloud-visual {
+  filter:
+    drop-shadow(0 0 0 rgba(159, 165, 139, 0))
+    drop-shadow(var(--sleep-quality-thumb-shadow-active));
+  transform: translate(-50%, -50%) scale(1.05);
+}
+
+.sleep-quality-slider-shell:active .sleep-quality-cloud-visual {
+  filter:
+    drop-shadow(0 0 8px rgba(95, 101, 73, 0.18))
+    drop-shadow(var(--sleep-quality-thumb-shadow-active));
+  transform: translate(-50%, -50%) scale(1.08);
+}
+
+/* cloud-shaped sleep quality slider thumb visual keeps the native range behavior intact. */
 @media (pointer: coarse) {
-  .sleep-quality-range {
+  .sleep-quality-slider-shell {
     --sleep-quality-thumb-width: 44px;
     --sleep-quality-thumb-height: 31px;
+    min-height: 44px;
+  }
+
+  .sleep-quality-range {
     min-height: 44px;
   }
 }

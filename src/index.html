@@ -233,16 +233,27 @@
             </div>
             <div class="sleep-quality-control">
               <label class="sr-only" for="quickSleepQualityRange">昨晚的睡眠感受</label>
-              <input
-                id="quickSleepQualityRange"
-                class="sleep-quality-range"
-                type="range"
-                min="0"
-                max="100"
-                step="5"
-                value="50"
-                aria-valuetext="未填写，滑动记录，可跳过"
-              >
+              <div class="sleep-quality-slider-shell">
+                <input
+                  id="quickSleepQualityRange"
+                  class="sleep-quality-range"
+                  type="range"
+                  min="0"
+                  max="100"
+                  step="5"
+                  value="50"
+                  aria-valuetext="未填写，滑动记录，可跳过"
+                >
+                <span class="sleep-quality-cloud-visual" aria-hidden="true">
+                  <svg viewBox="0 0 56 36" focusable="false">
+                    <path class="sleep-cloud-fill" d="M15.2 27.4c-5.8 0-10.4-3.7-10.4-8.5 0-4.7 3.8-8.2 8.6-8.2.9 0 1.8.1 2.7.4C18.1 6.4 22.8 3.8 28 3.8c6.4 0 11.5 4 13 9.7.7-.2 1.4-.3 2.1-.3 4.2 0 7.5 3.1 7.5 7.1 0 4.2-3.7 7.1-8.6 7.1H15.2Z" />
+                    <path class="sleep-cloud-line" d="M15.2 27.4c-5.8 0-10.4-3.7-10.4-8.5 0-4.7 3.8-8.2 8.6-8.2.9 0 1.8.1 2.7.4C18.1 6.4 22.8 3.8 28 3.8c6.4 0 11.5 4 13 9.7.7-.2 1.4-.3 2.1-.3 4.2 0 7.5 3.1 7.5 7.1 0 4.2-3.7 7.1-8.6 7.1H15.2Z" />
+                    <path class="sleep-cloud-shadow" d="M16.5 24.8h20.9" />
+                    <path class="sleep-cloud-moon" d="M38.3 11.8c-2 1.1-2 4.3.3 5.2-2.2.8-2.3 4-.3 5.2-3.3-.4-5.8-2.5-5.8-5.2 0-2.8 2.5-4.9 5.8-5.2Z" />
+                    <circle class="sleep-cloud-star" cx="44.4" cy="12.6" r="1.2" />
+                  </svg>
+                </span>
+              </div>
               <div class="sleep-quality-control-footer">
                 <p class="sleep-quality-value" data-quick-sleep-quality-display aria-live="polite">滑动记录，可跳过</p>
                 <button class="text-button" type="button" data-quick-sleep-quality-clear>清除</button>

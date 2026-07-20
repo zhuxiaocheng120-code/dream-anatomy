@@ -28,6 +28,7 @@ function createRecord(overrides = {}) {
 
 function createFakeElement(tagName = "div") {
   const listeners = new Map();
+  const styleProperties = new Map();
   const element = {
     tagName: tagName.toUpperCase(),
     children: [],
@@ -37,7 +38,15 @@ function createFakeElement(tagName = "div") {
     textContent: "",
     type: "",
     value: "",
-    style: {},
+    parentElement: null,
+    style: {
+      setProperty(name, value) {
+        styleProperties.set(name, String(value));
+      },
+      getPropertyValue(name) {
+        return styleProperties.get(name) || "";
+      }
+    },
     attributes: {},
     classList: {
       values: new Set(),
@@ -60,9 +69,19 @@ function createFakeElement(tagName = "div") {
       }
     },
     append(...nodes) {
+      nodes.forEach((node) => {
+        if (node && typeof node === "object") {
+          node.parentElement = this;
+        }
+      });
       this.children.push(...nodes);
     },
     replaceChildren(...nodes) {
+      nodes.forEach((node) => {
+        if (node && typeof node === "object") {
+          node.parentElement = this;
+        }
+      });
       this.children = nodes;
     },
     setAttribute(name, value) {
@@ -215,11 +234,18 @@ function createAppIntegrationHarness(options = {}) {
     }
   });
   const quickDream = Object.assign(createFakeElement("textarea"), { value: "" });
+  const quickSleepShell = createFakeElement("div");
+  quickSleepShell.className = "sleep-quality-slider-shell";
+  quickSleepShell.classList.add("sleep-quality-slider-shell");
   const quickSleepRange = Object.assign(createFakeElement("input"), {
     id: "quickSleepQualityRange",
     type: "range",
     value: "50"
   });
+  const quickSleepCloud = createFakeElement("span");
+  quickSleepCloud.className = "sleep-quality-cloud-visual";
+  quickSleepCloud.classList.add("sleep-quality-cloud-visual");
+  quickSleepShell.append(quickSleepRange, quickSleepCloud);
   const quickSleepDisplay = createFakeElement("p");
   const quickSleepClear = Object.assign(createFakeElement("button"), { type: "button" });
   const quickResult = Object.assign(createFakeElement("section"), { hidden: true });
@@ -472,9 +498,11 @@ function createAppIntegrationHarness(options = {}) {
     quickDream,
     quickForm,
     quickFormStatus,
+    quickSleepCloud,
     quickSleepClear,
     quickSleepDisplay,
     quickSleepRange,
+    quickSleepShell,
     quickResult,
     quickResultCard,
     resultFields,
@@ -1090,6 +1118,33 @@ test("quick decode saves selected sleep quality score label and metadata", async
   assert.equal(savedRecord.reportContent.sleepQualityScore, 65);
   assert.equal(savedRecord.reportContent.sleepQualityLabel, "比较安稳");
   assert.match(savedRecord.reportContent.sleepQualityUpdatedAt, /^\d{4}-\d{2}-\d{2}T/);
+});
+
+test("quick sleep quality cloud visual follows the native range without changing save behavior", () => {
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false
+  });
+
+  assert.equal(harness.quickSleepShell.style.getPropertyValue("--sleep-quality-progress"), "50%");
+  assert.equal(harness.quickSleepShell.style.getPropertyValue("--sleep-quality-cloud-position"), "50%");
+  assert.equal(harness.quickSleepRange.classList.contains("is-empty"), true);
+
+  harness.quickSleepRange.value = "25";
+  harness.quickSleepRange.trigger("input");
+  assert.equal(harness.quickSleepShell.style.getPropertyValue("--sleep-quality-progress"), "25%");
+  assert.equal(harness.quickSleepShell.style.getPropertyValue("--sleep-quality-cloud-position"), "25%");
+  assert.equal(harness.quickSleepDisplay.textContent, "25% · 偏疲惫");
+
+  harness.quickSleepRange.value = "100";
+  harness.quickSleepRange.trigger("input");
+  assert.equal(harness.quickSleepShell.style.getPropertyValue("--sleep-quality-cloud-position"), "100%");
+  assert.equal(harness.quickSleepDisplay.textContent, "100% · 很安稳");
+
+  harness.quickSleepClear.trigger("click");
+  assert.equal(harness.quickSleepShell.style.getPropertyValue("--sleep-quality-cloud-position"), "50%");
+  assert.equal(harness.quickSleepRange.classList.contains("is-empty"), true);
 });
 
 test("quick decode sends Bearer token for logged-in users", async () => {
@@ -1710,6 +1765,50 @@ test("Dream Detail displays and updates saved sleep quality without overwriting 
   assert.equal(saved.reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
   assert.equal(fetchCount, 0);
   assert.doesNotMatch(JSON.stringify(harness.analyticsCalls), /睡眠感受|65|80/);
+});
+
+test("Dream Detail sleep quality editor renders a real cloud visual that follows the range", () => {
+  const record = createRecord({
+    id: "sleep-detail-cloud-record",
+    sleepQuality: "比较安稳",
+    reportContent: {
+      summary: "保留已有报告内容",
+      sleepQualityScore: 65,
+      sleepQualityLabel: "比较安稳",
+      sleepQualityUpdatedAt: "2026-07-20T08:00:00.000Z"
+    }
+  });
+  const harness = createAppIntegrationHarness({ records: [record] });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const editButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "修改"
+  )[0];
+  editButton.trigger("click");
+
+  const shell = findElements(
+    harness.dreamDetailContent,
+    (element) => element.classList.contains("sleep-quality-slider-shell")
+  )[0];
+  const cloud = findElements(
+    harness.dreamDetailContent,
+    (element) => element.classList.contains("sleep-quality-cloud-visual")
+  )[0];
+  const range = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "INPUT" && element.type === "range"
+  )[0];
+
+  assert.ok(shell);
+  assert.ok(cloud);
+  assert.equal(cloud.attributes["aria-hidden"], "true");
+  assert.equal(shell.style.getPropertyValue("--sleep-quality-cloud-position"), "65%");
+
+  range.value = "75";
+  range.trigger("input");
+  assert.equal(shell.style.getPropertyValue("--sleep-quality-progress"), "75%");
+  assert.equal(shell.style.getPropertyValue("--sleep-quality-cloud-position"), "75%");
 });
 
 test("Dream Detail uses a low-distraction entry for missing sleep quality", () => {
