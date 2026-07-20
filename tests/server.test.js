@@ -364,7 +364,7 @@ test("retries standalone result-card generation when the first archetype id is u
   }
 });
 
-test("returns a clear incomplete error after two standalone result-card quality failures", { concurrency: false }, async () => {
+test("returns a clear incomplete error after standalone result-card quality failures exhaust the final attempt", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   const upstreamBodies = [];
   const inserted = [];
@@ -395,12 +395,12 @@ test("returns a clear incomplete error after two standalone result-card quality 
       assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
       assert.equal(payload.generationMeta.source, "generation_failed");
       assert.equal(payload.analysis, undefined);
-      assert.equal(upstreamBodies.length, 2);
+      assert.equal(upstreamBodies.length, 3);
       assert.equal(inserted.length, 1);
       assert.equal(inserted[0].analysis_type, "result_card");
       assert.equal(inserted[0].outcome, "generation_incomplete");
       assert.equal(inserted[0].error_code, "GENERATION_INCOMPLETE");
-      assert.equal(inserted[0].quality_retry_count, 1);
+      assert.equal(inserted[0].quality_retry_count, 2);
     }, {
       analyticsClient: {
         from: () => ({
@@ -785,7 +785,7 @@ test("returns an incomplete quick generation error after repeated quality failur
       assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
       assert.equal(payload.generationMeta.source, "generation_failed");
       assert.equal(payload.generationMeta.qualityStatus, "incomplete");
-      assert.equal(payload.usage.remaining, 99);
+      assert.equal(payload.usage.remaining, 100);
     });
   } finally {
     global.fetch = nativeFetch;
@@ -914,19 +914,33 @@ test("rejects quick-shaped JSON for guided final analysis", { concurrency: false
   }
 });
 
-test("keeps text analysis readable when combined result card is invalid", { concurrency: false }, async () => {
+test("repairs an invalid quick result card before returning success", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
   global.fetch = async (url, options) => {
     if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    const content = upstreamCalls === 1
+      ? {
+          analysis: createQuickAnalysisPayload(),
+          dreamResultCard: {}
+        }
+      : {
+          dreamResultCard: createResultCardPayload(),
+          generationMeta: {
+            source: "ai_generated",
+            promptVersion: "quick-v2",
+            qualityStatus: "passed",
+            limitedEvidence: false,
+            evidenceConfidence: "high"
+          }
+        };
     return {
       ok: true,
       json: async () => ({
         choices: [{
           message: {
-            content: JSON.stringify({
-              analysis: createQuickAnalysisPayload(),
-              dreamResultCard: {}
-            })
+            content: JSON.stringify(content)
           }
         }]
       })
@@ -943,37 +957,50 @@ test("keeps text analysis readable when combined result card is invalid", { conc
 
       assert.equal(response.status, 200);
       assert.equal(payload.analysis.dreamSummary, createQuickAnalysisPayload().dreamSummary);
-      assert.equal(payload.dreamResultCardStatus, "generation_failed");
-      assert.equal(payload.dreamResultCard, undefined);
+      assert.equal(payload.dreamResultCardStatus, "ai_generated");
+      assert.equal(payload.dreamResultCard.archetype.id, "seeker");
+      assert.equal(payload.generationMeta.limitedEvidence, false);
+      assert.equal(payload.generationMeta.evidenceConfidence, "high");
+      assert.equal(payload.generationMeta.qualityStatus, "passed");
+      assert.equal(upstreamCalls, 2);
     });
   } finally {
     global.fetch = nativeFetch;
   }
 });
 
-test("does not accept non-numeric result-card scores as generated zeros", { concurrency: false }, async () => {
+test("uses a limited-evidence final card when quick card repair is still incomplete", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
   global.fetch = async (url, options) => {
     if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
-    const invalidScoreCard = createResultCardPayload();
-    const invalidScores = ["   ", false, [], "abc"];
-    invalidScoreCard.dimensions = invalidScoreCard.dimensions.map((dimension) => ({
+    upstreamCalls += 1;
+    const completeCard = createResultCardPayload();
+    completeCard.dimensions = completeCard.dimensions.map((dimension) => ({
       ...dimension,
-      score: invalidScores.shift()
+      score: Math.max(20, Math.min(65, dimension.score))
     }));
-    invalidScoreCard.emotionalProfile = {
-      ...invalidScoreCard.emotionalProfile,
-      intensity: false
-    };
+    const content = upstreamCalls < 3
+      ? {
+          analysis: upstreamCalls === 1 ? createQuickAnalysisPayload() : undefined,
+          dreamResultCard: { dimensions: [] }
+        }
+      : {
+          dreamResultCard: completeCard,
+          generationMeta: {
+            source: "ai_generated",
+            promptVersion: "quick-v2",
+            qualityStatus: "passed",
+            limitedEvidence: true,
+            evidenceConfidence: "high"
+          }
+        };
     return {
       ok: true,
       json: async () => ({
         choices: [{
           message: {
-            content: JSON.stringify({
-              analysis: createQuickAnalysisPayload(),
-              dreamResultCard: invalidScoreCard
-            })
+            content: JSON.stringify(content)
           }
         }]
       })
@@ -990,15 +1017,71 @@ test("does not accept non-numeric result-card scores as generated zeros", { conc
 
       assert.equal(response.status, 200);
       assert.equal(payload.analysis.coreTheme, createQuickAnalysisPayload().coreTheme);
-      assert.equal(payload.dreamResultCardStatus, "generation_failed");
-      assert.equal(payload.dreamResultCard, undefined);
+      assert.equal(payload.dreamResultCardStatus, "ai_generated");
+      assert.equal(payload.generationMeta.limitedEvidence, true);
+      assert.equal(payload.generationMeta.evidenceConfidence, "low");
+      assert.equal(payload.dreamResultCard.dimensions.length, 4);
+      payload.dreamResultCard.dimensions.forEach((dimension) => {
+        assert.equal(typeof dimension.score, "number");
+        assert.notEqual(dimension.score, null);
+        assert.ok(dimension.rationale.length > 0);
+      });
+      assert.equal(upstreamCalls, 3);
     });
   } finally {
     global.fetch = nativeFetch;
   }
 });
 
-test("retries once and returns a safe incomplete error when result-card model JSON is invalid", { concurrency: false }, async () => {
+test("returns incomplete and refunds quota after quick card generation fails all stages", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    const content = upstreamCalls === 1
+      ? {
+          analysis: createQuickAnalysisPayload(),
+          dreamResultCard: {}
+        }
+      : { dreamResultCard: {} };
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{ message: { content: JSON.stringify(content) } }]
+      })
+    };
+  };
+
+  try {
+    const accessControl = createAiAccessControl({
+      guestDailyLimit: 1,
+      userDailyLimit: 1,
+      guestRequestsPerMinute: 100,
+      userRequestsPerMinute: 100,
+      maxConcurrentPerPrincipal: 1
+    });
+
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 422);
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
+      assert.equal(payload.analysis, undefined);
+      assert.equal(payload.dreamResultCard, undefined);
+      assert.equal(payload.usage.remaining, 1);
+      assert.equal(upstreamCalls, 3);
+    }, { accessControl });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("returns a safe incomplete error when result-card model JSON stays invalid through the final attempt", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   let upstreamCalls = 0;
   global.fetch = async (url, options) => {
@@ -1019,7 +1102,7 @@ test("retries once and returns a safe incomplete error when result-card model JS
       assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
       assert.equal(payload.generationMeta.source, "generation_failed");
       assert.equal(payload.analysis, undefined);
-      assert.equal(upstreamCalls, 2);
+      assert.equal(upstreamCalls, 3);
     });
   } finally {
     global.fetch = nativeFetch;

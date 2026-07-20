@@ -532,7 +532,7 @@ async function requestDreamAnalysis(payload) {
     const apiError = data && data.error && typeof data.error === "object" ? data.error : {};
     const error = new Error(apiError.message || "Dream analysis request failed.");
     error.status = response.status;
-    error.code = apiError.code || "";
+    error.code = apiError.code || (response.status === 422 ? "GENERATION_INCOMPLETE" : "");
     error.usage = data ? data.usage : null;
     error.generationMeta = data ? data.generationMeta : null;
     error.isValidationError = response.status === 400 || error.code === "INVALID_REQUEST";
@@ -554,6 +554,22 @@ function getAccessControlledErrorMessage(error) {
   return message;
 }
 
+function getQuickAnalysisFailureMessage(error) {
+  if (error && error.code === "GENERATION_INCOMPLETE") {
+    return "这次解析没有完整生成，已保留你的梦境内容。请稍后重新提交。";
+  }
+
+  if (error && error.code === "UPSTREAM_TIMEOUT") {
+    return "AI 回应时间较长，请稍后重新提交。";
+  }
+
+  if (error && error.code === "UPSTREAM_UNAVAILABLE") {
+    return error.message || "梦境解析服务暂时不可用，请稍后再试。";
+  }
+
+  return "这次解析暂时没有完成，已保留你的梦境内容。请稍后重新提交。";
+}
+
 function formatRemainingUsage(usage) {
   if (!usage || typeof usage.remaining !== "number" || usage.remaining > 2) {
     return "";
@@ -572,10 +588,18 @@ async function requestQuickDecode(rawDreamText) {
     throw new Error("Dream analysis response is empty.");
   }
 
+  if (!data.dreamResultCard || data.dreamResultCardStatus !== "ai_generated") {
+    const error = new Error("Dream analysis result card is incomplete.");
+    error.code = "GENERATION_INCOMPLETE";
+    error.isIncompleteGeneration = true;
+    error.generationMeta = data.generationMeta || null;
+    throw error;
+  }
+
   return {
     ...mapApiQuickDecode(data.analysis),
-    dreamResultCard: data.dreamResultCard || null,
-    dreamResultCardStatus: data.dreamResultCardStatus || (data.dreamResultCard ? "ai_generated" : "generation_failed"),
+    dreamResultCard: data.dreamResultCard,
+    dreamResultCardStatus: "ai_generated",
     generationMeta: data.generationMeta || null,
     usage: data.usage || null
   };
@@ -816,7 +840,8 @@ function renderDreamResultCardMount(container, rawDreamText, result, record, opt
     reportContent: {
       ...((record && getReportContent(record)) || {}),
       dreamResultCard: result.dreamResultCard,
-      dreamResultCardStatus: result.dreamResultCardStatus
+      dreamResultCardStatus: result.dreamResultCardStatus,
+      generationMeta: result.generationMeta || ((record && getReportContent(record)) || {}).generationMeta
     }
   });
 }
@@ -1815,7 +1840,7 @@ if (quickForm) {
           quickResultCard.textContent = "";
         }
         if (status) {
-          status.textContent = "AI 结果暂时不够完整，没有保存这次解析。你可以稍后再试，或补充一点梦境细节后重新生成。";
+          status.textContent = getQuickAnalysisFailureMessage(error);
         }
         if (submitButton) {
           submitButton.disabled = false;
@@ -1838,9 +1863,18 @@ if (quickForm) {
         return;
       }
 
-      quickDecode = generateMockQuickDecode(rawDreamText);
-      statusPrefix = "当前无法连接 AI，已为你展示本地示例结果";
-      analysisSource = "fallback";
+      trackProductEvent("analysis_failed", { analysis_type: "quick", error_code: error.code || "REQUEST_FAILED" });
+      quickResult.hidden = true;
+      if (quickResultCard) {
+        quickResultCard.textContent = "";
+      }
+      if (status) {
+        status.textContent = getQuickAnalysisFailureMessage(error);
+      }
+      if (submitButton) {
+        submitButton.disabled = false;
+      }
+      return;
     }
 
     trackProductEvent("analysis_completed", {
@@ -1893,7 +1927,7 @@ if (quickForm) {
 
     const status = quickForm.querySelector(".status");
     if (status) {
-      status.textContent = "写下一段梦境碎片后，可以先生成一份本地 mock 的快速解析结果。";
+      status.textContent = "写下一段梦境碎片后，可以生成一份包含梦境画像的快速解析结果。";
     }
     resetQuickSleepQuality();
   });

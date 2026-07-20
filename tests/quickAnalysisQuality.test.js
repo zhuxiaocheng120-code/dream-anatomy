@@ -107,3 +107,21 @@ test("synthetic quick-analysis dataset passes V2 quality without cross-dream lea
     assert.doesNotMatch(JSON.stringify(result.output), new RegExp(caseItem.other));
   });
 });
+
+test("limited-evidence quick generation defaults missing confidence to low", () => {
+  const caseItem = syntheticDreams.find((item) => item.id === "short");
+  const result = normalizeQuickCombinedOutput({
+    analysis: createSyntheticAnalysis(caseItem),
+    dreamResultCard: createSyntheticCard(caseItem),
+    generationMeta: {
+      source: "ai_generated",
+      promptVersion: "quick-analysis-v2",
+      qualityStatus: "passed",
+      limitedEvidence: true
+    }
+  }, caseItem.dream);
+
+  assert.equal(result.output.dreamResultCardStatus, "ai_generated");
+  assert.equal(result.output.generationMeta.limitedEvidence, true);
+  assert.equal(result.output.generationMeta.evidenceConfidence, "low");
+});
