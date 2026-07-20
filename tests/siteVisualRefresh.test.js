@@ -7,6 +7,12 @@ function readSource(relativePath) {
   return fs.readFileSync(path.join(__dirname, "..", relativePath), "utf8");
 }
 
+function readIfExists(relativePath) {
+  const filePath = path.join(__dirname, "..", relativePath);
+  assert.ok(fs.existsSync(filePath), `${relativePath} must exist`);
+  return fs.readFileSync(filePath, "utf8");
+}
+
 function cssRuleBlock(css, selector) {
   const escapedSelector = selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
   const match = css.match(new RegExp(`${escapedSelector}\\s*\\{([^}]*)\\}`));
@@ -65,7 +71,10 @@ test("site-wide visual refresh adds restrained page-level identity without exter
     assert.match(html, pattern, `${visual} must be decorative and hidden from assistive tech`);
   });
 
-  assert.doesNotMatch(html, /<img\b|https?:\/\/[^"']+\.(?:png|jpe?g|webp|gif|svg)/i);
+  assert.doesNotMatch(html, /https?:\/\/[^"']+\.(?:png|jpe?g|webp|gif|svg)/i);
+  [...html.matchAll(/<img\b[^>]*src="([^"]+)"/g)].forEach((match) => {
+    assert.match(match[1], /^assets\/brand\/dream-guide-|^assets\/brand\/dream-anatomy-lockup\.svg$/);
+  });
 
   const addedCopyRegion = html.match(/<section class="view-panel work-panel" data-view="quick"[\s\S]*?<section class="view-panel work-panel" data-view="guided"/)[0]
     + html.match(/<section class="view-panel work-panel" data-view="guided"[\s\S]*?<section class="view-panel work-panel" data-view="diary"/)[0]
@@ -144,4 +153,80 @@ test("sleep quality slider uses a restrained cloud thumb with accessible interac
   assert.match(coarsePointerBlock, /--sleep-quality-thumb-width:\s*40px/);
   assert.match(coarsePointerBlock, /--sleep-quality-thumb-height:\s*29px/);
   assert.match(coarsePointerBlock, /min-height:\s*42px/);
+});
+
+test("brand logo assets are local original SVGs without executable or external content", () => {
+  [
+    "src/assets/brand/dream-guide-mark.svg",
+    "src/assets/brand/dream-anatomy-lockup.svg",
+    "src/assets/brand/dream-guide-monochrome.svg"
+  ].forEach((assetPath) => {
+    const svg = readIfExists(assetPath);
+    assert.match(svg, /<svg\b/);
+    assert.match(svg, /<title\b/);
+    assert.doesNotMatch(svg, /<script\b|\son[a-z]+\s*=|javascript:/i);
+    assert.doesNotMatch(svg, /\b(?:href|src)=["']https?:|url\(["']?https?:|data:image|base64/i);
+    assert.doesNotMatch(svg, /Anthropic|Claude|HEMISPHERIC|tarot|zodiac/i);
+  });
+});
+
+test("Dream Guide brand assets are wired into Web UI without changing navigation hooks", () => {
+  const html = readSource("src/index.html");
+
+  assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="assets\/brand\/dream-guide-mark\.svg">/);
+  assert.match(html, /<button class="brand text-button" type="button" data-view-target="home" aria-label="返回析梦 Dream Anatomy 首页">/);
+
+  [
+    'class="brand-mark"',
+    'class="hero-brand-seal"',
+    'class="dream-guide-seal"',
+    'class="auth-brand-mark"'
+  ].forEach((classHook) => assert.match(html, new RegExp(classHook)));
+
+  [
+    'src="assets/brand/dream-guide-mark.svg"',
+    'src="assets/brand/dream-anatomy-lockup.svg"'
+  ].forEach((assetReference) => assert.match(html, new RegExp(assetReference)));
+
+  assert.doesNotMatch(html, /\/admin\.html|new Router|createRouter|fetch\("assets\/brand/);
+});
+
+test("Dream Guide microanimations are restrained and respect reduced motion", () => {
+  const css = readSource("src/style.css");
+
+  [
+    "@keyframes dreamGuideFloat",
+    "@keyframes dreamSoftEnter",
+    "@keyframes dreamDimensionReveal"
+  ].forEach((keyframe) => assert.match(css, new RegExp(keyframe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
+
+  assert.doesNotMatch(css, /@keyframes dreamGuideBlink|filter:\s*brightness/);
+
+  assert.match(css, /dreamGuideFloat[\s\S]*transform:/);
+  assert.match(css, /dreamSoftEnter[\s\S]*opacity:/);
+  assert.match(css, /dreamDimensionReveal[\s\S]*transform:/);
+
+  const reducedMotion = cssMediaBlock(css, "@media (prefers-reduced-motion: reduce)");
+  assert.match(reducedMotion, /animation:\s*none/);
+  assert.match(reducedMotion, /transition-duration:\s*0\.01ms/);
+  assert.match(reducedMotion, /\.brand-mark/);
+  assert.match(reducedMotion, /\.result-card-progress span/);
+
+  [
+    ".brand-mark",
+    ".hero-brand-seal",
+    ".dream-guide-seal",
+    ".auth-brand-mark"
+  ].forEach((selector) => assert.match(cssRuleBlock(css, selector), /pointer-events:\s*none/));
+});
+
+test("brand asset documentation records beta originality and future mini program export boundary", () => {
+  const docs = readIfExists("docs/BRAND_ASSETS.md");
+
+  [
+    "Dream Anatomy Beta 的原创品牌标识 v1",
+    "正式商标使用前仍应完成相似标识检索和必要法律审查",
+    "prefers-reduced-motion",
+    "小程序"
+  ].forEach((copy) => assert.match(docs, new RegExp(copy)));
 });
