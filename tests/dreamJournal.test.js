@@ -215,6 +215,13 @@ function createAppIntegrationHarness(options = {}) {
     }
   });
   const quickDream = Object.assign(createFakeElement("textarea"), { value: "" });
+  const quickSleepRange = Object.assign(createFakeElement("input"), {
+    id: "quickSleepQualityRange",
+    type: "range",
+    value: "50"
+  });
+  const quickSleepDisplay = createFakeElement("p");
+  const quickSleepClear = Object.assign(createFakeElement("button"), { type: "button" });
   const quickResult = Object.assign(createFakeElement("section"), { hidden: true });
   const quickResultCard = createFakeElement("div");
   const resultFields = ["summary", "theme", "emotion", "symbols", "jungian", "evidence", "question", "action", "reminder"].map((field) =>
@@ -372,6 +379,9 @@ function createAppIntegrationHarness(options = {}) {
   selectors.set("[data-journal-list-shell]", journalListShell);
   selectors.set("[data-quick-form]", quickForm);
   selectors.set("#quickDream", quickDream);
+  selectors.set("#quickSleepQualityRange", quickSleepRange);
+  selectors.set("[data-quick-sleep-quality-display]", quickSleepDisplay);
+  selectors.set("[data-quick-sleep-quality-clear]", quickSleepClear);
   selectors.set("#quickResult", quickResult);
   selectors.set("[data-quick-result-card]", quickResultCard);
   selectors.set("[data-guided-form]", guidedForm);
@@ -437,6 +447,7 @@ function createAppIntegrationHarness(options = {}) {
     vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/dreamJournal.js"), "utf8"), context);
   }
 
+  vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/sleepQuality.js"), "utf8"), context);
   vm.runInNewContext(fs.readFileSync(path.join(__dirname, "../src/app.js"), "utf8"), context);
 
   return {
@@ -461,6 +472,9 @@ function createAppIntegrationHarness(options = {}) {
     quickDream,
     quickForm,
     quickFormStatus,
+    quickSleepClear,
+    quickSleepDisplay,
+    quickSleepRange,
     quickResult,
     quickResultCard,
     resultFields,
@@ -993,6 +1007,89 @@ test("quick decode renders Dream Result Card on the current result page and save
   assert.equal(savedRecords[0].reportContent.evidence.length, 2);
   assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
   assert.equal(savedRecords[0].reportContent.dreamResultCardStatus, "ai_generated");
+});
+
+test("quick decode does not save an untouched sleep quality slider as 50", async () => {
+  const fetchCalls = [];
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      fetchCalls.push({ url, body: JSON.parse(options.body) });
+      return {
+        ok: true,
+        json: async () => ({
+          analysis: createQuickAnalysisFixture(),
+          dreamResultCard: createResultCardFixture(),
+          dreamResultCardStatus: "ai_generated"
+        })
+      };
+    }
+  });
+
+  assert.match(harness.quickSleepDisplay.textContent, /未填写|滑动记录/);
+
+  harness.quickDream.value = "我梦见自己站在一扇门前。";
+  await harness.quickForm.trigger("submit");
+
+  assert.deepEqual(fetchCalls[0].body, {
+    dreamText: harness.quickDream.value,
+    analysisType: "quick"
+  });
+
+  const savedRecords = harness.getSavedRecords();
+  assert.equal(savedRecords.length, 1);
+  assert.equal(savedRecords[0].sleepQuality, undefined);
+  assert.equal(savedRecords[0].sleep_quality, undefined);
+  assert.equal(savedRecords[0].reportContent.sleepQualityScore, undefined);
+  assert.equal(savedRecords[0].reportContent.sleepQualityLabel, undefined);
+  assert.equal(savedRecords[0].reportContent.sleepQualityUpdatedAt, undefined);
+});
+
+test("quick decode saves selected sleep quality score label and metadata", async () => {
+  const fetchBodies = [];
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async (url, options) => {
+      fetchBodies.push(JSON.parse(options.body));
+      return {
+        ok: true,
+        json: async () => ({
+          analysis: createQuickAnalysisFixture(),
+          dreamResultCard: createResultCardFixture(),
+          dreamResultCardStatus: "ai_generated"
+        })
+      };
+    }
+  });
+
+  harness.quickSleepRange.value = "65";
+  harness.quickSleepRange.trigger("input");
+  assert.match(harness.quickSleepDisplay.textContent, /65% · 不错/);
+
+  harness.quickSleepClear.trigger("click");
+  assert.match(harness.quickSleepDisplay.textContent, /未填写|滑动记录/);
+
+  harness.quickSleepRange.value = "63";
+  harness.quickSleepRange.trigger("input");
+  assert.equal(harness.quickSleepRange.value, "65");
+
+  harness.quickDream.value = "我梦见自己在雨里迷路。";
+  await harness.quickForm.trigger("submit");
+
+  assert.deepEqual(fetchBodies[0], {
+    dreamText: harness.quickDream.value,
+    analysisType: "quick"
+  });
+
+  const savedRecord = harness.getSavedRecords()[0];
+  assert.equal(savedRecord.sleepQuality, "不错");
+  assert.equal(savedRecord.reportContent.sleepQualityScore, 65);
+  assert.equal(savedRecord.reportContent.sleepQualityLabel, "不错");
+  assert.match(savedRecord.reportContent.sleepQualityUpdatedAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
 test("quick decode sends Bearer token for logged-in users", async () => {
@@ -1536,6 +1633,81 @@ test("Dream Detail renders a saved dream result card without replacing existing 
   assert.match(detailText, /梦境画像/);
   assert.match(detailText, /创造者/);
   assert.match(detailText, /一句话核心洞察/);
+});
+
+test("Dream Detail displays and updates saved sleep quality without overwriting report content", async () => {
+  const record = createRecord({
+    id: "sleep-detail-record",
+    sleepQuality: "不错",
+    reportContent: {
+      summary: "保留已有报告内容",
+      dreamResultCard: createResultCardFixture(),
+      userReflection: "这扇门让我想到一个选择。",
+      sleepQualityScore: 65,
+      sleepQualityLabel: "不错",
+      sleepQualityUpdatedAt: "2026-07-20T08:00:00.000Z"
+    }
+  });
+  let fetchCount = 0;
+  const harness = createAppIntegrationHarness({
+    records: [record],
+    fetch: async () => {
+      fetchCount += 1;
+      throw new Error("Sleep quality save must not call AI");
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /睡眠感受：65% · 不错/);
+
+  const editButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "修改"
+  )[0];
+  assert.ok(editButton);
+  editButton.trigger("click");
+
+  const range = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "INPUT" && element.type === "range"
+  )[0];
+  const saveButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "保存睡眠感受"
+  )[0];
+  assert.ok(range);
+  assert.ok(saveButton);
+
+  range.value = "81";
+  range.trigger("input");
+  assert.equal(range.value, "80");
+  await saveButton.trigger("click");
+
+  const saved = harness.getSavedRecords()[0];
+  assert.equal(saved.sleepQuality, "不错");
+  assert.equal(saved.reportContent.sleepQualityScore, 80);
+  assert.equal(saved.reportContent.sleepQualityLabel, "不错");
+  assert.equal(saved.reportContent.summary, "保留已有报告内容");
+  assert.equal(saved.reportContent.userReflection, "这扇门让我想到一个选择。");
+  assert.equal(saved.reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+  assert.equal(fetchCount, 0);
+  assert.doesNotMatch(JSON.stringify(harness.analyticsCalls), /睡眠感受|65|80/);
+});
+
+test("Dream Detail uses a low-distraction entry for missing sleep quality", () => {
+  const record = createRecord({
+    id: "missing-sleep-detail",
+    sleepQuality: null,
+    reportContent: { summary: "没有睡眠感受的记录" }
+  });
+  const harness = createAppIntegrationHarness({ records: [record] });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+
+  const detailText = collectText(harness.dreamDetailContent).join("\n");
+  assert.doesNotMatch(detailText, /睡眠质量/);
+  assert.doesNotMatch(detailText, /睡眠感受：未记录/);
+  assert.match(detailText, /补充睡眠感受/);
 });
 
 test("Dream Detail saves and restores user reflection without overwriting report content", async () => {

@@ -2,6 +2,9 @@ const viewPanels = document.querySelectorAll("[data-view]");
 const viewButtons = document.querySelectorAll("[data-view-target]");
 const quickForm = document.querySelector("[data-quick-form]");
 const quickDream = document.querySelector("#quickDream");
+const quickSleepQualityRange = document.querySelector("#quickSleepQualityRange");
+const quickSleepQualityDisplay = document.querySelector("[data-quick-sleep-quality-display]");
+const quickSleepQualityClear = document.querySelector("[data-quick-sleep-quality-clear]");
 const quickResult = document.querySelector("#quickResult");
 const quickResultCard = document.querySelector("[data-quick-result-card]");
 const resultFields = document.querySelectorAll("[data-result-field]");
@@ -58,6 +61,7 @@ const canUseDreamJournal = window.DreamJournal
   && typeof window.DreamJournal.createDreamJournalController === "function";
 const canUseDreamResultCard = window.DreamResultCard
   && typeof window.DreamResultCard.createDreamResultCardController === "function";
+const sleepQuality = window.DreamSleepQuality || null;
 const featureFlags = window.DreamAnatomyFeatureFlags || {};
 const deepGuidanceEnabled = featureFlags.DEEP_GUIDANCE_ENABLED === true;
 const dreamSyncController = window.DreamSync
@@ -921,18 +925,99 @@ function getSaveStatusMessage(syncStatus, prefix) {
   return `${prefix}，已保存到本地梦境日记。`;
 }
 
-function createDreamRecord(rawDreamText, quickDecode) {
-  return {
+function createEmptySleepQualityState() {
+  return { score: null, label: "", updatedAt: "" };
+}
+
+function formatSleepQualityDisplay(state) {
+  if (!state || typeof state.score !== "number" || !state.label) {
+    return "滑动记录，可跳过";
+  }
+
+  return `${state.score}% · ${state.label}`;
+}
+
+function setSleepQualityRangeProgress(range, state) {
+  if (!range || !sleepQuality || typeof sleepQuality.snapSleepQualityScore !== "function") {
+    return;
+  }
+
+  const displayScore = state && typeof state.score === "number" ? state.score : 50;
+  const snappedScore = sleepQuality.snapSleepQualityScore(displayScore);
+  const progress = snappedScore === null ? 50 : snappedScore;
+
+  range.value = String(progress);
+  if (range.style && typeof range.style.setProperty === "function") {
+    range.style.setProperty("--sleep-quality-progress", `${progress}%`);
+  }
+  range.classList.toggle("is-empty", !(state && typeof state.score === "number"));
+}
+
+function renderSleepQualityControl(range, display, state) {
+  if (!range || !display) {
+    return;
+  }
+
+  setSleepQualityRangeProgress(range, state);
+  display.textContent = formatSleepQualityDisplay(state);
+  range.setAttribute(
+    "aria-valuetext",
+    state && typeof state.score === "number"
+      ? `${state.score}%，${state.label}`
+      : "未填写，滑动记录，可跳过"
+  );
+}
+
+function readSleepQualityRangeState(range) {
+  if (!sleepQuality || !range) {
+    return createEmptySleepQualityState();
+  }
+
+  return sleepQuality.normalizeSleepQualityState({ score: range.value });
+}
+
+let quickSleepQualityState = createEmptySleepQualityState();
+
+function getSleepQualityStateFromRecord(record) {
+  if (!sleepQuality || typeof sleepQuality.normalizeSleepQualityState !== "function") {
+    return createEmptySleepQualityState();
+  }
+
+  const report = getReportContent(record);
+  const score = report.sleepQualityScore;
+
+  if (typeof score !== "number") {
+    return createEmptySleepQualityState();
+  }
+
+  return sleepQuality.normalizeSleepQualityState({
+    score,
+    updatedAt: typeof report.sleepQualityUpdatedAt === "string" ? report.sleepQualityUpdatedAt : ""
+  });
+}
+
+function resetQuickSleepQuality() {
+  quickSleepQualityState = createEmptySleepQualityState();
+  renderSleepQualityControl(quickSleepQualityRange, quickSleepQualityDisplay, quickSleepQualityState);
+}
+
+function createDreamRecord(rawDreamText, quickDecode, sleepQualityState = createEmptySleepQualityState()) {
+  const baseRecord = {
     id: `dream-${Date.now()}`,
     createdAt: new Date().toISOString(),
     rawDreamText,
     dreamSummary: quickDecode.summary,
     emotions: quickDecode.emotion,
     symbols: quickDecode.symbols,
-    sleepQuality: "未记录",
     analysisType: "快速解析",
     reportContent: quickDecode
   };
+
+  if (!sleepQuality || typeof sleepQuality.applySleepQualityToRecord !== "function") {
+    return baseRecord;
+  }
+
+  return sleepQuality.applySleepQualityToRecord(baseRecord, sleepQualityState);
 }
 
 function createDeepDreamRecord(rawDreamText, report) {
@@ -1205,6 +1290,139 @@ function createReflectionSection(record) {
   return section;
 }
 
+function createSleepQualityDetailSection(record) {
+  const section = document.createElement("section");
+  const title = document.createElement("h4");
+  const copy = document.createElement("p");
+  const display = document.createElement("p");
+  const editButton = document.createElement("button");
+  const editor = document.createElement("div");
+  const label = document.createElement("label");
+  const range = document.createElement("input");
+  const rangeDisplay = document.createElement("p");
+  const actions = document.createElement("div");
+  const saveButton = document.createElement("button");
+  const clearButton = document.createElement("button");
+  const status = document.createElement("p");
+  const recordKey = getDreamDetailScopeKey(record);
+  let state = getSleepQualityStateFromRecord(record);
+  let draftState = state;
+  let isSaving = false;
+  let saveSequence = 0;
+
+  section.className = "detail-sleep-quality";
+  title.textContent = "睡眠感受";
+  copy.textContent = "可选。按照你醒来后的主观感受记录，不是医学测量。";
+  display.className = "detail-sleep-quality-value";
+  editButton.className = state.score === null ? "secondary-button" : "text-button";
+  editButton.type = "button";
+  editButton.textContent = state.score === null ? "补充睡眠感受" : "修改";
+  editor.className = "detail-sleep-quality-editor";
+  editor.hidden = true;
+  label.className = "sr-only";
+  label.setAttribute("for", "detailSleepQualityRange");
+  label.textContent = "昨晚的睡眠感受";
+  range.id = "detailSleepQualityRange";
+  range.className = "sleep-quality-range";
+  range.type = "range";
+  range.min = "0";
+  range.max = "100";
+  range.step = "5";
+  range.value = "50";
+  rangeDisplay.className = "sleep-quality-value";
+  rangeDisplay.setAttribute("aria-live", "polite");
+  actions.className = "detail-sleep-quality-actions";
+  saveButton.className = "primary-button";
+  saveButton.type = "button";
+  saveButton.textContent = "保存睡眠感受";
+  clearButton.className = "secondary-button";
+  clearButton.type = "button";
+  clearButton.textContent = "清除";
+  status.className = "detail-sleep-quality-status";
+
+  function renderDisplay() {
+    display.textContent = state.score === null
+      ? "你可以在这里补充醒来后的主观睡眠感受。"
+      : `睡眠感受：${formatSleepQualityDisplay(state)}`;
+    editButton.textContent = state.score === null ? "补充睡眠感受" : "修改";
+    editButton.className = state.score === null ? "secondary-button" : "text-button";
+  }
+
+  function renderEditor() {
+    renderSleepQualityControl(range, rangeDisplay, draftState);
+  }
+
+  editButton.addEventListener("click", () => {
+    draftState = state;
+    renderEditor();
+    editor.hidden = false;
+    status.textContent = "";
+  });
+
+  range.addEventListener("input", () => {
+    draftState = readSleepQualityRangeState(range);
+    renderEditor();
+  });
+
+  clearButton.addEventListener("click", () => {
+    draftState = createEmptySleepQualityState();
+    renderEditor();
+    status.textContent = "已清除输入，点击保存后更新记录。";
+  });
+
+  saveButton.addEventListener("click", async () => {
+    if (isSaving || !sleepQuality || typeof sleepQuality.applySleepQualityToRecord !== "function") {
+      return;
+    }
+
+    if (currentDreamDetailRecordKey !== recordKey) {
+      return;
+    }
+
+    isSaving = true;
+    saveSequence += 1;
+    const currentSequence = saveSequence;
+    saveButton.disabled = true;
+    status.textContent = "保存中……";
+
+    try {
+      const saveResult = await saveDreamDetailRecord(record, (latestRecord) =>
+        sleepQuality.applySleepQualityToRecord(latestRecord, draftState)
+      );
+
+      if (currentDreamDetailRecordKey !== recordKey || currentSequence !== saveSequence) {
+        return;
+      }
+
+      state = getSleepQualityStateFromRecord(saveResult.record);
+      draftState = state;
+      renderDisplay();
+      renderEditor();
+      status.textContent = state.score === null
+        ? "已清除睡眠感受"
+        : (saveResult.syncStatus === "pending_sync" ? "已保存，云端同步稍后重试。" : "已保存");
+      editor.hidden = true;
+    } catch (error) {
+      if (currentDreamDetailRecordKey === recordKey && currentSequence === saveSequence) {
+        status.textContent = "保存失败，请稍后再试。";
+      }
+    } finally {
+      if (currentDreamDetailRecordKey === recordKey && currentSequence === saveSequence) {
+        isSaving = false;
+        saveButton.disabled = false;
+      }
+    }
+  });
+
+  renderDisplay();
+  renderEditor();
+  actions.append(saveButton, clearButton);
+  editor.append(label, range, rangeDisplay, actions);
+  section.append(title, copy, display, editButton, editor, status);
+
+  return section;
+}
+
 function buildDetailAnalysis(record) {
   const report = getReportContent(record);
   const dreamSummary = formatDetailValue(getRecordField(record, "dream_summary", "dreamSummary"));
@@ -1347,7 +1565,6 @@ function renderDreamDetail(recordId, fallbackRow) {
   const dreamSummary = getRecordField(record, "dream_summary", "dreamSummary");
   const emotions = getRecordField(record, "emotions", "emotions");
   const symbols = getRecordField(record, "symbols", "symbols");
-  const sleepQuality = getRecordField(record, "sleep_quality", "sleepQuality");
   const analysisType = getRecordField(record, "analysis_type", "analysisType");
   const report = getReportContent(record);
   const gentleReminder = report.safetyReminder || report.gentleReminder || report.reminder;
@@ -1357,6 +1574,7 @@ function renderDreamDetail(recordId, fallbackRow) {
   const analysisSection = document.createElement("section");
   const analysisTitle = document.createElement("h4");
   const analysisCards = document.createElement("div");
+  const sleepQualitySection = createSleepQualityDetailSection(record);
   const reflection = createReflectionSection(record);
   const dreamResultCard = document.createElement("div");
   const detailActions = document.createElement("div");
@@ -1369,8 +1587,7 @@ function renderDreamDetail(recordId, fallbackRow) {
   heroMeta.append(
     createDetailMetaItem("日期", dateParts.date),
     createDetailMetaItem("时间", dateParts.time),
-    createDetailMetaItem("分析类型", formatDetailValue(analysisType)),
-    createDetailMetaItem("睡眠质量", formatDetailValue(sleepQuality))
+    createDetailMetaItem("分析类型", formatDetailValue(analysisType))
   );
   hero.append(heroTitle, heroMeta);
 
@@ -1402,6 +1619,7 @@ function renderDreamDetail(recordId, fallbackRow) {
   dreamDetailContent.append(
     hero,
     detailActions,
+    sleepQualitySection,
     createDetailSection("梦境原文", rawDreamText, { preserveWhitespace: true }),
     createDetailSection("梦境摘要", dreamSummary),
     createDetailSection("情绪标签", emotions),
@@ -1485,6 +1703,22 @@ function renderDreamJournal(records = loadDreamRecords()) {
 
     card.append(title, rawDream, meta, detailButton);
     dreamJournalList.append(card);
+  });
+}
+
+resetQuickSleepQuality();
+
+if (quickSleepQualityRange) {
+  quickSleepQualityRange.addEventListener("input", () => {
+    const state = readSleepQualityRangeState(quickSleepQualityRange);
+    quickSleepQualityState = state;
+    renderSleepQualityControl(quickSleepQualityRange, quickSleepQualityDisplay, state);
+  });
+}
+
+if (quickSleepQualityClear) {
+  quickSleepQualityClear.addEventListener("click", () => {
+    resetQuickSleepQuality();
   });
 }
 
@@ -1616,7 +1850,7 @@ if (quickForm) {
     });
 
     try {
-      const dreamRecord = createDreamRecord(rawDreamText, quickDecode);
+      const dreamRecord = createDreamRecord(rawDreamText, quickDecode, quickSleepQualityState);
       const saveResult = await saveDreamRecord(dreamRecord);
       const savedRecord = saveResult.records.find((record) => String(record.id) === String(dreamRecord.id)) || dreamRecord;
 
@@ -1661,6 +1895,7 @@ if (quickForm) {
     if (status) {
       status.textContent = "写下一段梦境碎片后，可以先生成一份本地 mock 的快速解析结果。";
     }
+    resetQuickSleepQuality();
   });
 }
 

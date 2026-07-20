@@ -56,12 +56,15 @@
 
   function sanitizeExportRecord(record) {
     const recordId = getRecordId(record);
+    const sleepQuality = record
+      ? (record.sleepQuality !== undefined ? record.sleepQuality : record.sleep_quality)
+      : undefined;
     return {
       recordIdHint: recordId ? recordId.slice(-8) : "",
       createdAt: getRecordValue(record, "createdAt", "created_at"),
       rawDreamText: getRecordValue(record, "rawDreamText", "raw_dream_text"),
       dreamSummary: getRecordValue(record, "dreamSummary", "dream_summary"),
-      sleepQuality: getRecordValue(record, "sleepQuality", "sleep_quality", "未记录"),
+      ...(sleepQuality ? { sleepQuality } : {}),
       emotions: getRecordValue(record, "emotions", "emotions", []),
       symbols: getRecordValue(record, "symbols", "symbols", []),
       analysisType: getRecordValue(record, "analysisType", "analysis_type"),
