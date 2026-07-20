@@ -152,7 +152,7 @@ Dream Detail 会保持现有梦境正文和 AI 生成分析只读。它不会编
 
 当前 AI API 面向 Web Beta 和后续客户端共用，首选接口是 `POST /api/v1/dream-analysis`。浏览器登录后会把 Supabase access token 放在 Authorization header 中；服务端只用 `SUPABASE_URL` 和 `SUPABASE_ANON_KEY` 校验 token，不使用 service role。未登录请求仍可作为访客使用免费额度。
 
-默认 Beta 额度和限制为：访客 24 小时 3 次、登录用户 24 小时 10 次、访客每分钟 2 次、登录用户每分钟 3 次、同一身份同时 1 个 AI 请求、DeepSeek 超时 45000ms。配置项分别是 `AI_GUEST_DAILY_LIMIT`、`AI_USER_DAILY_LIMIT`、`AI_GUEST_REQUESTS_PER_MINUTE`、`AI_USER_REQUESTS_PER_MINUTE`、`AI_MAX_CONCURRENT_PER_PRINCIPAL`、`AI_REQUEST_TIMEOUT_MS` 和 `DEEP_GUIDANCE_ENABLED`。
+默认 Beta 额度和限制为：访客 24 小时 3 次、登录用户 24 小时 10 次、访客每分钟 2 次、登录用户每分钟 3 次、同一身份同时 1 个 AI 请求。快速解析的 DeepSeek 请求现在采用分阶段超时：初始合并生成 45000ms、画像修复 30000ms、limited-evidence 最终画像 25000ms，整次请求硬上限 90000ms。配置项分别是 `AI_GUEST_DAILY_LIMIT`、`AI_USER_DAILY_LIMIT`、`AI_GUEST_REQUESTS_PER_MINUTE`、`AI_USER_REQUESTS_PER_MINUTE`、`AI_MAX_CONCURRENT_PER_PRINCIPAL`、`AI_INITIAL_ATTEMPT_TIMEOUT_MS`、`AI_REPAIR_ATTEMPT_TIMEOUT_MS`、`AI_LIMITED_ATTEMPT_TIMEOUT_MS`、`AI_TOTAL_REQUEST_TIMEOUT_MS` 和 `DEEP_GUIDANCE_ENABLED`。`AI_REQUEST_TIMEOUT_MS` 仍作为旧本地配置的兼容 fallback，但新部署应优先使用分阶段配置。
 
 这些限制目前使用内存计数器，适合当前单实例 Beta。Render 重启后计数会重置，多实例时不会共享；正式大规模发布前需要 Redis 或其他持久化限流方案。
 

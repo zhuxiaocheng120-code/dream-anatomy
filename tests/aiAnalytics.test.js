@@ -6,6 +6,7 @@ const {
   buildUsageEvent,
   calculateEstimatedCost,
   createPrincipalHash,
+  getPersistableUsageEvent,
   recordUsageEventSafely
 } = require("../server/aiAnalytics");
 
@@ -104,6 +105,45 @@ test("buildUsageEvent excludes private content and keeps null token values", () 
   assert.equal(event.total_tokens, null);
   assert.equal(event.estimated_cost_usd, null);
   assert.doesNotMatch(JSON.stringify(event), /private-user-id|must not appear/);
+});
+
+test("buildUsageEvent keeps safe generation diagnostics separate from persisted columns", async () => {
+  const event = buildUsageEvent({
+    requestId: "00000000-0000-4000-8000-000000000003",
+    occurredAt: new Date("2026-07-17T00:00:00.000Z"),
+    identity: { type: "guest", userId: "", rateLimitKey: "guest:203.0.113.24" },
+    principalHash: "c".repeat(64),
+    analysisType: "quick",
+    outcome: "timeout",
+    errorCode: "REPAIR_TIMEOUT",
+    durationMs: 1300,
+    qualityRetryCount: 1,
+    generationStage: "repair",
+    stageDurations: {
+      initial: 44123,
+      repair: 30001,
+      dreamText: "must not persist"
+    },
+    finalErrorCode: "REPAIR_TIMEOUT",
+    upstreamUsage: { total_tokens: 55 },
+    env: {}
+  });
+
+  assert.equal(event.error_code, "REPAIR_TIMEOUT");
+  assert.equal(event.generation_stage, "repair");
+  assert.deepEqual(event.stage_durations, {
+    initial: 44123,
+    repair: 30001
+  });
+  assert.equal(event.final_error_code, "REPAIR_TIMEOUT");
+  assert.doesNotMatch(JSON.stringify(event), /must not persist/);
+
+  const persisted = getPersistableUsageEvent(event);
+  assert.equal(persisted.error_code, "REPAIR_TIMEOUT");
+  assert.equal(persisted.total_tokens, 55);
+  assert.equal(persisted.generation_stage, undefined);
+  assert.equal(persisted.stage_durations, undefined);
+  assert.equal(persisted.final_error_code, undefined);
 });
 
 test("buildUsageEvent clamps invalid numeric fields to safe values", () => {

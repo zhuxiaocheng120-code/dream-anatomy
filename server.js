@@ -30,6 +30,10 @@ const deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const maxDreamTextLength = 5000;
 const quickPromptVersion = "quick-analysis-v2";
 const defaultRequestTimeoutMs = parsePositiveInteger(process.env.AI_REQUEST_TIMEOUT_MS, 45000);
+const defaultInitialAttemptTimeoutMs = parsePositiveInteger(process.env.AI_INITIAL_ATTEMPT_TIMEOUT_MS, defaultRequestTimeoutMs);
+const defaultRepairAttemptTimeoutMs = parsePositiveInteger(process.env.AI_REPAIR_ATTEMPT_TIMEOUT_MS, 30000);
+const defaultLimitedAttemptTimeoutMs = parsePositiveInteger(process.env.AI_LIMITED_ATTEMPT_TIMEOUT_MS, 25000);
+const defaultTotalRequestTimeoutMs = parsePositiveInteger(process.env.AI_TOTAL_REQUEST_TIMEOUT_MS, 90000);
 
 app.set("trust proxy", "loopback");
 app.use(express.json({ limit: "32kb" }));
@@ -63,6 +67,34 @@ function getAiAccessControl() {
 
 function getAiRequestTimeoutMs() {
   return parsePositiveInteger(app.locals.aiRequestTimeoutMs, defaultRequestTimeoutMs);
+}
+
+function getAiTimeoutConfig() {
+  if (app.locals.aiTimeoutConfig && typeof app.locals.aiTimeoutConfig === "object") {
+    return {
+      initialAttemptMs: parsePositiveInteger(app.locals.aiTimeoutConfig.initialAttemptMs, defaultInitialAttemptTimeoutMs),
+      repairAttemptMs: parsePositiveInteger(app.locals.aiTimeoutConfig.repairAttemptMs, defaultRepairAttemptTimeoutMs),
+      limitedAttemptMs: parsePositiveInteger(app.locals.aiTimeoutConfig.limitedAttemptMs, defaultLimitedAttemptTimeoutMs),
+      totalRequestMs: parsePositiveInteger(app.locals.aiTimeoutConfig.totalRequestMs, defaultTotalRequestTimeoutMs)
+    };
+  }
+
+  if (app.locals.aiRequestTimeoutMs !== undefined) {
+    const legacyTimeoutMs = getAiRequestTimeoutMs();
+    return {
+      initialAttemptMs: legacyTimeoutMs,
+      repairAttemptMs: legacyTimeoutMs,
+      limitedAttemptMs: legacyTimeoutMs,
+      totalRequestMs: legacyTimeoutMs
+    };
+  }
+
+  return {
+    initialAttemptMs: parsePositiveInteger(process.env.AI_INITIAL_ATTEMPT_TIMEOUT_MS, defaultInitialAttemptTimeoutMs),
+    repairAttemptMs: parsePositiveInteger(process.env.AI_REPAIR_ATTEMPT_TIMEOUT_MS, defaultRepairAttemptTimeoutMs),
+    limitedAttemptMs: parsePositiveInteger(process.env.AI_LIMITED_ATTEMPT_TIMEOUT_MS, defaultLimitedAttemptTimeoutMs),
+    totalRequestMs: parsePositiveInteger(process.env.AI_TOTAL_REQUEST_TIMEOUT_MS, defaultTotalRequestTimeoutMs)
+  };
 }
 
 function getAnalyticsClient() {
@@ -1055,6 +1087,61 @@ function combineUpstreamUsage(left, right) {
   return hasAnyValue ? combined : null;
 }
 
+function getTimeoutStageCode(stage) {
+  if (stage === "initial") return "INITIAL_TIMEOUT";
+  if (stage === "repair") return "REPAIR_TIMEOUT";
+  if (stage === "limited") return "LIMITED_TIMEOUT";
+  return "UPSTREAM_TIMEOUT";
+}
+
+function createStageTimeoutError(stage) {
+  return createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504, {
+    generationStage: stage,
+    internalErrorCode: getTimeoutStageCode(stage)
+  });
+}
+
+function appendStageDuration(analyticsMeta, stage, startedAt) {
+  if (!analyticsMeta) return;
+  if (!analyticsMeta.stageDurations || typeof analyticsMeta.stageDurations !== "object") {
+    analyticsMeta.stageDurations = {};
+  }
+  analyticsMeta.stageDurations[stage] = Date.now() - startedAt;
+  analyticsMeta.generationStage = stage;
+}
+
+async function runDeepSeekStage(stage, timeoutMs, totalDeadlineAt, task, analyticsMeta) {
+  const startedAt = Date.now();
+  const remainingTotalMs = totalDeadlineAt - startedAt;
+
+  if (remainingTotalMs <= 0) {
+    appendStageDuration(analyticsMeta, stage, startedAt);
+    throw createStageTimeoutError(stage);
+  }
+
+  const abortController = new AbortController();
+  const stageTimeout = setTimeout(
+    () => abortController.abort(),
+    Math.max(1, Math.min(timeoutMs, remainingTotalMs))
+  );
+  if (typeof stageTimeout.unref === "function") {
+    stageTimeout.unref();
+  }
+
+  try {
+    return await task(abortController.signal);
+  } catch (error) {
+    if (error && error.code === "UPSTREAM_TIMEOUT") {
+      error.generationStage = stage;
+      error.internalErrorCode = getTimeoutStageCode(stage);
+    }
+    throw error;
+  } finally {
+    clearTimeout(stageTimeout);
+    appendStageDuration(analyticsMeta, stage, startedAt);
+  }
+}
+
 async function recordAiUsageEvent(context) {
   const analyticsEnv = getAnalyticsEnv();
   const principalHash = createPrincipalHash(context.identity, context.request, analyticsEnv.ANALYTICS_HASH_SECRET);
@@ -1077,6 +1164,9 @@ async function recordAiUsageEvent(context) {
     promptVersion: context.analyticsMeta && context.analyticsMeta.promptVersion,
     model: context.analyticsMeta && context.analyticsMeta.model,
     upstreamUsage: context.analyticsMeta && context.analyticsMeta.upstreamUsage,
+    generationStage: context.analyticsMeta && context.analyticsMeta.generationStage,
+    stageDurations: context.analyticsMeta && context.analyticsMeta.stageDurations,
+    finalErrorCode: context.analyticsMeta && context.analyticsMeta.finalErrorCode,
     env: analyticsEnv
   });
 
@@ -1182,9 +1272,35 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
     upstreamUsage: null,
     qualityRetryCount: 0,
     promptVersion: quickPromptVersion,
-    model: deepSeekModel
+    model: deepSeekModel,
+    generationStage: "initial",
+    stageDurations: {},
+    finalErrorCode: null
   };
-  const completion = await requestDeepSeekCompletion(dreamText, analysisType, options);
+  const timeoutConfig = options.timeoutConfig || {
+    initialAttemptMs: defaultInitialAttemptTimeoutMs,
+    repairAttemptMs: defaultRepairAttemptTimeoutMs,
+    limitedAttemptMs: defaultLimitedAttemptTimeoutMs,
+    totalRequestMs: defaultTotalRequestTimeoutMs
+  };
+  const totalDeadlineAt = Date.now() + timeoutConfig.totalRequestMs;
+  const requestOptions = { ...options };
+  delete requestOptions.signal;
+  delete requestOptions.timeoutConfig;
+  let completion;
+  try {
+    completion = await runDeepSeekStage(
+      "initial",
+      timeoutConfig.initialAttemptMs,
+      totalDeadlineAt,
+      (signal) => requestDeepSeekCompletion(dreamText, analysisType, { ...requestOptions, signal }),
+      analyticsMeta
+    );
+  } catch (error) {
+    analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
+    error.analyticsMeta = analyticsMeta;
+    throw error;
+  }
   const parsed = completion.parsed;
   analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, completion.usage);
   let normalized = null;
@@ -1197,11 +1313,19 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
       analyticsMeta.qualityRetryCount += 1;
       let retryCompletion;
       try {
-        retryCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
-          ...options,
-          retryIssues: result.issues
-        });
+        retryCompletion = await runDeepSeekStage(
+          "repair",
+          timeoutConfig.repairAttemptMs,
+          totalDeadlineAt,
+          (signal) => requestDeepSeekCompletion(dreamText, analysisType, {
+            ...requestOptions,
+            retryIssues: result.issues,
+            signal
+          }),
+          analyticsMeta
+        );
       } catch (error) {
+        analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
         error.analyticsMeta = analyticsMeta;
         throw error;
       }
@@ -1213,11 +1337,19 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
         analyticsMeta.qualityRetryCount += 1;
         let limitedCompletion;
         try {
-          limitedCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
-            ...options,
-            userPrompt: buildLimitedEvidenceResultCardUserPrompt(dreamText, null, result.issues)
-          });
+          limitedCompletion = await runDeepSeekStage(
+            "limited",
+            timeoutConfig.limitedAttemptMs,
+            totalDeadlineAt,
+            (signal) => requestDeepSeekCompletion(dreamText, analysisType, {
+              ...requestOptions,
+              userPrompt: buildLimitedEvidenceResultCardUserPrompt(dreamText, null, result.issues),
+              signal
+            }),
+            analyticsMeta
+          );
         } catch (error) {
+          analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
           error.analyticsMeta = analyticsMeta;
           throw error;
         }
@@ -1235,6 +1367,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
             promptVersion: quickPromptVersion,
             qualityStatus: "incomplete"
           };
+          analyticsMeta.finalErrorCode = "GENERATION_INCOMPLETE";
           incompleteError.analyticsMeta = analyticsMeta;
           throw incompleteError;
         }
@@ -1252,11 +1385,19 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
       analyticsMeta.qualityRetryCount += 1;
       let repairCompletion;
       try {
-        repairCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
-          ...options,
-          userPrompt: buildQuickResultCardRepairUserPrompt(dreamText, result.analysis, result.issues)
-        });
+        repairCompletion = await runDeepSeekStage(
+          "repair",
+          timeoutConfig.repairAttemptMs,
+          totalDeadlineAt,
+          (signal) => requestDeepSeekCompletion(dreamText, analysisType, {
+            ...requestOptions,
+            userPrompt: buildQuickResultCardRepairUserPrompt(dreamText, result.analysis, result.issues),
+            signal
+          }),
+          analyticsMeta
+        );
       } catch (error) {
+        analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
         error.analyticsMeta = analyticsMeta;
         throw error;
       }
@@ -1267,11 +1408,19 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
         analyticsMeta.qualityRetryCount += 1;
         let limitedCompletion;
         try {
-          limitedCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
-            ...options,
-            userPrompt: buildLimitedEvidenceResultCardUserPrompt(dreamText, result.analysis, repairedCard.issues)
-          });
+          limitedCompletion = await runDeepSeekStage(
+            "limited",
+            timeoutConfig.limitedAttemptMs,
+            totalDeadlineAt,
+            (signal) => requestDeepSeekCompletion(dreamText, analysisType, {
+              ...requestOptions,
+              userPrompt: buildLimitedEvidenceResultCardUserPrompt(dreamText, result.analysis, repairedCard.issues),
+              signal
+            }),
+            analyticsMeta
+          );
         } catch (error) {
+          analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
           error.analyticsMeta = analyticsMeta;
           throw error;
         }
@@ -1299,15 +1448,30 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
           promptVersion: quickPromptVersion,
           qualityStatus: "incomplete"
         };
+        analyticsMeta.finalErrorCode = "GENERATION_INCOMPLETE";
         incompleteError.analyticsMeta = analyticsMeta;
         throw incompleteError;
       }
     } else if (!normalized) {
-      const retryCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
-        ...options,
-        retryIssues: result.issues
-      });
       analyticsMeta.qualityRetryCount += 1;
+      let retryCompletion;
+      try {
+        retryCompletion = await runDeepSeekStage(
+          "repair",
+          timeoutConfig.repairAttemptMs,
+          totalDeadlineAt,
+          (signal) => requestDeepSeekCompletion(dreamText, analysisType, {
+            ...requestOptions,
+            retryIssues: result.issues,
+            signal
+          }),
+          analyticsMeta
+        );
+      } catch (error) {
+        analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
+        error.analyticsMeta = analyticsMeta;
+        throw error;
+      }
       analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, retryCompletion.usage);
       const retryParsed = retryCompletion.parsed;
       result = retryParsed ? normalizeQuickCombinedOutput(retryParsed, dreamText) : { output: null, issues: ["重试后仍不是合法 JSON。"] };
@@ -1323,6 +1487,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
           promptVersion: quickPromptVersion,
           qualityStatus: "incomplete"
         };
+        analyticsMeta.finalErrorCode = "GENERATION_INCOMPLETE";
         incompleteError.analyticsMeta = analyticsMeta;
         throw incompleteError;
       }
@@ -1334,10 +1499,13 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
   if (!normalized) {
     const invalidJsonError = createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
     invalidJsonError.statusCode = 502;
+    analyticsMeta.finalErrorCode = invalidJsonError.code;
+    invalidJsonError.analyticsMeta = analyticsMeta;
     throw invalidJsonError;
   }
 
   if (normalized && typeof normalized === "object") {
+    analyticsMeta.finalErrorCode = null;
     normalized.__analyticsMeta = analyticsMeta;
   }
 
@@ -1376,26 +1544,18 @@ async function handleDreamAnalysisRequest(request, response) {
   }
 
   let reservation;
-  let timeout;
   let analyticsMeta = null;
   try {
     reservation = accessControl.start(identity, request.body.analysisType);
-    const abortController = new AbortController();
-    timeout = setTimeout(() => abortController.abort(), getAiRequestTimeoutMs());
-    if (typeof timeout.unref === "function") {
-      timeout.unref();
-    }
 
     const analysis = await requestDeepSeekAnalysis(validation.dreamText, request.body.analysisType, {
       guidedAnswers: validation.guidedAnswers,
-      signal: abortController.signal
+      timeoutConfig: getAiTimeoutConfig()
     });
     analyticsMeta = analysis && analysis.__analyticsMeta ? analysis.__analyticsMeta : null;
     if (analysis && typeof analysis === "object") {
       delete analysis.__analyticsMeta;
     }
-    clearTimeout(timeout);
-    timeout = null;
     accessControl.finish(reservation, { refundDaily: false });
     reservation = null;
 
@@ -1416,10 +1576,6 @@ async function handleDreamAnalysisRequest(request, response) {
       usage
     });
   } catch (error) {
-    if (timeout) {
-      clearTimeout(timeout);
-    }
-
     const code = error.code || (error.statusCode === 422 ? "GENERATION_INCOMPLETE" : "UPSTREAM_UNAVAILABLE");
     const apiError = error.code
       ? error
@@ -1445,7 +1601,7 @@ async function handleDreamAnalysisRequest(request, response) {
         identity,
         analysisType: request.body.analysisType,
         outcome: getAnalyticsOutcome(apiError.code),
-        errorCode: apiError.code,
+        errorCode: analyticsMeta && analyticsMeta.finalErrorCode ? analyticsMeta.finalErrorCode : apiError.code,
         httpStatus: apiError.status || apiError.statusCode || 500,
         analyticsMeta
       });

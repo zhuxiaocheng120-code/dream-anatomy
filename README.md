@@ -116,7 +116,7 @@
 - Install dependencies with `npm install`.
 - Copy `.env.example` to `.env` and set `DEEPSEEK_API_KEY` locally. The server loads this file automatically.
 - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` locally to enable the account UI. These are browser-safe Supabase project values, not service role secrets.
-- Optional AI protection settings are available in `.env.example`: `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_GUEST_REQUESTS_PER_MINUTE`, `AI_USER_REQUESTS_PER_MINUTE`, `AI_MAX_CONCURRENT_PER_PRINCIPAL`, `AI_REQUEST_TIMEOUT_MS`, and `DEEP_GUIDANCE_ENABLED`.
+- Optional AI protection settings are available in `.env.example`: `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_GUEST_REQUESTS_PER_MINUTE`, `AI_USER_REQUESTS_PER_MINUTE`, `AI_MAX_CONCURRENT_PER_PRINCIPAL`, staged DeepSeek timeout settings, and `DEEP_GUIDANCE_ENABLED`.
 - Optional admin analytics settings are available in `.env.example`: `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER_IDS`, `ANALYTICS_HASH_SECRET`, `AI_INPUT_COST_PER_1M_TOKENS`, and `AI_OUTPUT_COST_PER_1M_TOKENS`. These are server-only values and must not be exposed in browser runtime config.
 - Optional public contact setting: `PUBLIC_SUPPORT_EMAIL`. This is safe to expose in browser runtime config and is used by the legal documents. Do not put private inboxes or secrets here.
 - Start the app with `npm start`.
@@ -159,8 +159,13 @@ Default Beta limits:
 - `AI_GUEST_REQUESTS_PER_MINUTE=2`
 - `AI_USER_REQUESTS_PER_MINUTE=3`
 - `AI_MAX_CONCURRENT_PER_PRINCIPAL=1`
-- `AI_REQUEST_TIMEOUT_MS=45000`
+- `AI_INITIAL_ATTEMPT_TIMEOUT_MS=45000`
+- `AI_REPAIR_ATTEMPT_TIMEOUT_MS=30000`
+- `AI_LIMITED_ATTEMPT_TIMEOUT_MS=25000`
+- `AI_TOTAL_REQUEST_TIMEOUT_MS=90000`
 - `DEEP_GUIDANCE_ENABLED=false`
+
+Quick analysis may perform up to three upstream stages: the initial combined analysis/result-card request, a directed result-card repair, and a limited-evidence final card generation. Each stage gets its own timeout, while `AI_TOTAL_REQUEST_TIMEOUT_MS` remains the hard upper bound for the full request. `AI_REQUEST_TIMEOUT_MS` is kept as a legacy fallback for older local setups, but new deployments should prefer the staged settings above.
 
 These limits use an in-memory counter suitable for the current single-instance Beta. Render restarts reset the counters, and multiple instances would not share them. Before a larger public release, this should move to Redis or another shared persistent limiter.
 

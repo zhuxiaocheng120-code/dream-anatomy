@@ -32,6 +32,32 @@ function toNonNegativeNumber(value) {
   return Number.isFinite(number) && number >= 0 ? number : null;
 }
 
+function sanitizeGenerationStage(value) {
+  return ["initial", "repair", "limited"].includes(value) ? value : null;
+}
+
+function sanitizeErrorCode(value) {
+  if (typeof value !== "string") return null;
+  const normalized = value.trim().toUpperCase();
+  return /^[A-Z0-9_]{1,80}$/.test(normalized) ? normalized : null;
+}
+
+function sanitizeStageDurations(value) {
+  if (!value || typeof value !== "object" || Array.isArray(value)) {
+    return null;
+  }
+
+  const durations = {};
+  ["initial", "repair", "limited"].forEach((stage) => {
+    const duration = toNonNegativeInteger(value[stage]);
+    if (duration !== null) {
+      durations[stage] = duration;
+    }
+  });
+
+  return Object.keys(durations).length ? durations : null;
+}
+
 function calculateEstimatedCost(usage = {}, env = process.env) {
   const promptTokens = toNonNegativeInteger(usage.prompt_tokens);
   const completionTokens = toNonNegativeInteger(usage.completion_tokens);
@@ -64,8 +90,37 @@ function buildUsageEvent(context = {}) {
     prompt_tokens: toNonNegativeInteger(usage.prompt_tokens),
     completion_tokens: toNonNegativeInteger(usage.completion_tokens),
     total_tokens: toNonNegativeInteger(usage.total_tokens),
-    estimated_cost_usd: calculateEstimatedCost(usage, context.env)
+    estimated_cost_usd: calculateEstimatedCost(usage, context.env),
+    generation_stage: sanitizeGenerationStage(context.generationStage),
+    stage_durations: sanitizeStageDurations(context.stageDurations),
+    final_error_code: sanitizeErrorCode(context.finalErrorCode)
   };
+}
+
+const persistedUsageEventColumns = [
+  "request_id",
+  "occurred_at",
+  "principal_type",
+  "principal_hash",
+  "analysis_type",
+  "outcome",
+  "error_code",
+  "http_status",
+  "duration_ms",
+  "quality_retry_count",
+  "prompt_version",
+  "model",
+  "prompt_tokens",
+  "completion_tokens",
+  "total_tokens",
+  "estimated_cost_usd"
+];
+
+function getPersistableUsageEvent(event = {}) {
+  return persistedUsageEventColumns.reduce((persisted, column) => {
+    persisted[column] = Object.prototype.hasOwnProperty.call(event, column) ? event[column] : null;
+    return persisted;
+  }, {});
 }
 
 async function recordUsageEventSafely(client, event, logger = console) {
@@ -74,7 +129,7 @@ async function recordUsageEventSafely(client, event, logger = console) {
   }
 
   try {
-    const response = await client.from("ai_usage_events").insert(event);
+    const response = await client.from("ai_usage_events").insert(getPersistableUsageEvent(event));
 
     if (response && response.error) {
       if (logger && typeof logger.warn === "function") {
@@ -96,5 +151,6 @@ module.exports = {
   buildUsageEvent,
   calculateEstimatedCost,
   createPrincipalHash,
+  getPersistableUsageEvent,
   recordUsageEventSafely
 };
