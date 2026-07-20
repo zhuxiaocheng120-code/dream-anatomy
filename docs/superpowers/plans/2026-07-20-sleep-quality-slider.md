@@ -12,11 +12,11 @@
 
 - Product copy remains Chinese-first and must not describe sleep quality as a medical measurement.
 - Initial sleep quality is `null`; no untouched slider may save `50` or `"未记录"`.
-- Slider range is `0-100`, step is `5`, and labels are exactly: `0-20 很差`, `21-40 不太好`, `41-60 一般`, `61-80 不错`, `81-100 很好`.
+- Slider range is `0-100`, step is `5`, and labels are exactly: `0-20 很不安稳`, `21-40 偏疲惫`, `41-60 一般`, `61-80 比较安稳`, `81-100 很安稳`.
 - Save top-level `sleepQuality` / `sleep_quality` as the text label only when the user has provided a value.
 - Save `reportContent.sleepQualityScore`, `reportContent.sleepQualityLabel`, and `reportContent.sleepQualityUpdatedAt` only when a value exists.
 - Clearing restores the unfilled state and removes sleep quality fields from the record/reportContent.
-- Dream Detail must show `睡眠感受：65% · 不错` when filled, and a low-distraction `补充睡眠感受` entry when missing.
+- Dream Detail must show `睡眠感受：65% · 比较安稳` when filled, and a low-distraction `补充睡眠感受` entry when missing.
 - Updating sleep quality must merge `reportContent` and preserve AI analysis, Dream Result Card, `userReflection`, raw dream text, and all other fields.
 - Sleep quality must not be sent to AI, must not change AI prompts, must not trigger reanalysis, must not enter product analytics payloads, logs, URLs, or AI usage events.
 - No database migration; reuse `sleep_quality` and `report_content` JSONB.
@@ -62,9 +62,9 @@ const SleepQuality = require("../src/sleepQuality");
 
 test("maps sleep quality label boundaries", () => {
   const cases = [
-    [0, "很差"], [20, "很差"], [21, "不太好"], [40, "不太好"],
-    [41, "一般"], [60, "一般"], [61, "不错"], [80, "不错"],
-    [81, "很好"], [100, "很好"]
+    [0, "很不安稳"], [20, "很不安稳"], [21, "偏疲惫"], [40, "偏疲惫"],
+    [41, "一般"], [60, "一般"], [61, "比较安稳"], [80, "比较安稳"],
+    [81, "很安稳"], [100, "很安稳"]
   ];
 
   cases.forEach(([score, label]) => {
@@ -96,9 +96,9 @@ test("applies and clears sleep quality without overwriting report content", () =
   };
 
   const saved = SleepQuality.applySleepQualityToRecord(base, { score: 65 }, () => "2026-07-20T10:00:00.000Z");
-  assert.equal(saved.sleepQuality, "不错");
+  assert.equal(saved.sleepQuality, "比较安稳");
   assert.equal(saved.reportContent.sleepQualityScore, 65);
-  assert.equal(saved.reportContent.sleepQualityLabel, "不错");
+  assert.equal(saved.reportContent.sleepQualityLabel, "比较安稳");
   assert.equal(saved.reportContent.sleepQualityUpdatedAt, "2026-07-20T10:00:00.000Z");
   assert.deepEqual(saved.reportContent.dreamResultCard, base.reportContent.dreamResultCard);
   assert.equal(saved.reportContent.userReflection, base.reportContent.userReflection);
@@ -144,7 +144,7 @@ Expected: PASS.
 
 Add tests asserting:
 - untouched quick form save does not persist `sleepQuality`, `reportContent.sleepQualityScore`, or `50`;
-- slider input `65` persists top-level `sleepQuality: "不错"` and reportContent sleep fields;
+- slider input `65` persists top-level `sleepQuality: "比较安稳"` and reportContent sleep fields;
 - clear button restores unfilled state;
 - AI request body contains `dreamText` and `analysisType` but no sleep quality fields.
 
@@ -182,7 +182,7 @@ Expected: PASS.
 - [ ] **Step 1: Write failing detail tests**
 
 Add tests asserting:
-- filled records display `睡眠感受：65% · 不错`;
+- filled records display `睡眠感受：65% · 比较安稳`;
 - missing records do not render a `未记录` sleep quality card and show `补充睡眠感受`;
 - modifying detail sleep quality preserves `dreamResultCard`, `userReflection`, and raw dream text;
 - concurrent repeat clicks keep save button disabled and do not overwrite a new detail record.

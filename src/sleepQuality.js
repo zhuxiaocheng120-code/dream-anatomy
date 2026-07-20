@@ -36,11 +36,11 @@
       return "";
     }
 
-    if (snappedScore <= 20) return "很差";
-    if (snappedScore <= 40) return "不太好";
+    if (snappedScore <= 20) return "很不安稳";
+    if (snappedScore <= 40) return "偏疲惫";
     if (snappedScore <= 60) return "一般";
-    if (snappedScore <= 80) return "不错";
-    return "很好";
+    if (snappedScore <= 80) return "比较安稳";
+    return "很安稳";
   }
 
   function normalizeSleepQualityState(input) {
