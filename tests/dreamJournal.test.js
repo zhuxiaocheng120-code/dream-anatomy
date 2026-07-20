@@ -1185,7 +1185,7 @@ test("quick decode shows an incomplete generation message without mock fallback"
   await harness.quickForm.trigger("submit");
 
   assert.equal(harness.quickResult.hidden, true);
-  assert.match(harness.quickFormStatus.textContent, /AI 结果暂时不够完整/);
+  assert.match(harness.quickFormStatus.textContent, /这次解析没有完整生成，已保留你的梦境内容。请稍后重新提交。/);
   assert.doesNotMatch(harness.quickFormStatus.textContent, /本地示例结果/);
   assert.equal(harness.getSavedRecords().length, 0);
 });
@@ -1258,7 +1258,7 @@ test("server-disabled guided questions do not fall back to local mock questions"
   assert.doesNotMatch(harness.guidedStatus.textContent, /本地示例问题/);
 });
 
-test("quick decode keeps analysis readable when result card generation failed", async () => {
+test("quick decode rejects successful payloads that do not include a complete result card", async () => {
   const harness = createAppIntegrationHarness({
     realDreamResultCard: true,
     noDreamJournal: true,
@@ -1275,51 +1275,65 @@ test("quick decode keeps analysis readable when result card generation failed", 
   harness.quickDream.value = "我在学校走廊里一直找不到教室。";
   await harness.quickForm.trigger("submit");
 
-  assert.equal(harness.quickResult.hidden, false);
-  assert.match(collectText(harness.quickResult).join("\n"), /寻找教室/);
-  assert.match(collectText(harness.quickResultCard).join("\n"), /梦境画像暂时未能完整生成。/);
+  assert.equal(harness.quickResult.hidden, true);
+  assert.match(harness.quickFormStatus.textContent, /这次解析没有完整生成，已保留你的梦境内容。请稍后重新提交。/);
+  assert.equal(harness.quickDream.value, "我在学校走廊里一直找不到教室。");
+  assert.equal(harness.getSavedRecords().length, 0);
 });
 
-test("quick current-page result card retry does not save a malformed synthetic record", async () => {
-  const fetchCalls = [];
+test("quick decode does not fall back to local mock when AI service is unavailable", async () => {
   const harness = createAppIntegrationHarness({
     realDreamResultCard: true,
     noDreamJournal: true,
     fakeDreamJournal: false,
-    fetch: async (url, options) => {
-      fetchCalls.push([url, options]);
-      const body = JSON.parse(options.body);
-      if (body.analysisType === "quick") {
-        return {
-          ok: true,
-          json: async () => ({
-            analysis: createQuickAnalysisFixture(),
-            dreamResultCardStatus: "generation_failed"
-          })
-        };
-      }
-      return {
-        ok: true,
-        json: async () => ({ analysis: createResultCardFixture() })
-      };
-    }
+    fetch: async () => ({
+      ok: false,
+      status: 502,
+      json: async () => ({
+        error: { code: "UPSTREAM_UNAVAILABLE", message: "梦境解析服务暂时不可用，请稍后再试。" }
+      })
+    })
   });
 
   harness.quickDream.value = "我在学校走廊里一直找不到教室。";
   await harness.quickForm.trigger("submit");
-  const retryButton = findElements(
-    harness.quickResultCard,
-    (element) => element.tagName === "BUTTON" && element.textContent === "重新生成梦境画像"
-  )[0];
 
-  await retryButton.trigger("click");
+  assert.equal(harness.quickResult.hidden, true);
+  assert.match(harness.quickFormStatus.textContent, /梦境解析服务暂时不可用/);
+  assert.doesNotMatch(harness.quickFormStatus.textContent, /本地示例结果/);
+  assert.equal(harness.getSavedRecords().length, 0);
+});
 
-  const savedRecords = harness.getSavedRecords();
-  assert.equal(savedRecords.length, 1);
-  assert.ok(savedRecords[0].id);
-  assert.ok(savedRecords[0].createdAt);
-  assert.equal(savedRecords[0].analysisType, "快速解析");
-  assert.equal(savedRecords[0].reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);
+test("quick decode shows a limited-evidence notice when the result card is complete but tentative", async () => {
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: true,
+      json: async () => ({
+        analysis: createQuickAnalysisFixture(),
+        dreamResultCard: createResultCardFixture(),
+        dreamResultCardStatus: "ai_generated",
+        generationMeta: {
+          source: "ai_generated",
+          promptVersion: "quick-analysis-v2",
+          qualityStatus: "passed",
+          limitedEvidence: true,
+          evidenceConfidence: "low"
+        }
+      })
+    })
+  });
+
+  harness.quickDream.value = "梦见门。很亮。";
+  await harness.quickForm.trigger("submit");
+
+  const cardText = collectText(harness.quickResultCard).join("\n");
+  assert.equal(harness.quickResult.hidden, false);
+  assert.match(cardText, /基于有限线索的暂定画像/);
+  assert.match(cardText, /这张画像依据的是本次记录中呈现的线索/);
+  assert.equal(harness.getSavedRecords()[0].reportContent.generationMeta.limitedEvidence, true);
 });
 
 test("guided questions come from the current dream through the backend", async () => {

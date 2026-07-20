@@ -192,7 +192,7 @@ function buildUserPrompt(dreamText) {
     '    "reflectionQuestions": ["开放问题"],',
     '    "safetyReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"',
     "  },",
-    '  "generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed" }',
+    '  "generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": false, "evidenceConfidence": "high" }',
     "}",
     "梦境内容：",
     dreamText
@@ -214,6 +214,61 @@ function buildResultCardRetryUserPrompt(dreamText, issues) {
     "",
     "上一次梦境画像输出没有通过质量检查，请只返回完整梦境画像 JSON，并补齐以下缺失项：",
     issues.map((issue) => `- ${issue}`).join("\n")
+  ].join("\n");
+}
+
+function formatValidatedQuickAnalysisForPrompt(analysis) {
+  return JSON.stringify({
+    dreamSummary: analysis.dreamSummary,
+    coreTheme: analysis.coreTheme,
+    coreInterpretation: analysis.coreInterpretation,
+    evidence: analysis.evidence,
+    emotionalReading: analysis.emotionalReading,
+    symbolReading: analysis.symbolReading,
+    reflectionQuestions: analysis.reflectionQuestions,
+    gentleAction: analysis.gentleAction,
+    safetyReminder: analysis.safetyReminder
+  });
+}
+
+function buildQuickResultCardRepairUserPrompt(dreamText, analysis, issues) {
+  return [
+    "请只修复并返回完整 Dream Result Card JSON，不要重新生成或改写 analysis。",
+    "你必须使用下面已通过校验的快速解析作为同一上下文依据，保持画像与文字分析一致。",
+    "如果梦境线索有限，仍然必须给出完整画像、四个 0-100 数字评分和 rationale；可以把 evidenceConfidence 设为 low 或 medium。",
+    "不要生成假分数，不要把缺失分数补成 0；分数必须来自你根据本次梦境文本和已验证 analysis 的谨慎判断。",
+    "返回 JSON 结构必须严格符合：",
+    "{",
+    '  "dreamResultCard": { ...完整 Dream Result Card... },',
+    '  "generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": false, "evidenceConfidence": "high" }',
+    "}",
+    "上一次画像缺失项：",
+    issues.map((issue) => `- ${issue}`).join("\n"),
+    "已验证 analysis：",
+    formatValidatedQuickAnalysisForPrompt(analysis),
+    "梦境内容：",
+    dreamText
+  ].join("\n");
+}
+
+function buildLimitedEvidenceResultCardUserPrompt(dreamText, analysis, issues) {
+  return [
+    "请生成一个基于有限线索的最小完整 Dream Result Card。",
+    "这是最后一次修复：即使梦境很短或信息较少，也必须返回完整画像，不能返回空字段、null 分数、暂不可用或暂不评分。",
+    "所有分数必须是 0-100 的数字，并用 rationale 说明它只依据本次记录中呈现的线索。",
+    "如果线索较少，请让解释更谨慎、分数更保守，并设置 limitedEvidence: true。",
+    "不得编造梦里没有出现的人物、事件、情绪或现实背景。",
+    "返回 JSON 结构必须严格符合：",
+    "{",
+    '  "dreamResultCard": { ...完整 Dream Result Card... },',
+    '  "generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": true, "evidenceConfidence": "low" }',
+    "}",
+    "仍需补齐的问题：",
+    issues.map((issue) => `- ${issue}`).join("\n"),
+    "已验证 analysis：",
+    analysis ? formatValidatedQuickAnalysisForPrompt(analysis) : "无已验证快速解析，请仅依据梦境内容生成画像。",
+    "梦境内容：",
+    dreamText
   ].join("\n");
 }
 
@@ -871,20 +926,14 @@ function normalizeQuickCombinedOutput(parsed, dreamText) {
   const cardIssues = rawCardIssues.length
     ? rawCardIssues
     : (dreamResultCard ? validateResultCardQuality(dreamResultCard, dreamText) : ["梦境画像暂时未能完整生成。"]);
-  const generationMeta = {
-    source: "ai_generated",
-    promptVersion: quickPromptVersion,
-    qualityStatus: "passed"
-  };
+  const generationMeta = normalizeGenerationMeta(parsed.generationMeta);
 
   if (!dreamResultCard || cardIssues.length) {
     return {
-      output: {
-        analysis,
-        dreamResultCardStatus: "generation_failed",
-        generationMeta
-      },
-      issues: []
+      output: null,
+      analysis,
+      issues: cardIssues.length ? cardIssues : ["梦境画像暂时未能完整生成。"],
+      issueScope: "dreamResultCard"
     };
   }
 
@@ -900,19 +949,52 @@ function normalizeQuickCombinedOutput(parsed, dreamText) {
 }
 
 function normalizeStandaloneResultCardOutput(parsed, dreamText) {
-  if (!isPlainObject(parsed)) {
-    return { output: null, issues: ["返回内容不是合法 JSON 对象。"] };
+  const envelope = extractResultCardEnvelope(parsed);
+
+  if (!envelope.card) {
+    return { output: null, issues: ["返回内容不是合法 Dream Result Card JSON 对象。"], generationMeta: envelope.generationMeta };
   }
 
-  const rawCardIssues = validateRawResultCardCompleteness(parsed);
-  const dreamResultCard = rawCardIssues.length ? null : normalizeDeepSeekResultCardOutput(parsed);
+  const rawCardIssues = validateRawResultCardCompleteness(envelope.card);
+  const dreamResultCard = rawCardIssues.length ? null : normalizeDeepSeekResultCardOutput(envelope.card);
   const cardIssues = rawCardIssues.length
     ? rawCardIssues
     : (dreamResultCard ? validateResultCardQuality(dreamResultCard, dreamText) : ["梦境画像暂时未能完整生成。"]);
 
   return !dreamResultCard || cardIssues.length
-    ? { output: null, issues: cardIssues }
-    : { output: dreamResultCard, issues: [] };
+    ? { output: null, issues: cardIssues, generationMeta: envelope.generationMeta }
+    : { output: dreamResultCard, issues: [], generationMeta: envelope.generationMeta };
+}
+
+function extractResultCardEnvelope(parsed) {
+  if (!isPlainObject(parsed)) {
+    return { card: null, generationMeta: normalizeGenerationMeta(null) };
+  }
+
+  return {
+    card: isPlainObject(parsed.dreamResultCard) ? parsed.dreamResultCard : parsed,
+    generationMeta: normalizeGenerationMeta(parsed.generationMeta)
+  };
+}
+
+function normalizeGenerationMeta(rawMeta, overrides = {}) {
+  const meta = isPlainObject(rawMeta) ? rawMeta : {};
+  const limitedEvidence = typeof overrides.limitedEvidence === "boolean"
+    ? overrides.limitedEvidence
+    : meta.limitedEvidence === true;
+  const evidenceConfidence = overrides.limitedEvidence === true
+    ? "low"
+    : ["low", "medium", "high"].includes(meta.evidenceConfidence)
+    ? meta.evidenceConfidence
+    : (limitedEvidence ? "low" : "high");
+
+  return {
+    source: "ai_generated",
+    promptVersion: quickPromptVersion,
+    qualityStatus: "passed",
+    limitedEvidence,
+    evidenceConfidence
+  };
 }
 
 function getAnalyticsOutcome(errorCode) {
@@ -1045,7 +1127,9 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
           { role: "system", content: buildSystemPrompt() },
           {
             role: "user",
-            content: options.retryIssues && options.retryIssues.length
+            content: options.userPrompt
+              ? options.userPrompt
+              : options.retryIssues && options.retryIssues.length
               ? getRetryUserPrompt(dreamText, analysisType, options.retryIssues)
               : getUserPrompt(dreamText, analysisType, options)
           }
@@ -1110,7 +1194,87 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
       normalized = result.output;
 
       if (!normalized) {
-        const incompleteError = new Error("Dream result card generation was incomplete.");
+        analyticsMeta.qualityRetryCount += 1;
+        let limitedCompletion;
+        try {
+          limitedCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
+            ...options,
+            userPrompt: buildLimitedEvidenceResultCardUserPrompt(dreamText, null, result.issues)
+          });
+        } catch (error) {
+          error.analyticsMeta = analyticsMeta;
+          throw error;
+        }
+        analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, limitedCompletion.usage);
+        result = normalizeStandaloneResultCardOutput(limitedCompletion.parsed, dreamText);
+        normalized = result.output;
+
+        if (!normalized) {
+          const incompleteError = new Error("Dream result card generation was incomplete.");
+          incompleteError.code = "GENERATION_INCOMPLETE";
+          incompleteError.statusCode = 422;
+          incompleteError.status = 422;
+          incompleteError.generationMeta = {
+            source: "generation_failed",
+            promptVersion: quickPromptVersion,
+            qualityStatus: "incomplete"
+          };
+          incompleteError.analyticsMeta = analyticsMeta;
+          throw incompleteError;
+        }
+      }
+    }
+  } else if (parsed && analysisType === "guided_questions") {
+    normalized = normalizeGuidedQuestionsOutput(parsed);
+  } else if (parsed && analysisType === "guided_final") {
+    normalized = normalizeCombinedOutput(parsed, normalizeDeepReportOutput);
+  } else if (analysisType === "quick") {
+    let result = parsed ? normalizeQuickCombinedOutput(parsed, dreamText) : { output: null, issues: ["返回内容不是合法 JSON。"] };
+    normalized = result.output;
+
+    if (!normalized && result.analysis && result.issueScope === "dreamResultCard") {
+      analyticsMeta.qualityRetryCount += 1;
+      let repairCompletion;
+      try {
+        repairCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
+          ...options,
+          userPrompt: buildQuickResultCardRepairUserPrompt(dreamText, result.analysis, result.issues)
+        });
+      } catch (error) {
+        error.analyticsMeta = analyticsMeta;
+        throw error;
+      }
+      analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, repairCompletion.usage);
+      let repairedCard = normalizeStandaloneResultCardOutput(repairCompletion.parsed, dreamText);
+
+      if (!repairedCard.output) {
+        analyticsMeta.qualityRetryCount += 1;
+        let limitedCompletion;
+        try {
+          limitedCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
+            ...options,
+            userPrompt: buildLimitedEvidenceResultCardUserPrompt(dreamText, result.analysis, repairedCard.issues)
+          });
+        } catch (error) {
+          error.analyticsMeta = analyticsMeta;
+          throw error;
+        }
+        analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, limitedCompletion.usage);
+        repairedCard = normalizeStandaloneResultCardOutput(limitedCompletion.parsed, dreamText);
+        if (repairedCard.output) {
+          repairedCard.generationMeta = normalizeGenerationMeta(repairedCard.generationMeta, { limitedEvidence: true });
+        }
+      }
+
+      if (repairedCard.output) {
+        normalized = {
+          analysis: result.analysis,
+          dreamResultCard: repairedCard.output,
+          dreamResultCardStatus: "ai_generated",
+          generationMeta: repairedCard.generationMeta
+        };
+      } else {
+        const incompleteError = new Error("Dream analysis result was incomplete.");
         incompleteError.code = "GENERATION_INCOMPLETE";
         incompleteError.statusCode = 422;
         incompleteError.status = 422;
@@ -1122,16 +1286,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
         incompleteError.analyticsMeta = analyticsMeta;
         throw incompleteError;
       }
-    }
-  } else if (parsed && analysisType === "guided_questions") {
-    normalized = normalizeGuidedQuestionsOutput(parsed);
-  } else if (parsed && analysisType === "guided_final") {
-    normalized = normalizeCombinedOutput(parsed, normalizeDeepReportOutput);
-  } else if (analysisType === "quick") {
-    let result = parsed ? normalizeQuickCombinedOutput(parsed, dreamText) : { output: null, issues: ["返回内容不是合法 JSON。"] };
-    normalized = result.output;
-
-    if (!normalized) {
+    } else if (!normalized) {
       const retryCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
         ...options,
         retryIssues: result.issues
@@ -1261,7 +1416,7 @@ async function handleDreamAnalysisRequest(request, response) {
 
     if (reservation) {
       accessControl.finish(reservation, {
-        refundDaily: ["UPSTREAM_TIMEOUT", "UPSTREAM_UNAVAILABLE"].includes(apiError.code)
+        refundDaily: ["UPSTREAM_TIMEOUT", "UPSTREAM_UNAVAILABLE", "GENERATION_INCOMPLETE"].includes(apiError.code)
       });
     }
 

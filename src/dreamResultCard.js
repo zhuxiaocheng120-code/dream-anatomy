@@ -125,6 +125,14 @@
       : "";
   }
 
+  function getGenerationMetaFromRecord(record) {
+    if (!record || typeof record !== "object") return {};
+    const report = record.reportContent || record.report_content;
+    return report && typeof report === "object" && report.generationMeta && typeof report.generationMeta === "object"
+      ? report.generationMeta
+      : {};
+  }
+
   function isPlainObject(value) {
     return Boolean(value) && typeof value === "object" && !Array.isArray(value);
   }
@@ -253,9 +261,13 @@
     return preview;
   }
 
-  function renderExistingCard(documentRef, card, statusMessage, displayState = "complete") {
+  function renderExistingCard(documentRef, card, statusMessage, displayState = "complete", generationMeta = {}) {
     const root = createElement(documentRef, "section", "dream-result-card");
     appendTextElement(documentRef, root, "h2", "", "梦境画像");
+    if (generationMeta && generationMeta.limitedEvidence === true) {
+      appendTextElement(documentRef, root, "p", "result-card-status", "基于有限线索的暂定画像");
+      appendTextElement(documentRef, root, "p", "result-card-note", "这张画像依据的是本次记录中呈现的线索。它不是对你的固定判断，补充更多梦境细节后，画像可能会有所变化。");
+    }
     if (displayState === "partial_historical") {
       appendTextElement(documentRef, root, "p", "result-card-status", partialHistoricalMessage);
     }
@@ -391,7 +403,7 @@
       const normalizedCard = normalizeDreamResultCard(savedCard, record, {
         allowUnavailableScores: statusValue === "generation_failed"
       });
-      container.replaceChildren(renderExistingCard(documentRef, normalizedCard, statusMessage, displayState));
+      container.replaceChildren(renderExistingCard(documentRef, normalizedCard, statusMessage, displayState, getGenerationMetaFromRecord(record)));
     }
 
     return { render };
