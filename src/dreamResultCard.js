@@ -179,8 +179,8 @@
       && hasScoreValue(card.emotionalProfile.intensity)
       && hasTextValue(card.emotionalProfile.evidence)
       && hasTextList(card.reflectionQuestions)
-      && hasTextValue(card.safetyReminder)
-      && card.safetyReminder.includes("这不是诊断、治疗或预言，只是一种自我探索视角");
+      && typeof card.safetyReminder === "string"
+      && card.safetyReminder.includes(safetyReminder);
   }
 
   function getDreamResultCardDisplayState(record) {

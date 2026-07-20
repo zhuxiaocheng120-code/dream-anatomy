@@ -124,6 +124,7 @@ test("buildUsageEvent keeps safe generation diagnostics separate from persisted 
       repair: 30001,
       dreamText: "must not persist"
     },
+    validationIssueCodes: ["missing_dimension_emotion_intensity", "bad free text", "invalid_score"],
     finalErrorCode: "REPAIR_TIMEOUT",
     upstreamUsage: { total_tokens: 55 },
     env: {}
@@ -135,6 +136,7 @@ test("buildUsageEvent keeps safe generation diagnostics separate from persisted 
     initial: 44123,
     repair: 30001
   });
+  assert.deepEqual(event.validation_issue_codes, ["missing_dimension_emotion_intensity", "invalid_score"]);
   assert.equal(event.final_error_code, "REPAIR_TIMEOUT");
   assert.doesNotMatch(JSON.stringify(event), /must not persist/);
 
@@ -143,6 +145,7 @@ test("buildUsageEvent keeps safe generation diagnostics separate from persisted 
   assert.equal(persisted.total_tokens, 55);
   assert.equal(persisted.generation_stage, undefined);
   assert.equal(persisted.stage_durations, undefined);
+  assert.equal(persisted.validation_issue_codes, undefined);
   assert.equal(persisted.final_error_code, undefined);
 });
 

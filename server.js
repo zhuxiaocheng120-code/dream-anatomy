@@ -34,6 +34,7 @@ const defaultInitialAttemptTimeoutMs = parsePositiveInteger(process.env.AI_INITI
 const defaultRepairAttemptTimeoutMs = parsePositiveInteger(process.env.AI_REPAIR_ATTEMPT_TIMEOUT_MS, 30000);
 const defaultLimitedAttemptTimeoutMs = parsePositiveInteger(process.env.AI_LIMITED_ATTEMPT_TIMEOUT_MS, 25000);
 const defaultTotalRequestTimeoutMs = parsePositiveInteger(process.env.AI_TOTAL_REQUEST_TIMEOUT_MS, 90000);
+const requiredResultCardDimensionIds = ["symbol_depth", "emotion_intensity", "self_awareness", "growth_signal"];
 
 app.set("trust proxy", "loopback");
 app.use(express.json({ limit: "32kb" }));
@@ -189,6 +190,141 @@ function sendApiError(response, error, usage) {
   response.status(status).json(payload);
 }
 
+const resultCardDimensionSchemaLines = [
+  '      {',
+  '        "id": "symbol_depth",',
+  '        "name": "象征深度",',
+  '        "score": 0,',
+  '        "summary": "简短说明",',
+  '        "rationale": ["基于梦境内容的依据"]',
+  '      },',
+  '      {',
+  '        "id": "emotion_intensity",',
+  '        "name": "情绪强度",',
+  '        "score": 0,',
+  '        "summary": "简短说明",',
+  '        "rationale": ["基于梦境内容的依据"]',
+  '      },',
+  '      {',
+  '        "id": "self_awareness",',
+  '        "name": "自我觉察",',
+  '        "score": 0,',
+  '        "summary": "简短说明",',
+  '        "rationale": ["基于梦境内容的依据"]',
+  '      },',
+  '      {',
+  '        "id": "growth_signal",',
+  '        "name": "成长信号",',
+  '        "score": 0,',
+  '        "summary": "简短说明",',
+  '        "rationale": ["基于梦境内容的依据"]',
+  '      }'
+];
+
+function getStableArchetypePromptLine() {
+  const archetypeList = DreamArchetypes.archetypes
+    .map((item) => `${item.id}（${item.nameZh} / ${item.nameEn}）`)
+    .join("、");
+
+  return `梦境原型必须从稳定原型集合中选择一个 id，不得返回未知 id。稳定原型集合：${archetypeList}。`;
+}
+
+function getResultCardSchemaRules() {
+  return [
+    getStableArchetypePromptLine(),
+    "dimensions 必须正好返回四项，不得遗漏，不得增加未知 id，不得重复维度。",
+    "每项维度必须有数值 score、summary 和至少一条 rationale；信息较少时仍要根据当前文本线索谨慎评分。",
+    "不得使用 null、暂不可用或暂不评分。score=0 是有效真实评分，但只能在有梦境依据时使用。",
+    "archetype.evidence 必须至少两条，并引用当前梦境线索。",
+    "reflectionQuestions 至少 1 个，快速解析整体 analysis.reflectionQuestions 必须正好 3 个。",
+    "emotionalProfile 必须包含 primary、secondary、intensity 和 evidence。"
+  ];
+}
+
+function getResultCardValidationIssueCodes(issues = []) {
+  const codes = [];
+
+  issues.forEach((issue) => {
+    const text = normalizeText(issue);
+
+    if (!text) return;
+
+    if (text.includes("不是合法") || text.includes("不是 JSON")) {
+      codes.push("invalid_json");
+    }
+
+    if (text.includes("稳定原型") || text.includes("未知 id")) {
+      codes.push("invalid_archetype_id");
+    }
+
+    if (text.includes("四个梦境维度")) {
+      requiredResultCardDimensionIds.forEach((id) => codes.push(`missing_dimension_${id}`));
+    }
+
+    requiredResultCardDimensionIds.forEach((id) => {
+      if (text.includes(id)) {
+        codes.push(`missing_dimension_${id}`);
+      }
+    });
+
+    if (text.includes("rationale")) {
+      codes.push("missing_rationale");
+    }
+
+    if (text.includes("分数") || text.includes("score")) {
+      codes.push("invalid_score");
+    }
+
+    if (text.includes("情绪画像")) {
+      codes.push("missing_emotional_profile");
+    }
+
+    if (text.includes("主要意象")) {
+      codes.push("missing_symbols");
+    }
+
+    if (text.includes("自我思考问题")) {
+      codes.push("missing_reflection_questions");
+    }
+
+    if (text.includes("安全提醒")) {
+      codes.push("missing_safety_reminder");
+    }
+  });
+
+  return Array.from(new Set(codes));
+}
+
+function applyValidationIssueAnalytics(analyticsMeta, issues) {
+  if (!analyticsMeta) return;
+  const validationIssueCodes = getResultCardValidationIssueCodes(issues);
+  analyticsMeta.validationIssueCodes = validationIssueCodes;
+  analyticsMeta.finalErrorCode = validationIssueCodes[0] || "GENERATION_INCOMPLETE";
+}
+
+function getResultCardObjectSchemaLines(indent = "    ") {
+  return [
+    `${indent}"archetype": { "id": "seeker", "nameZh": "寻路者", "nameEn": "The Seeker", "summary": "本次梦境更接近某个稳定原型的说明", "evidence": ["梦中证据1", "梦中证据2"] },`,
+    `${indent}"coreInsight": "一句温和且不绝对的核心洞察",`,
+    `${indent}"dimensions": [`,
+    ...resultCardDimensionSchemaLines.map((line) => `${indent}${line}`),
+    `${indent}],`,
+    `${indent}"symbols": [{ "name": "意象", "generalPossibility": "可能性", "contextMeaning": "这次梦里的可能含义", "evidence": "梦中线索", "reflectionQuestion": "开放问题" }],`,
+    `${indent}"emotionalProfile": { "primary": "主要情绪", "secondary": ["伴随情绪"], "intensity": 0, "evidence": "梦中线索" },`,
+    `${indent}"reflectionQuestions": ["开放问题"],`,
+    `${indent}"safetyReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"`
+  ];
+}
+
+function getResultCardEnvelopeSchemaLines(indent = "    ") {
+  return [
+    `${indent}"dreamResultCard": {`,
+    ...getResultCardObjectSchemaLines(`${indent}  `),
+    `${indent}},`,
+    `${indent}"generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": false, "evidenceConfidence": "high" }`
+  ];
+}
+
 function buildSystemPrompt() {
   return [
     "你是一个温和的中文梦境自我探索助手。",
@@ -214,6 +350,7 @@ function buildUserPrompt(dreamText) {
     "反思问题必须有 3 个，并尽量包含梦里的具体人物、地点、物件或情节。",
     "温和行动必须是低压力、非治疗性质的小动作。",
     "四维评分必须有 0-100 分、简短解释和 rationale；rationale 要说明梦境内容依据，不要随机分数。",
+    ...getResultCardSchemaRules(),
     "评分说明：象征深度 0-25 直接事件较多，26-50 少量可解释意象，51-75 多个意象相互关联，76-100 意象、情绪和情节形成明显主题网络。",
     "评分说明：情绪强度 0-25 情绪轻微，26-50 情绪可辨认，51-75 情绪推动情节，76-100 情绪贯穿梦境并留下强烈醒后感。",
     "评分说明：自我觉察 0-25 只记录事件，26-50 能识别感受，51-75 能观察自己的反应，76-100 能把梦中反应与自我理解连接。",
@@ -231,16 +368,7 @@ function buildUserPrompt(dreamText) {
     '    "gentleAction": "一个很小、低压力、非治疗性质的行动",',
     '    "safetyReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"',
     "  },",
-    '  "dreamResultCard": {',
-    '    "archetype": { "id": "seeker", "nameZh": "寻路者", "nameEn": "The Seeker", "summary": "本次梦境更接近某个稳定原型的说明", "evidence": ["梦中证据1", "梦中证据2"] },',
-    '    "coreInsight": "一句温和且不绝对的核心洞察",',
-    '    "dimensions": [{ "id": "symbol_depth", "name": "象征深度", "score": 0, "summary": "简短说明", "rationale": ["梦境内容依据"] }],',
-    '    "symbols": [{ "name": "意象", "generalPossibility": "可能性", "contextMeaning": "这次梦里的可能含义", "evidence": "梦中线索", "reflectionQuestion": "开放问题" }],',
-    '    "emotionalProfile": { "primary": "主要情绪", "secondary": ["伴随情绪"], "intensity": 0, "evidence": "梦中线索" },',
-    '    "reflectionQuestions": ["开放问题"],',
-    '    "safetyReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"',
-    "  },",
-    '  "generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": false, "evidenceConfidence": "high" }',
+    ...getResultCardEnvelopeSchemaLines("  "),
     "}",
     "梦境内容：",
     dreamText
@@ -260,7 +388,8 @@ function buildResultCardRetryUserPrompt(dreamText, issues) {
   return [
     buildResultCardUserPrompt(dreamText),
     "",
-    "上一次梦境画像输出没有通过质量检查，请只返回完整梦境画像 JSON，并补齐以下缺失项：",
+    "上一次梦境画像输出没有通过质量检查，请只返回完整梦境画像 JSON 对象本身，并补齐以下缺失项：",
+    "必须返回整张完整 Dream Result Card，不能只返回缺失字段片段，不能返回 analysis 包裹层。",
     issues.map((issue) => `- ${issue}`).join("\n")
   ].join("\n");
 }
@@ -281,14 +410,16 @@ function formatValidatedQuickAnalysisForPrompt(analysis) {
 
 function buildQuickResultCardRepairUserPrompt(dreamText, analysis, issues) {
   return [
-    "请只修复并返回完整 Dream Result Card JSON，不要重新生成或改写 analysis。",
+    "请只返回完整梦境画像 JSON 对象本身；不要重新生成或改写 analysis。",
     "你必须使用下面已通过校验的快速解析作为同一上下文依据，保持画像与文字分析一致。",
     "如果梦境线索有限，仍然必须给出完整画像、四个 0-100 数字评分和 rationale；可以把 evidenceConfidence 设为 low 或 medium。",
     "不要生成假分数，不要把缺失分数补成 0；分数必须来自你根据本次梦境文本和已验证 analysis 的谨慎判断。",
+    ...getResultCardSchemaRules(),
+    "当前缺少哪些维度或字段会列在下方；你仍需返回整张完整 Dream Result Card，不能只返回缺失字段片段。",
+    "standalone result_card 必须返回卡片对象本身，不能返回 analysis 包裹层，也不要返回 dreamResultCard 包裹层。",
     "返回 JSON 结构必须严格符合：",
     "{",
-    '  "dreamResultCard": { ...完整 Dream Result Card... },',
-    '  "generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": false, "evidenceConfidence": "high" }',
+    ...getResultCardObjectSchemaLines("  "),
     "}",
     "上一次画像缺失项：",
     issues.map((issue) => `- ${issue}`).join("\n"),
@@ -302,14 +433,17 @@ function buildQuickResultCardRepairUserPrompt(dreamText, analysis, issues) {
 function buildLimitedEvidenceResultCardUserPrompt(dreamText, analysis, issues) {
   return [
     "请生成一个基于有限线索的最小完整 Dream Result Card。",
+    "请只返回完整梦境画像 JSON 对象本身。",
     "这是最后一次修复：即使梦境很短或信息较少，也必须返回完整画像，不能返回空字段、null 分数、暂不可用或暂不评分。",
     "所有分数必须是 0-100 的数字，并用 rationale 说明它只依据本次记录中呈现的线索。",
     "如果线索较少，请让解释更谨慎、分数更保守，并设置 limitedEvidence: true。",
     "不得编造梦里没有出现的人物、事件、情绪或现实背景。",
+    ...getResultCardSchemaRules(),
+    "仍需返回整张完整 Dream Result Card，不能只返回缺失字段片段。",
+    "standalone result_card 必须返回卡片对象本身，不能返回 analysis 包裹层，也不要返回 dreamResultCard 包裹层。",
     "返回 JSON 结构必须严格符合：",
     "{",
-    '  "dreamResultCard": { ...完整 Dream Result Card... },',
-    '  "generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": true, "evidenceConfidence": "low" }',
+    ...getResultCardObjectSchemaLines("  "),
     "}",
     "仍需补齐的问题：",
     issues.map((issue) => `- ${issue}`).join("\n"),
@@ -329,15 +463,11 @@ function buildResultCardUserPrompt(dreamText) {
     "必须结合梦境中的具体人物、场景、动作或情绪线索，不要输出通用模板。",
     "四个维度必须都有 0-100 分、简短解释和至少一条基于梦境内容的 rationale。",
     "梦境原型必须从稳定原型中选择，并提供至少两条 evidence。",
+    ...getResultCardSchemaRules(),
+    "standalone result_card 必须返回卡片对象本身，不能返回 analysis 包裹层，也不要返回 dreamResultCard 包裹层。",
     "返回 JSON 结构必须严格符合：",
     "{",
-    '  "archetype": { "id": "seeker", "nameZh": "寻路者", "nameEn": "The Seeker", "summary": "本次梦境更接近寻路者，也许与你正在寻找方向有关。", "evidence": ["梦中线索一", "梦中线索二"] },',
-    '  "coreInsight": "一句温和且不绝对的核心洞察",',
-    '  "dimensions": [{ "id": "symbol_depth", "name": "象征深度", "score": 0, "summary": "简短说明", "rationale": ["基于梦境内容的线索"] }],',
-    '  "symbols": [{ "name": "意象", "generalPossibility": "可能性", "contextMeaning": "这次梦里的可能含义", "evidence": "梦中线索", "reflectionQuestion": "开放问题" }],',
-    '  "emotionalProfile": { "primary": "主要情绪", "secondary": ["伴随情绪"], "intensity": 0, "evidence": "梦中线索" },',
-    '  "reflectionQuestions": ["开放问题"],',
-    '  "safetyReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"',
+    ...getResultCardObjectSchemaLines("  "),
     "}",
     "梦境内容：",
     dreamText
@@ -370,6 +500,7 @@ function buildGuidedFinalUserPrompt(dreamText, guidedAnswers) {
     "必须使用用户写下的回答；如果某个回答为空，可以轻轻跳过，不要编造现实背景。",
     "所有解读使用可能、也许、可以理解为、你可以思考等非绝对表达。",
     "不要诊断、治疗、预测未来、判断吉凶、算命，或给出固定人格结论。",
+    ...getResultCardSchemaRules(),
     "只返回严格合法 JSON，不要 Markdown，不要代码块。",
     "返回 JSON 结构必须严格符合：",
     "{",
@@ -383,15 +514,7 @@ function buildGuidedFinalUserPrompt(dreamText, guidedAnswers) {
     '    "smallAction": "今日小行动",',
     '    "gentleReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"',
     "  },",
-    '  "dreamResultCard": {',
-    '    "archetype": { "id": "seeker", "summary": "本次梦境更接近寻路者，也许与你正在寻找方向有关。" },',
-    '    "coreInsight": "一句温和且不绝对的核心洞察",',
-    '    "dimensions": [{ "id": "symbol_depth", "score": 0, "summary": "简短说明", "rationale": ["线索"] }],',
-    '    "symbols": [{ "name": "意象", "generalPossibility": "可能性", "contextMeaning": "这次梦里的可能含义", "evidence": "梦中线索", "reflectionQuestion": "开放问题" }],',
-    '    "emotionalProfile": { "primary": "主要情绪", "secondary": ["伴随情绪"], "intensity": 0, "evidence": "梦中线索" },',
-    '    "reflectionQuestions": ["开放问题"],',
-    '    "safetyReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"',
-    "  }",
+    ...getResultCardEnvelopeSchemaLines("  "),
     "}",
     "梦境内容：",
     dreamText,
@@ -734,7 +857,6 @@ function hasModelTextList(value, minLength = 1) {
 
 function validateRawResultCardCompleteness(card) {
   const issues = [];
-  const requiredDimensionIds = ["symbol_depth", "emotion_intensity", "self_awareness", "growth_signal"];
 
   if (!isPlainObject(card)) {
     return ["缺少完整 dreamResultCard。"];
@@ -753,7 +875,7 @@ function validateRawResultCardCompleteness(card) {
   if (!Array.isArray(card.dimensions)) {
     issues.push("四个梦境维度必须齐全。");
   } else {
-    requiredDimensionIds.forEach((id) => {
+    requiredResultCardDimensionIds.forEach((id) => {
       const dimension = card.dimensions.find((item) => isPlainObject(item) && item.id === id);
       if (!dimension || !hasModelScore(dimension.score) || !hasModelText(dimension.summary) || !hasModelTextList(dimension.rationale)) {
         issues.push(`${id} 缺少真实分数、summary 或 rationale。`);
@@ -912,7 +1034,6 @@ function validateQuickAnalysisQuality(analysis, dreamText) {
 function validateResultCardQuality(card, dreamText) {
   const issues = [];
   const dreamAnchors = getDreamAnchors(dreamText);
-  const requiredDimensionIds = ["symbol_depth", "emotion_intensity", "self_awareness", "growth_signal"];
 
   if (!card) {
     return ["缺少完整 dreamResultCard。"];
@@ -925,7 +1046,7 @@ function validateResultCardQuality(card, dreamText) {
   if (!Array.isArray(card.dimensions) || card.dimensions.length !== 4) {
     issues.push("四个梦境维度必须齐全。");
   } else {
-    requiredDimensionIds.forEach((id) => {
+    requiredResultCardDimensionIds.forEach((id) => {
       const dimension = card.dimensions.find((item) => item.id === id);
       if (!dimension || dimension.score === null || !Array.isArray(dimension.rationale) || dimension.rationale.length === 0) {
         issues.push(`${id} 缺少分数或 rationale。`);
@@ -1166,6 +1287,7 @@ async function recordAiUsageEvent(context) {
     upstreamUsage: context.analyticsMeta && context.analyticsMeta.upstreamUsage,
     generationStage: context.analyticsMeta && context.analyticsMeta.generationStage,
     stageDurations: context.analyticsMeta && context.analyticsMeta.stageDurations,
+    validationIssueCodes: context.analyticsMeta && context.analyticsMeta.validationIssueCodes,
     finalErrorCode: context.analyticsMeta && context.analyticsMeta.finalErrorCode,
     env: analyticsEnv
   });
@@ -1367,7 +1489,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
             promptVersion: quickPromptVersion,
             qualityStatus: "incomplete"
           };
-          analyticsMeta.finalErrorCode = "GENERATION_INCOMPLETE";
+          applyValidationIssueAnalytics(analyticsMeta, result.issues);
           incompleteError.analyticsMeta = analyticsMeta;
           throw incompleteError;
         }
@@ -1448,7 +1570,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
           promptVersion: quickPromptVersion,
           qualityStatus: "incomplete"
         };
-        analyticsMeta.finalErrorCode = "GENERATION_INCOMPLETE";
+        applyValidationIssueAnalytics(analyticsMeta, repairedCard.issues);
         incompleteError.analyticsMeta = analyticsMeta;
         throw incompleteError;
       }
@@ -1487,7 +1609,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
           promptVersion: quickPromptVersion,
           qualityStatus: "incomplete"
         };
-        analyticsMeta.finalErrorCode = "GENERATION_INCOMPLETE";
+        applyValidationIssueAnalytics(analyticsMeta, result.issues);
         incompleteError.analyticsMeta = analyticsMeta;
         throw incompleteError;
       }
@@ -1867,7 +1989,12 @@ module.exports = {
   buildSystemPrompt,
   buildGuidedFinalUserPrompt,
   buildGuidedQuestionsUserPrompt,
+  buildLimitedEvidenceResultCardUserPrompt,
+  buildQuickResultCardRepairUserPrompt,
+  buildQuickRetryUserPrompt,
+  buildResultCardRetryUserPrompt,
   buildResultCardUserPrompt,
+  buildUserPrompt,
   normalizeGuidedQuestionsOutput,
   normalizeQuickAnalysisOutput,
   normalizeQuickCombinedOutput,
