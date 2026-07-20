@@ -118,38 +118,48 @@ test("visual refresh keeps existing page hooks available for product behavior", 
   ].forEach((hook) => assert.match(html, new RegExp(hook)));
 });
 
-test("sleep quality slider uses a restrained cloud thumb with accessible interaction states", () => {
+test("sleep quality slider renders a real visible cloud element over the native range", () => {
+  const html = readSource("src/index.html");
   const css = readSource("src/style.css");
+  const sliderShellRule = cssRuleBlock(css, ".sleep-quality-slider-shell");
+  const cloudRule = cssRuleBlock(css, ".sleep-quality-cloud-visual");
   const baseRangeRule = cssRuleBlock(css, ".sleep-quality-range");
   const webkitThumbRule = cssRuleBlock(css, ".sleep-quality-range::-webkit-slider-thumb");
   const mozThumbRule = cssRuleBlock(css, ".sleep-quality-range::-moz-range-thumb");
 
-  assert.match(baseRangeRule, /--sleep-quality-cloud-thumb:/);
-  assert.match(baseRangeRule, /--sleep-quality-thumb-width:\s*40px/);
-  assert.match(baseRangeRule, /--sleep-quality-thumb-height:\s*28px/);
-  assert.match(baseRangeRule, /--sleep-quality-cloud-thumb-style:\s*dream-guide-slider-thumb-v2/);
+  assert.match(html, /class="sleep-quality-slider-shell"/);
+  assert.match(html, /class="sleep-quality-cloud-visual"/);
+  assert.match(html, /aria-hidden="true"/);
+  assert.match(html, /<svg[^>]+viewBox="0 0 56 36"/);
+
   assert.match(css, /cloud-shaped sleep quality slider thumb/);
-  assert.match(baseRangeRule, /viewBox='0 0 48 34'/);
-  assert.match(baseRangeRule, /stroke='%235f6549'/);
-  assert.match(webkitThumbRule, /background:\s*var\(--sleep-quality-cloud-thumb\) center \/ 100% 100% no-repeat/);
-  assert.match(mozThumbRule, /background:\s*var\(--sleep-quality-cloud-thumb\) center \/ 100% 100% no-repeat/);
+  assert.match(sliderShellRule, /position:\s*relative/);
+  assert.match(sliderShellRule, /--sleep-quality-cloud-left:\s*clamp\(/);
+  assert.match(cloudRule, /position:\s*absolute/);
+  assert.match(cloudRule, /pointer-events:\s*none/);
+  assert.match(cloudRule, /left:\s*var\(--sleep-quality-cloud-left\)/);
+  assert.match(cloudRule, /width:\s*var\(--sleep-quality-thumb-width\)/);
+  assert.match(cloudRule, /transform:\s*translate\(-50%,\s*-50%\)/);
+  assert.match(webkitThumbRule, /background:\s*transparent/);
+  assert.match(webkitThumbRule, /box-shadow:\s*none/);
+  assert.match(webkitThumbRule, /opacity:\s*0/);
+  assert.match(mozThumbRule, /background:\s*transparent/);
+  assert.match(mozThumbRule, /box-shadow:\s*none/);
+  assert.match(mozThumbRule, /opacity:\s*0/);
 
   assert.match(css, /rgba\(95,\s*101,\s*73,\s*0\.72\) 0 var\(--sleep-quality-progress\)/);
   assert.match(css, /rgba\(229,\s*216,\s*192,\s*0\.72\) var\(--sleep-quality-progress\) 100%/);
 
   const feedbackRules = [
-    ".sleep-quality-range:hover::-webkit-slider-thumb",
-    ".sleep-quality-range:focus-visible::-webkit-slider-thumb",
-    ".sleep-quality-range:active::-webkit-slider-thumb",
-    ".sleep-quality-range:hover::-moz-range-thumb",
-    ".sleep-quality-range:focus-visible::-moz-range-thumb",
-    ".sleep-quality-range:active::-moz-range-thumb"
+    ".sleep-quality-slider-shell:hover .sleep-quality-cloud-visual",
+    ".sleep-quality-slider-shell:focus-within .sleep-quality-cloud-visual",
+    ".sleep-quality-slider-shell:active .sleep-quality-cloud-visual"
   ];
 
   feedbackRules.forEach((selector) => {
     const block = cssRuleBlock(css, selector);
-    assert.match(block, /transform:\s*scale\(1\.0[458]\)/);
-    assert.match(block, /box-shadow:/);
+    assert.match(block, /scale\(1\.0[458]\)/);
+    assert.match(block, /filter:/);
   });
 
   const coarsePointerBlock = cssMediaBlock(css, "@media (pointer: coarse)");

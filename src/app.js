@@ -962,6 +962,26 @@ function formatSleepQualityDisplay(state) {
   return `${state.score}% · ${state.label}`;
 }
 
+function getSleepQualitySliderShell(range) {
+  if (!range) {
+    return null;
+  }
+
+  if (typeof range.closest === "function") {
+    return range.closest(".sleep-quality-slider-shell") || range;
+  }
+
+  if (
+    range.parentElement &&
+    range.parentElement.classList &&
+    range.parentElement.classList.contains("sleep-quality-slider-shell")
+  ) {
+    return range.parentElement;
+  }
+
+  return range;
+}
+
 function setSleepQualityRangeProgress(range, state) {
   if (!range || !sleepQuality || typeof sleepQuality.snapSleepQualityScore !== "function") {
     return;
@@ -970,12 +990,75 @@ function setSleepQualityRangeProgress(range, state) {
   const displayScore = state && typeof state.score === "number" ? state.score : 50;
   const snappedScore = sleepQuality.snapSleepQualityScore(displayScore);
   const progress = snappedScore === null ? 50 : snappedScore;
+  const shell = getSleepQualitySliderShell(range);
 
   range.value = String(progress);
-  if (range.style && typeof range.style.setProperty === "function") {
-    range.style.setProperty("--sleep-quality-progress", `${progress}%`);
+  [shell, range].forEach((target) => {
+    if (target && target.style && typeof target.style.setProperty === "function") {
+      target.style.setProperty("--sleep-quality-progress", `${progress}%`);
+      target.style.setProperty("--sleep-quality-cloud-position", `${progress}%`);
+    }
+  });
+
+  if (shell && shell.classList) {
+    shell.classList.toggle("is-empty", !(state && typeof state.score === "number"));
   }
   range.classList.toggle("is-empty", !(state && typeof state.score === "number"));
+}
+
+function createSleepQualitySvgElement(tagName) {
+  if (document.createElementNS) {
+    return document.createElementNS("http://www.w3.org/2000/svg", tagName);
+  }
+
+  return document.createElement(tagName);
+}
+
+function createSleepQualityCloudVisual() {
+  const cloud = document.createElement("span");
+  const svg = createSleepQualitySvgElement("svg");
+  const fill = createSleepQualitySvgElement("path");
+  const line = createSleepQualitySvgElement("path");
+  const shadow = createSleepQualitySvgElement("path");
+  const moon = createSleepQualitySvgElement("path");
+  const star = createSleepQualitySvgElement("circle");
+  const cloudPath = "M15.2 27.4c-5.8 0-10.4-3.7-10.4-8.5 0-4.7 3.8-8.2 8.6-8.2.9 0 1.8.1 2.7.4C18.1 6.4 22.8 3.8 28 3.8c6.4 0 11.5 4 13 9.7.7-.2 1.4-.3 2.1-.3 4.2 0 7.5 3.1 7.5 7.1 0 4.2-3.7 7.1-8.6 7.1H15.2Z";
+
+  cloud.className = "sleep-quality-cloud-visual";
+  if (cloud.classList && typeof cloud.classList.add === "function") {
+    cloud.classList.add("sleep-quality-cloud-visual");
+  }
+  cloud.setAttribute("aria-hidden", "true");
+  svg.setAttribute("viewBox", "0 0 56 36");
+  svg.setAttribute("focusable", "false");
+  fill.setAttribute("class", "sleep-cloud-fill");
+  fill.setAttribute("d", cloudPath);
+  line.setAttribute("class", "sleep-cloud-line");
+  line.setAttribute("d", cloudPath);
+  shadow.setAttribute("class", "sleep-cloud-shadow");
+  shadow.setAttribute("d", "M16.5 24.8h20.9");
+  moon.setAttribute("class", "sleep-cloud-moon");
+  moon.setAttribute("d", "M38.3 11.8c-2 1.1-2 4.3.3 5.2-2.2.8-2.3 4-.3 5.2-3.3-.4-5.8-2.5-5.8-5.2 0-2.8 2.5-4.9 5.8-5.2Z");
+  star.setAttribute("class", "sleep-cloud-star");
+  star.setAttribute("cx", "44.4");
+  star.setAttribute("cy", "12.6");
+  star.setAttribute("r", "1.2");
+  svg.append(fill, line, shadow, moon, star);
+  cloud.append(svg);
+
+  return cloud;
+}
+
+function createSleepQualitySliderShell(range) {
+  const shell = document.createElement("div");
+
+  shell.className = "sleep-quality-slider-shell";
+  if (shell.classList && typeof shell.classList.add === "function") {
+    shell.classList.add("sleep-quality-slider-shell");
+  }
+  shell.append(range, createSleepQualityCloudVisual());
+
+  return shell;
 }
 
 function renderSleepQualityControl(range, display, state) {
@@ -1354,6 +1437,7 @@ function createSleepQualityDetailSection(record) {
   range.max = "100";
   range.step = "5";
   range.value = "50";
+  const sliderShell = createSleepQualitySliderShell(range);
   rangeDisplay.className = "sleep-quality-value";
   rangeDisplay.setAttribute("aria-live", "polite");
   actions.className = "detail-sleep-quality-actions";
@@ -1442,7 +1526,7 @@ function createSleepQualityDetailSection(record) {
   renderDisplay();
   renderEditor();
   actions.append(saveButton, clearButton);
-  editor.append(label, range, rangeDisplay, actions);
+  editor.append(label, sliderShell, rangeDisplay, actions);
   section.append(title, copy, display, editButton, editor, status);
 
   return section;
