@@ -115,6 +115,9 @@ async function withServer(run, options = {}) {
   if (options.requestTimeoutMs !== undefined) {
     app.locals.aiRequestTimeoutMs = options.requestTimeoutMs;
   }
+  if (options.aiTimeoutConfig) {
+    app.locals.aiTimeoutConfig = options.aiTimeoutConfig;
+  }
   if (Object.prototype.hasOwnProperty.call(options, "analyticsClient")) {
     app.locals.analyticsClient = options.analyticsClient;
   }
@@ -151,6 +154,7 @@ async function withServer(run, options = {}) {
     delete app.locals.aiAccessControl;
     delete app.locals.aiAuthResolver;
     delete app.locals.aiRequestTimeoutMs;
+    delete app.locals.aiTimeoutConfig;
     delete app.locals.analyticsClient;
     delete app.locals.analyticsEnv;
     delete app.locals.adminEnv;
@@ -169,6 +173,10 @@ async function postDreamAnalysis(baseUrl, body, options = {}) {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     body: JSON.stringify(body)
   });
+}
+
+function wait(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 async function deleteAccount(baseUrl, body, options = {}) {
@@ -703,7 +711,7 @@ test("records result-card quality retry metadata when the retry attempt times ou
       assert.equal(inserted.length, 1);
       assert.equal(inserted[0].analysis_type, "result_card");
       assert.equal(inserted[0].outcome, "timeout");
-      assert.equal(inserted[0].error_code, "UPSTREAM_TIMEOUT");
+      assert.equal(inserted[0].error_code, "REPAIR_TIMEOUT");
       assert.equal(inserted[0].quality_retry_count, 1);
       assert.equal(inserted[0].prompt_tokens, 11);
       assert.equal(inserted[0].completion_tokens, 22);
@@ -1212,6 +1220,89 @@ test("repairs an invalid quick result card before returning success", { concurre
   }
 });
 
+test("repair stage receives its own timeout after a slow initial quick response", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  let repairWasAborted = false;
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+
+    if (upstreamCalls === 1) {
+      await wait(15);
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                analysis: createQuickAnalysisPayload(),
+                dreamResultCard: {}
+              })
+            }
+          }]
+        })
+      };
+    }
+
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        repairWasAborted = true;
+        const error = new Error("repair aborted");
+        error.name = "AbortError";
+        reject(error);
+      });
+      setTimeout(() => {
+        resolve({
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: JSON.stringify({
+                  dreamResultCard: createResultCardPayload(),
+                  generationMeta: {
+                    source: "ai_generated",
+                    promptVersion: "quick-v2",
+                    qualityStatus: "passed",
+                    limitedEvidence: false,
+                    evidenceConfidence: "high"
+                  }
+                })
+              }
+            }]
+          })
+        });
+      }, 10);
+    });
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.dreamResultCardStatus, "ai_generated");
+      assert.equal(upstreamCalls, 2);
+      assert.equal(repairWasAborted, false);
+    }, {
+      requestTimeoutMs: 20,
+      aiTimeoutConfig: {
+        initialAttemptMs: 20,
+        repairAttemptMs: 30,
+        limitedAttemptMs: 25,
+        totalRequestMs: 100
+      }
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
 test("uses a limited-evidence final card when quick card repair is still incomplete", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   let upstreamCalls = 0;
@@ -1270,6 +1361,174 @@ test("uses a limited-evidence final card when quick card repair is still incompl
         assert.ok(dimension.rationale.length > 0);
       });
       assert.equal(upstreamCalls, 3);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("overall quick analysis timeout aborts the active stage and skips later stages", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  let repairWasAborted = false;
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+
+    if (upstreamCalls === 1) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                analysis: createQuickAnalysisPayload(),
+                dreamResultCard: {}
+              })
+            }
+          }]
+        })
+      };
+    }
+
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        repairWasAborted = true;
+        const error = new Error("overall timeout");
+        error.name = "AbortError";
+        reject(error);
+      });
+    });
+  };
+
+  try {
+    const accessControl = createAiAccessControl({
+      guestDailyLimit: 1,
+      guestRequestsPerMinute: 100,
+      maxConcurrentPerPrincipal: 1
+    });
+
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 504);
+      assert.equal(payload.error.code, "UPSTREAM_TIMEOUT");
+      assert.equal(payload.analysis, undefined);
+      assert.equal(payload.dreamResultCard, undefined);
+      assert.equal(payload.usage.remaining, 1);
+      assert.equal(upstreamCalls, 2);
+      assert.equal(repairWasAborted, true);
+    }, {
+      accessControl,
+      aiTimeoutConfig: {
+        initialAttemptMs: 50,
+        repairAttemptMs: 50,
+        limitedAttemptMs: 50,
+        totalRequestMs: 10
+      }
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("quick full retry timeout records retry count and internal repair timeout code", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const inserted = [];
+  let upstreamCalls = 0;
+  let repairWasAborted = false;
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+
+    if (upstreamCalls === 1) {
+      return {
+        ok: true,
+        json: async () => ({
+          usage: { prompt_tokens: 10, completion_tokens: 10, total_tokens: 20 },
+          choices: [{
+            message: {
+              content: JSON.stringify({
+                analysis: {
+                  dreamSummary: "太短。",
+                  coreTheme: "太短。",
+                  coreInterpretation: "太短。",
+                  evidence: [],
+                  emotionalReading: {},
+                  symbolReading: [],
+                  reflectionQuestions: [],
+                  gentleAction: "",
+                  safetyReminder: ""
+                },
+                dreamResultCard: {}
+              })
+            }
+          }]
+        })
+      };
+    }
+
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        repairWasAborted = true;
+        const error = new Error("repair timeout");
+        error.name = "AbortError";
+        reject(error);
+      });
+    });
+  };
+
+  try {
+    const accessControl = createAiAccessControl({
+      guestDailyLimit: 1,
+      guestRequestsPerMinute: 100,
+      maxConcurrentPerPrincipal: 1
+    });
+
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 504);
+      assert.equal(payload.error.code, "UPSTREAM_TIMEOUT");
+      assert.equal(payload.analysis, undefined);
+      assert.equal(payload.dreamResultCard, undefined);
+      assert.equal(payload.usage.remaining, 1);
+      assert.equal(upstreamCalls, 2);
+      assert.equal(repairWasAborted, true);
+      assert.equal(inserted.length, 1);
+      assert.equal(inserted[0].outcome, "timeout");
+      assert.equal(inserted[0].error_code, "REPAIR_TIMEOUT");
+      assert.equal(inserted[0].quality_retry_count, 1);
+      assert.equal(inserted[0].total_tokens, 20);
+      assert.doesNotMatch(JSON.stringify(inserted[0]), /学校走廊|发着光|Bearer|test-key/);
+    }, {
+      accessControl,
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true,
+      aiTimeoutConfig: {
+        initialAttemptMs: 50,
+        repairAttemptMs: 10,
+        limitedAttemptMs: 50,
+        totalRequestMs: 100
+      }
     });
   } finally {
     global.fetch = nativeFetch;

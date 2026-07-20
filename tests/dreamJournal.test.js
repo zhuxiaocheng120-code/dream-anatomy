@@ -1182,11 +1182,15 @@ test("quick decode shows an incomplete generation message without mock fallback"
   });
 
   harness.quickDream.value = "我梦见一条黑狗被困住。";
+  harness.quickSleepRange.value = "65";
+  harness.quickSleepRange.trigger("input");
   await harness.quickForm.trigger("submit");
 
   assert.equal(harness.quickResult.hidden, true);
-  assert.match(harness.quickFormStatus.textContent, /这次解析没有完整生成，已保留你的梦境内容。请稍后重新提交。/);
+  assert.match(harness.quickFormStatus.textContent, /梦境画像结构连续不完整，已保留你的梦境内容。请稍后重新提交。/);
   assert.doesNotMatch(harness.quickFormStatus.textContent, /本地示例结果/);
+  assert.equal(harness.quickDream.value, "我梦见一条黑狗被困住。");
+  assert.match(harness.quickSleepDisplay.textContent, /65% · 不错/);
   assert.equal(harness.getSavedRecords().length, 0);
 });
 
@@ -1276,7 +1280,7 @@ test("quick decode rejects successful payloads that do not include a complete re
   await harness.quickForm.trigger("submit");
 
   assert.equal(harness.quickResult.hidden, true);
-  assert.match(harness.quickFormStatus.textContent, /这次解析没有完整生成，已保留你的梦境内容。请稍后重新提交。/);
+  assert.match(harness.quickFormStatus.textContent, /梦境画像结构连续不完整，已保留你的梦境内容。请稍后重新提交。/);
   assert.equal(harness.quickDream.value, "我在学校走廊里一直找不到教室。");
   assert.equal(harness.getSavedRecords().length, 0);
 });

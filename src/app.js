@@ -556,7 +556,7 @@ function getAccessControlledErrorMessage(error) {
 
 function getQuickAnalysisFailureMessage(error) {
   if (error && error.code === "GENERATION_INCOMPLETE") {
-    return "这次解析没有完整生成，已保留你的梦境内容。请稍后重新提交。";
+    return "梦境画像结构连续不完整，已保留你的梦境内容。请稍后重新提交。";
   }
 
   if (error && error.code === "UPSTREAM_TIMEOUT") {
