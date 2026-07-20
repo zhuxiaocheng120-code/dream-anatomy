@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-本轮实现微信小程序原生基础工程与游客版核心闭环。小程序位于 `miniprogram/`，使用微信原生 JavaScript、WXML 和 WXSS，不使用 Taro、uni-app、React、Vue 或新的路由框架。
+小程序位于 `miniprogram/`，使用微信原生 JavaScript、WXML 和 WXSS，不使用 Taro、uni-app、React、Vue 或新的路由框架。当前已经在游客核心闭环上新增微信身份桥接，但不做云同步。
 
 游客版核心闭环：
 
@@ -25,6 +25,20 @@
 
 小程序不调用 DeepSeek，不读取 DeepSeek API key，也不保存完整 AI 服务响应日志。后端继续负责 AI 接口鉴权、访客额度、限流、超时和安全错误结构。
 
+## 微信身份桥接
+
+微信身份桥接只用于建立 Dream Anatomy 小程序登录态：
+
+```text
+wx.login()
+→ Render POST /api/v1/wechat-auth/login
+→ 微信服务端验证 code
+→ wechat_accounts / wechat_sessions
+→ 小程序保存不透明 Session Token
+```
+
+它不伪造 Supabase Session，不创建合成邮箱用户，不把微信 Session Token 当作 Supabase access token，也不做云同步。当前返回的身份状态始终包含 `cloudSyncAvailable: false`。
+
 ## 本机存储
 
 游客梦境只保存在当前微信本机，存储 key 为：
@@ -41,8 +55,8 @@ dream_anatomy_guest_records_v1
 
 ## 功能边界
 
-- 不接入微信登录。
-- 不调用 `wx.login` 或 `code2Session`。
+- 不做云同步。
+- 不调用 `code2Session`。
 - 不保存 openid、unionid、session_key 或自定义 JWT。
 - 不接入 Supabase 登录或云同步。
 - 不接入微信支付、会员或数据库。

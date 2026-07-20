@@ -10,3 +10,18 @@
 .profile-card {
   border-left: 4rpx solid rgba(95, 101, 73, 0.24);
 }
+
+.profile-action-card {
+  display: grid;
+  gap: 18rpx;
+}
+
+.secondary-button {
+  background: rgba(95, 101, 73, 0.08);
+  color: #4b4a3d;
+  border-color: rgba(95, 101, 73, 0.22);
+}
+
+.profile-status {
+  min-height: 34rpx;
+}

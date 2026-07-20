@@ -21,6 +21,7 @@ const {
   normalizeProductEventBatch,
   recordProductEventsSafely
 } = require("./server/productAnalytics");
+const { createWechatAuthService } = require("./server/wechatAuth");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -113,6 +114,21 @@ function getAccountDeletionService() {
     env: getAnalyticsEnv(),
     getAdminClient: () => createAdminSupabaseClient()
   });
+}
+
+function getWechatAuthService() {
+  if (app.locals.wechatAuthService) {
+    return app.locals.wechatAuthService;
+  }
+
+  if (!app.locals.defaultWechatAuthService) {
+    app.locals.defaultWechatAuthService = createWechatAuthService({
+      env: process.env,
+      getAdminClient: () => app.locals.wechatAdminClient || createAdminSupabaseClient()
+    });
+  }
+
+  return app.locals.defaultWechatAuthService;
 }
 
 function isDeepGuidanceEnabled() {
@@ -1616,8 +1632,56 @@ async function handleAccountDeletionRequest(request, response) {
   }
 }
 
+async function handleWechatLoginRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getWechatAuthService().login(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "微信身份服务暂时不可用，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleWechatSessionRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getWechatAuthService().getSession(request);
+    response.json({
+      account: result.account,
+      expiresAt: result.expiresAt
+    });
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "微信身份服务暂时不可用，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleWechatLogoutRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getWechatAuthService().logout(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "微信身份服务暂时不可用，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
 app.post("/api/v1/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/dream-analysis", handleDreamAnalysisRequest);
+app.post("/api/v1/wechat-auth/login", handleWechatLoginRequest);
+app.get("/api/v1/wechat-auth/session", handleWechatSessionRequest);
+app.post("/api/v1/wechat-auth/logout", handleWechatLogoutRequest);
 app.post("/api/v1/product-events", handleProductEventsRequest);
 app.delete("/api/v1/product-analytics", handleProductAnalyticsDeletionRequest);
 app.get("/api/v1/admin/analytics/summary", handleAdminSummaryRequest);

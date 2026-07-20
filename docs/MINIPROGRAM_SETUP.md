@@ -1,6 +1,6 @@
 # 微信小程序本地设置
 
-本目录提供 **析梦 Dream Anatomy** 的原生微信小程序游客版基础工程。当前版本只做游客核心闭环：快速解析、梦境画像、本机保存、本机梦境日记、详情、删除、导出和清除本机数据。
+本目录提供 **析梦 Dream Anatomy** 的原生微信小程序基础工程。当前版本支持游客核心闭环，并新增安全的微信身份桥接：快速解析、梦境画像、本机保存、本机梦境日记、详情、删除、导出、清除本机数据，以及“我的”页面里主动点击“使用微信身份继续”。
 
 小程序视觉语言已同步 Web 端的旧纸、私人档案、心理工作室和手稿记录风格。配色、字体层级、原创装饰资产和手动视觉验收清单见 [docs/MINIPROGRAM_VISUAL_LANGUAGE.md](MINIPROGRAM_VISUAL_LANGUAGE.md)。
 
@@ -44,6 +44,10 @@ API_BASE_URL = "https://dream-anatomy.onrender.com"
 
 - 不要在小程序中配置 AppSecret。
 - 不要把 `DEEPSEEK_API_KEY`、`SUPABASE_SERVICE_ROLE_KEY`、`ANALYTICS_HASH_SECRET` 或任何 token 放入小程序文件。
-- 不调用 `wx.login`、`code2Session`、微信支付、Supabase Auth 或云同步。
-- 游客请求不发送认证头。
+- 微信身份使用 Render 后端桥接；`WECHAT_MINIPROGRAM_APP_ID`、`WECHAT_MINIPROGRAM_APP_SECRET`、`WECHAT_IDENTITY_HASH_SECRET` 和 `WECHAT_SESSION_HASH_SECRET` 只在 Render 配置。
+- 小程序只在用户点击“使用微信身份继续”时调用 `wx.login`，不会在启动时反复弹出登录。
+- 不在小程序中调用 `code2Session`、微信支付、Supabase Auth 或云同步。
+- 快速解析请求不发送微信身份 Authorization header，当前仍按访客 AI 额度运行。
 - 深度引导入口保持可见，但显示“正在开发中”，不能触发 AI 请求。
+
+微信身份桥接的部署步骤见 [docs/WECHAT_AUTH_SETUP.md](WECHAT_AUTH_SETUP.md)。

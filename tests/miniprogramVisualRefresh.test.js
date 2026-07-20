@@ -67,16 +67,20 @@ test("each mini program page has restrained page-level visual identity", () => {
   });
 });
 
-test("mini program visual refresh keeps guest-only and asset boundaries", () => {
+test("mini program visual refresh keeps local asset and WeChat auth boundaries", () => {
   const files = listFiles("miniprogram", (file) => /\.(js|json|wxml|wxss)$/.test(file));
   const source = files.map((file) => `${file}\n${read(file)}`).join("\n");
+  const authAdapter = read("miniprogram/services/authAdapter.js");
+  const quickApiClient = read("miniprogram/services/apiClient.js");
 
   assert.doesNotMatch(source, /https?:\/\/[^"']+\.(?:png|jpe?g|webp|gif|svg|ttf|otf|woff2?)/i);
   assert.doesNotMatch(source, /base64,[A-Za-z0-9+/=]{200,}/);
   assert.doesNotMatch(source, /taro|uni-app|react|vue/i);
-  assert.doesNotMatch(source, /DEEPSEEK_API_KEY|SUPABASE_SERVICE_ROLE_KEY|ANALYTICS_HASH_SECRET|AppSecret/i);
-  assert.doesNotMatch(source, /wx\.login|code2Session|openid|unionid|session_key/i);
-  assert.doesNotMatch(source, /Authorization\s*:|Bearer\s+/i);
+  assert.doesNotMatch(source, /DEEPSEEK_API_KEY|SUPABASE_SERVICE_ROLE_KEY|ANALYTICS_HASH_SECRET|WECHAT_MINIPROGRAM_APP_SECRET|WECHAT_IDENTITY_HASH_SECRET|WECHAT_SESSION_HASH_SECRET|AppSecret/i);
+  assert.doesNotMatch(source, /code2Session|openid|unionid|session_key/i);
+  assert.match(authAdapter, /wxRef\.login|wx\.login/);
+  assert.match(authAdapter, /Authorization|Bearer/);
+  assert.doesNotMatch(quickApiClient, /Authorization\s*:|Bearer\s+/i);
   assert.doesNotMatch(source, /\/chat\/completions|api\.deepseek\.com/i);
   assert.doesNotMatch(source, /产品行为统计|product-events|trackProductEvent/i);
 });

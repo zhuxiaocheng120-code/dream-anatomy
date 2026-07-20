@@ -2,14 +2,36 @@
   <view class="page-hero profile-hero">
     <view class="page-hero-content">
       <view class="eyebrow">Dream Anatomy</view>
-      <view class="title">游客模式</view>
-      <view class="subtitle">当前版本不接入微信登录，也不做云端同步。梦境只保存在本机。</view>
+      <view class="title" wx:if="{{!authState.authenticated}}">游客模式</view>
+      <view class="title" wx:else>微信身份已建立</view>
+      <view class="subtitle" wx:if="{{!authState.authenticated}}">当前梦境仅保存在本机。你也可以使用微信身份继续，为后续云端同步做准备。</view>
+      <view class="subtitle" wx:else>当前身份可以用于后续云端同步。现阶段梦境仍只保存在本机。</view>
     </view>
-    <view class="identity-seal" aria-hidden="true" data-visual="profile-seal">本机游客档案</view>
+    <view class="identity-seal" aria-hidden="true" data-visual="profile-seal">{{authState.authenticated ? '微信身份档案' : '本机游客档案'}}</view>
   </view>
   <view class="section card profile-card">
-    <view>账户状态：游客</view>
+    <view>账户状态：{{authState.authenticated ? '微信身份已建立' : '游客'}}</view>
     <view class="small muted">云同步：暂未开启</view>
+    <view class="small muted" wx:if="{{authState.authenticated && expiresAt}}">登录状态有效期：{{expiresAt}}</view>
+    <view class="small muted" wx:if="{{authState.authenticated && !expiresAt}}">登录状态正常</view>
+    <view class="small muted">不会显示或保存微信头像、昵称、手机号或内部身份标识。</view>
+  </view>
+  <view class="section card profile-action-card">
+    <button
+      wx:if="{{!authState.authenticated}}"
+      class="button"
+      loading="{{isBusy}}"
+      disabled="{{isBusy}}"
+      bindtap="handleWechatLogin"
+    >使用微信身份继续</button>
+    <button
+      wx:else
+      class="button secondary-button"
+      loading="{{isBusy}}"
+      disabled="{{isBusy}}"
+      bindtap="handleWechatLogout"
+    >退出当前身份</button>
+    <view class="small muted profile-status" wx:if="{{statusMessage}}">{{statusMessage}}</view>
   </view>
   <button class="button section" bindtap="goPrivacy">隐私与数据</button>
 </view>

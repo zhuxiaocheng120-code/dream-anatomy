@@ -133,6 +133,12 @@ async function withServer(run, options = {}) {
   if (options.accountDeletionService) {
     app.locals.accountDeletionService = options.accountDeletionService;
   }
+  if (options.wechatAuthService) {
+    app.locals.wechatAuthService = options.wechatAuthService;
+  }
+  if (options.wechatAdminClient) {
+    app.locals.wechatAdminClient = options.wechatAdminClient;
+  }
 
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
@@ -151,6 +157,9 @@ async function withServer(run, options = {}) {
     delete app.locals.analyticsLogger;
     delete app.locals.awaitAnalyticsWrites;
     delete app.locals.accountDeletionService;
+    delete app.locals.wechatAuthService;
+    delete app.locals.wechatAdminClient;
+    delete app.locals.defaultWechatAuthService;
   }
 }
 
@@ -168,6 +177,80 @@ async function deleteAccount(baseUrl, body, options = {}) {
     headers: { "Content-Type": "application/json", ...(options.headers || {}) },
     body: JSON.stringify(body)
   });
+}
+
+async function postWechatLogin(baseUrl, body, options = {}) {
+  return fetch(`${baseUrl}/api/v1/wechat-auth/login`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    body: JSON.stringify(body)
+  });
+}
+
+async function getWechatSession(baseUrl, options = {}) {
+  return fetch(`${baseUrl}/api/v1/wechat-auth/session`, {
+    method: "GET",
+    headers: { ...(options.headers || {}) }
+  });
+}
+
+async function postWechatLogout(baseUrl, options = {}) {
+  return fetch(`${baseUrl}/api/v1/wechat-auth/logout`, {
+    method: "POST",
+    headers: { ...(options.headers || {}) }
+  });
+}
+
+function createRouteWechatAdminClient() {
+  const state = {
+    wechat_accounts: [],
+    wechat_sessions: []
+  };
+
+  return {
+    state,
+    from(tableName) {
+      const filters = [];
+      const queryApi = {
+        select() {
+          return queryApi;
+        },
+        insert(value) {
+          const row = { ...value, id: value.id || `${tableName}-${state[tableName].length + 1}` };
+          state[tableName].push(row);
+          return {
+            select() {
+              return {
+                single: async () => ({ data: row, error: null })
+              };
+            }
+          };
+        },
+        update(values) {
+          return {
+            eq(column, value) {
+              filters.push({ column, value });
+              return this;
+            },
+            async then(resolve) {
+              const rows = state[tableName].filter((row) => filters.every((filter) => row[filter.column] === filter.value));
+              rows.forEach((row) => Object.assign(row, values));
+              return resolve({ data: rows, error: null });
+            }
+          };
+        },
+        eq(column, value) {
+          filters.push({ column, value });
+          return queryApi;
+        },
+        maybeSingle: async () => {
+          const rows = state[tableName].filter((row) => filters.every((filter) => row[filter.column] === filter.value));
+          return { data: rows[0] || null, error: null };
+        }
+      };
+      return queryApi;
+    }
+  };
 }
 
 test("runtime environment response is not cached", { concurrency: false }, async () => {
@@ -228,6 +311,166 @@ test("account deletion route formats safe stable errors", { concurrency: false }
       }
     }
   });
+});
+
+test("wechat auth routes return no-store safe success payloads", { concurrency: false }, async () => {
+  const calls = [];
+  await withServer(async (baseUrl) => {
+    const loginResponse = await postWechatLogin(baseUrl, {
+      code: "code-1",
+      openid: "forged-openid",
+      accountId: "forged-account"
+    });
+    const loginPayload = await loginResponse.json();
+
+    assert.equal(loginResponse.status, 200);
+    assert.equal(loginResponse.headers.get("cache-control"), "no-store");
+    assert.equal(loginPayload.sessionToken, "opaque-session-token");
+    assert.equal(loginPayload.expiresAt, "2026-07-27T00:00:00.000Z");
+    assert.deepEqual(loginPayload.account, {
+      mode: "wechat",
+      authenticated: true,
+      cloudSyncAvailable: false
+    });
+    assert.doesNotMatch(JSON.stringify(loginPayload), /openid|unionid|session_key|account-1|service_role/i);
+
+    const sessionResponse = await getWechatSession(baseUrl, {
+      headers: { Authorization: "Bearer opaque-session-token" }
+    });
+    const sessionPayload = await sessionResponse.json();
+    assert.equal(sessionResponse.status, 200);
+    assert.equal(sessionResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(sessionPayload.account, {
+      mode: "wechat",
+      authenticated: true,
+      cloudSyncAvailable: false
+    });
+    assert.doesNotMatch(JSON.stringify(sessionPayload), /account-1|openid|unionid|session_key/i);
+
+    const logoutResponse = await postWechatLogout(baseUrl, {
+      headers: { Authorization: "Bearer opaque-session-token" }
+    });
+    const logoutPayload = await logoutResponse.json();
+    assert.equal(logoutResponse.status, 200);
+    assert.equal(logoutResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(logoutPayload, { ok: true });
+    assert.deepEqual(calls.map((call) => call.name), ["login", "session", "logout"]);
+  }, {
+    wechatAuthService: {
+      login: async (request) => {
+        calls.push({ name: "login", body: request.body });
+        return {
+          sessionToken: "opaque-session-token",
+          expiresAt: "2026-07-27T00:00:00.000Z",
+          account: { mode: "wechat", authenticated: true, cloudSyncAvailable: false }
+        };
+      },
+      getSession: async (request) => {
+        calls.push({ name: "session", authorization: request.headers.authorization });
+        return {
+          expiresAt: "2026-07-27T00:00:00.000Z",
+          account: { mode: "wechat", authenticated: true, cloudSyncAvailable: false },
+          wechatAccountId: "account-1"
+        };
+      },
+      logout: async (request) => {
+        calls.push({ name: "logout", authorization: request.headers.authorization });
+        return { ok: true };
+      }
+    }
+  });
+});
+
+test("wechat auth routes format stable errors without leaking secrets", { concurrency: false }, async () => {
+  await withServer(async (baseUrl) => {
+    const loginResponse = await postWechatLogin(baseUrl, { code: "bad-code" });
+    const loginPayload = await loginResponse.json();
+    assert.equal(loginResponse.status, 503);
+    assert.equal(loginResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(loginPayload.error, {
+      code: "WECHAT_AUTH_UNAVAILABLE",
+      message: "微信身份服务暂时不可用，请稍后再试。"
+    });
+    assert.doesNotMatch(JSON.stringify(loginPayload), /wechat-app-secret|identity-secret|session-secret|stack|openid|session_key/i);
+
+    const sessionResponse = await getWechatSession(baseUrl, {
+      headers: { Authorization: "Bearer invalid-token" }
+    });
+    const sessionPayload = await sessionResponse.json();
+    assert.equal(sessionResponse.status, 401);
+    assert.equal(sessionPayload.error.code, "AUTH_INVALID");
+    assert.doesNotMatch(JSON.stringify(sessionPayload), /invalid-token|stack|account/i);
+  }, {
+    wechatAuthService: {
+      login: async () => {
+        const error = new Error("微信身份服务暂时不可用，请稍后再试。");
+        error.code = "WECHAT_AUTH_UNAVAILABLE";
+        error.status = 503;
+        throw error;
+      },
+      getSession: async () => {
+        const error = new Error("微信登录状态已失效，请重新登录。");
+        error.code = "AUTH_INVALID";
+        error.status = 401;
+        throw error;
+      },
+      logout: async () => ({ ok: true })
+    }
+  });
+});
+
+test("wechat auth route reuses its default service so login rate limits survive across requests", { concurrency: false }, async () => {
+  const previousEnv = {
+    WECHAT_MINIPROGRAM_APP_ID: process.env.WECHAT_MINIPROGRAM_APP_ID,
+    WECHAT_MINIPROGRAM_APP_SECRET: process.env.WECHAT_MINIPROGRAM_APP_SECRET,
+    WECHAT_IDENTITY_HASH_SECRET: process.env.WECHAT_IDENTITY_HASH_SECRET,
+    WECHAT_SESSION_HASH_SECRET: process.env.WECHAT_SESSION_HASH_SECRET,
+    WECHAT_LOGIN_REQUESTS_PER_MINUTE: process.env.WECHAT_LOGIN_REQUESTS_PER_MINUTE
+  };
+
+  process.env.WECHAT_MINIPROGRAM_APP_ID = "wx-test-app";
+  process.env.WECHAT_MINIPROGRAM_APP_SECRET = "wechat-app-secret";
+  process.env.WECHAT_IDENTITY_HASH_SECRET = "identity-secret";
+  process.env.WECHAT_SESSION_HASH_SECRET = "session-secret";
+  process.env.WECHAT_LOGIN_REQUESTS_PER_MINUTE = "1";
+
+  const originalFetch = global.fetch;
+  try {
+    global.fetch = async (url, options) => {
+      if (String(url).startsWith("http://127.0.0.1")) {
+        return originalFetch(url, options);
+      }
+      return {
+        ok: true,
+        json: async () => ({ openid: "openid-1", session_key: "secret-session-key" })
+      };
+    };
+
+    const adminClient = createRouteWechatAdminClient();
+
+    await withServer(async (baseUrl) => {
+      const first = await postWechatLogin(baseUrl, { code: "first-code" });
+      assert.equal(first.status, 200);
+
+      const second = await postWechatLogin(baseUrl, { code: "second-code" });
+      const payload = await second.json();
+      assert.equal(second.status, 429);
+      assert.equal(second.headers.get("cache-control"), "no-store");
+      assert.equal(payload.error.code, "RATE_LIMITED");
+      assert.equal(second.headers.has("retry-after"), true);
+    }, {
+      wechatAdminClient: adminClient
+    });
+  } finally {
+    global.fetch = originalFetch;
+    for (const [key, value] of Object.entries(previousEnv)) {
+      if (value === undefined) {
+        delete process.env[key];
+      } else {
+        process.env[key] = value;
+      }
+    }
+  }
 });
 
 test("returns a normalized result card from strict DeepSeek JSON", { concurrency: false }, async () => {
