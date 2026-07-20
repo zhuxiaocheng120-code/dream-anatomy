@@ -125,9 +125,12 @@ test("sleep quality slider uses a restrained cloud thumb with accessible interac
   const mozThumbRule = cssRuleBlock(css, ".sleep-quality-range::-moz-range-thumb");
 
   assert.match(baseRangeRule, /--sleep-quality-cloud-thumb:/);
-  assert.match(baseRangeRule, /--sleep-quality-thumb-width:\s*36px/);
-  assert.match(baseRangeRule, /--sleep-quality-thumb-height:\s*26px/);
+  assert.match(baseRangeRule, /--sleep-quality-thumb-width:\s*40px/);
+  assert.match(baseRangeRule, /--sleep-quality-thumb-height:\s*28px/);
+  assert.match(baseRangeRule, /--sleep-quality-cloud-thumb-style:\s*dream-guide-slider-thumb-v2/);
   assert.match(css, /cloud-shaped sleep quality slider thumb/);
+  assert.match(baseRangeRule, /viewBox='0 0 48 34'/);
+  assert.match(baseRangeRule, /stroke='%235f6549'/);
   assert.match(webkitThumbRule, /background:\s*var\(--sleep-quality-cloud-thumb\) center \/ 100% 100% no-repeat/);
   assert.match(mozThumbRule, /background:\s*var\(--sleep-quality-cloud-thumb\) center \/ 100% 100% no-repeat/);
 
@@ -150,9 +153,9 @@ test("sleep quality slider uses a restrained cloud thumb with accessible interac
   });
 
   const coarsePointerBlock = cssMediaBlock(css, "@media (pointer: coarse)");
-  assert.match(coarsePointerBlock, /--sleep-quality-thumb-width:\s*40px/);
-  assert.match(coarsePointerBlock, /--sleep-quality-thumb-height:\s*29px/);
-  assert.match(coarsePointerBlock, /min-height:\s*42px/);
+  assert.match(coarsePointerBlock, /--sleep-quality-thumb-width:\s*44px/);
+  assert.match(coarsePointerBlock, /--sleep-quality-thumb-height:\s*31px/);
+  assert.match(coarsePointerBlock, /min-height:\s*44px/);
 });
 
 test("brand logo assets are local original SVGs without executable or external content", () => {

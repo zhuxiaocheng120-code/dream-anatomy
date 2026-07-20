@@ -5,16 +5,16 @@ const SleepQuality = require("../src/sleepQuality");
 
 test("maps sleep quality label boundaries", () => {
   const cases = [
-    [0, "很差"],
-    [20, "很差"],
-    [21, "不太好"],
-    [40, "不太好"],
+    [0, "很不安稳"],
+    [20, "很不安稳"],
+    [21, "偏疲惫"],
+    [40, "偏疲惫"],
     [41, "一般"],
     [60, "一般"],
-    [61, "不错"],
-    [80, "不错"],
-    [81, "很好"],
-    [100, "很好"]
+    [61, "比较安稳"],
+    [80, "比较安稳"],
+    [81, "很安稳"],
+    [100, "很安稳"]
   ];
 
   cases.forEach(([score, label]) => {
@@ -52,9 +52,9 @@ test("applies and clears sleep quality without overwriting report content", () =
     () => "2026-07-20T10:00:00.000Z"
   );
 
-  assert.equal(saved.sleepQuality, "不错");
+  assert.equal(saved.sleepQuality, "比较安稳");
   assert.equal(saved.reportContent.sleepQualityScore, 65);
-  assert.equal(saved.reportContent.sleepQualityLabel, "不错");
+  assert.equal(saved.reportContent.sleepQualityLabel, "比较安稳");
   assert.equal(saved.reportContent.sleepQualityUpdatedAt, "2026-07-20T10:00:00.000Z");
   assert.deepEqual(saved.reportContent.dreamResultCard, base.reportContent.dreamResultCard);
   assert.equal(saved.reportContent.userReflection, base.reportContent.userReflection);

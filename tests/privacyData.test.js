@@ -375,7 +375,7 @@ test("export excludes tokens principal hashes email and full user ids", async ()
       userReflection: "这个梦让我想到一个还没有说出口的选择。",
       userReflectionUpdatedAt: "2026-07-20T09:00:00.000Z",
       sleepQualityScore: 65,
-      sleepQualityLabel: "不错",
+      sleepQualityLabel: "比较安稳",
       sleepQualityUpdatedAt: "2026-07-20T09:30:00.000Z"
     }
   };
@@ -394,7 +394,7 @@ test("export excludes tokens principal hashes email and full user ids", async ()
   assert.match(exportedText, /这个梦让我想到一个还没有说出口的选择/);
   assert.match(exportedText, /sleepQualityScore/);
   assert.match(exportedText, /65/);
-  assert.match(exportedText, /不错/);
+  assert.match(exportedText, /比较安稳/);
   assert.doesNotMatch(exportedText, /private@example\.com/);
   assert.doesNotMatch(exportedText, /12345678-1234-1234-1234-123456789abc/);
   assert.doesNotMatch(exportedText, /access_token|refresh_token|principal_hash/i);

@@ -1068,7 +1068,7 @@ test("quick decode saves selected sleep quality score label and metadata", async
 
   harness.quickSleepRange.value = "65";
   harness.quickSleepRange.trigger("input");
-  assert.match(harness.quickSleepDisplay.textContent, /65% · 不错/);
+  assert.match(harness.quickSleepDisplay.textContent, /65% · 比较安稳/);
 
   harness.quickSleepClear.trigger("click");
   assert.match(harness.quickSleepDisplay.textContent, /未填写|滑动记录/);
@@ -1086,9 +1086,9 @@ test("quick decode saves selected sleep quality score label and metadata", async
   });
 
   const savedRecord = harness.getSavedRecords()[0];
-  assert.equal(savedRecord.sleepQuality, "不错");
+  assert.equal(savedRecord.sleepQuality, "比较安稳");
   assert.equal(savedRecord.reportContent.sleepQualityScore, 65);
-  assert.equal(savedRecord.reportContent.sleepQualityLabel, "不错");
+  assert.equal(savedRecord.reportContent.sleepQualityLabel, "比较安稳");
   assert.match(savedRecord.reportContent.sleepQualityUpdatedAt, /^\d{4}-\d{2}-\d{2}T/);
 });
 
@@ -1190,7 +1190,7 @@ test("quick decode shows an incomplete generation message without mock fallback"
   assert.match(harness.quickFormStatus.textContent, /梦境画像结构连续不完整，已保留你的梦境内容。请稍后重新提交。/);
   assert.doesNotMatch(harness.quickFormStatus.textContent, /本地示例结果/);
   assert.equal(harness.quickDream.value, "我梦见一条黑狗被困住。");
-  assert.match(harness.quickSleepDisplay.textContent, /65% · 不错/);
+  assert.match(harness.quickSleepDisplay.textContent, /65% · 比较安稳/);
   assert.equal(harness.getSavedRecords().length, 0);
 });
 
@@ -1656,13 +1656,13 @@ test("Dream Detail renders a saved dream result card without replacing existing 
 test("Dream Detail displays and updates saved sleep quality without overwriting report content", async () => {
   const record = createRecord({
     id: "sleep-detail-record",
-    sleepQuality: "不错",
+    sleepQuality: "比较安稳",
     reportContent: {
       summary: "保留已有报告内容",
       dreamResultCard: createResultCardFixture(),
       userReflection: "这扇门让我想到一个选择。",
       sleepQualityScore: 65,
-      sleepQualityLabel: "不错",
+      sleepQualityLabel: "比较安稳",
       sleepQualityUpdatedAt: "2026-07-20T08:00:00.000Z"
     }
   });
@@ -1676,7 +1676,7 @@ test("Dream Detail displays and updates saved sleep quality without overwriting 
   });
 
   harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
-  assert.match(collectText(harness.dreamDetailContent).join("\n"), /睡眠感受：65% · 不错/);
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /睡眠感受：65% · 比较安稳/);
 
   const editButton = findElements(
     harness.dreamDetailContent,
@@ -1702,9 +1702,9 @@ test("Dream Detail displays and updates saved sleep quality without overwriting 
   await saveButton.trigger("click");
 
   const saved = harness.getSavedRecords()[0];
-  assert.equal(saved.sleepQuality, "不错");
+  assert.equal(saved.sleepQuality, "比较安稳");
   assert.equal(saved.reportContent.sleepQualityScore, 80);
-  assert.equal(saved.reportContent.sleepQualityLabel, "不错");
+  assert.equal(saved.reportContent.sleepQualityLabel, "比较安稳");
   assert.equal(saved.reportContent.summary, "保留已有报告内容");
   assert.equal(saved.reportContent.userReflection, "这扇门让我想到一个选择。");
   assert.equal(saved.reportContent.dreamResultCard.coreInsight, createResultCardFixture().coreInsight);

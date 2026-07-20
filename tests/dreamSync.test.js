@@ -175,7 +175,7 @@ test("maps empty sleep quality to null and preserves score metadata", () => {
       summary: "梦境整理",
       dreamResultCard: { coreInsight: "也许在靠近选择。" },
       sleepQualityScore: 65,
-      sleepQualityLabel: "不错",
+      sleepQualityLabel: "比较安稳",
       sleepQualityUpdatedAt: "2026-07-20T08:00:00.000Z"
     }
   });
@@ -183,7 +183,7 @@ test("maps empty sleep quality to null and preserves score metadata", () => {
 
   assert.equal(row.sleep_quality, null);
   assert.equal(row.report_content.sleepQualityScore, 65);
-  assert.equal(row.report_content.sleepQualityLabel, "不错");
+  assert.equal(row.report_content.sleepQualityLabel, "比较安稳");
   assert.equal(row.report_content.dreamResultCard.coreInsight, "也许在靠近选择。");
 });
 
@@ -227,7 +227,7 @@ test("maps null Supabase sleep quality back without manufacturing 未记录", ()
     report_content: {
       summary: "门",
       sleepQualityScore: 80,
-      sleepQualityLabel: "不错",
+      sleepQualityLabel: "比较安稳",
       sleepQualityUpdatedAt: "2026-07-20T09:00:00.000Z"
     },
     source: "app",
@@ -236,7 +236,7 @@ test("maps null Supabase sleep quality back without manufacturing 未记录", ()
 
   assert.equal(localRecord.sleepQuality, undefined);
   assert.equal(localRecord.reportContent.sleepQualityScore, 80);
-  assert.equal(localRecord.reportContent.sleepQualityLabel, "不错");
+  assert.equal(localRecord.reportContent.sleepQualityLabel, "比较安稳");
 });
 
 test("ignores a forged local user id when mapping rows for the current session user", () => {
