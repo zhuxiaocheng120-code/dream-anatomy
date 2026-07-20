@@ -12,7 +12,16 @@ process.env.AI_MAX_CONCURRENT_PER_PRINCIPAL = "1";
 process.env.AI_REQUEST_TIMEOUT_MS = "45000";
 process.env.DEEP_GUIDANCE_ENABLED = "false";
 
-const { app } = require("../server");
+const {
+  app,
+  buildGuidedFinalUserPrompt,
+  buildLimitedEvidenceResultCardUserPrompt,
+  buildQuickResultCardRepairUserPrompt,
+  buildQuickRetryUserPrompt,
+  buildResultCardRetryUserPrompt,
+  buildResultCardUserPrompt,
+  buildUserPrompt
+} = require("../server");
 const { createAiAccessControl } = require("../server/aiAccessControl");
 
 function createResultCardPayload() {
@@ -100,6 +109,87 @@ function createDeepAnalysisPayload() {
     gentleReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
   };
 }
+
+const resultCardDimensionIds = ["symbol_depth", "emotion_intensity", "self_awareness", "growth_signal"];
+const stableArchetypeIds = ["seeker", "explorer", "guardian", "observer", "transformer", "creator", "healer", "homecomer"];
+
+function assertPromptContainsCompleteDimensionSchema(prompt) {
+  resultCardDimensionIds.forEach((id) => {
+    assert.match(prompt, new RegExp(`"id": "${id}"`));
+  });
+  assert.match(prompt, /必须正好返回四项/);
+  assert.match(prompt, /不得遗漏/);
+  assert.match(prompt, /不得增加未知 id/);
+  assert.match(prompt, /不得使用 null、暂不可用或暂不评分/);
+  assert.doesNotMatch(prompt, /\.\.\.完整 Dream Result Card/);
+}
+
+function assertPromptContainsStableArchetypeIds(prompt) {
+  stableArchetypeIds.forEach((id) => {
+    assert.match(prompt, new RegExp(`\\b${id}\\b`));
+  });
+  assert.match(prompt, /稳定原型集合/);
+  assert.match(prompt, /未知 id/);
+}
+
+test("quick combined prompt schema explicitly contains all required result-card dimensions", () => {
+  const prompt = buildUserPrompt("我梦见在学校找不到教室。");
+
+  assert.match(prompt, /"analysis"/);
+  assert.match(prompt, /"dreamResultCard"/);
+  assert.match(prompt, /"generationMeta"/);
+  assertPromptContainsCompleteDimensionSchema(prompt);
+  assertPromptContainsStableArchetypeIds(prompt);
+});
+
+test("standalone result-card prompt uses card root schema with all required dimensions", () => {
+  const prompt = buildResultCardUserPrompt("我梦见一只黑狗被困住。");
+
+  assert.match(prompt, /^\s*请基于用户的梦境碎片生成梦境画像。/);
+  assert.match(prompt, /"archetype"/);
+  assert.doesNotMatch(prompt, /"dreamResultCard"\s*:/);
+  assert.doesNotMatch(prompt, /"analysis"\s*:/);
+  assertPromptContainsCompleteDimensionSchema(prompt);
+  assertPromptContainsStableArchetypeIds(prompt);
+});
+
+test("repair and limited prompts require a full four-dimension result card object", () => {
+  const analysis = createQuickAnalysisPayload();
+  const issues = ["emotion_intensity 缺少真实分数、summary 或 rationale。"];
+  const prompts = [
+    buildQuickResultCardRepairUserPrompt("我梦见在学校找不到教室。", analysis, issues),
+    buildLimitedEvidenceResultCardUserPrompt("门。", analysis, issues),
+    buildResultCardRetryUserPrompt("我梦见在学校找不到教室。", issues)
+  ];
+
+  prompts.forEach((prompt) => {
+    assert.match(prompt, /只返回完整梦境画像 JSON 对象本身/);
+    assert.doesNotMatch(prompt, /"analysis"\s*:/);
+    assertPromptContainsCompleteDimensionSchema(prompt);
+    assertPromptContainsStableArchetypeIds(prompt);
+  });
+});
+
+test("quick retry prompt preserves the combined analysis and result-card root contract", () => {
+  const prompt = buildQuickRetryUserPrompt("我梦见在学校找不到教室。", ["四个梦境维度必须齐全。"]);
+
+  assert.match(prompt, /"analysis"/);
+  assert.match(prompt, /"dreamResultCard"/);
+  assert.match(prompt, /"generationMeta"/);
+  assertPromptContainsCompleteDimensionSchema(prompt);
+});
+
+test("guided final prompt schema also matches the four-dimension result-card contract", () => {
+  const prompt = buildGuidedFinalUserPrompt("我梦见在学校找不到教室。", {
+    emotion: "紧张",
+    association: "想到考试。"
+  });
+
+  assert.match(prompt, /"analysis"/);
+  assert.match(prompt, /"dreamResultCard"/);
+  assertPromptContainsCompleteDimensionSchema(prompt);
+  assertPromptContainsStableArchetypeIds(prompt);
+});
 
 async function withServer(run, options = {}) {
   app.locals.aiAccessControl = options.accessControl || createAiAccessControl({
@@ -650,7 +740,7 @@ test("returns a clear incomplete error after standalone result-card quality fail
       assert.equal(inserted.length, 1);
       assert.equal(inserted[0].analysis_type, "result_card");
       assert.equal(inserted[0].outcome, "generation_incomplete");
-      assert.equal(inserted[0].error_code, "GENERATION_INCOMPLETE");
+      assert.equal(inserted[0].error_code, "missing_dimension_emotion_intensity");
       assert.equal(inserted[0].quality_retry_count, 2);
     }, {
       analyticsClient: {
@@ -717,7 +807,12 @@ test("records result-card quality retry metadata when the retry attempt times ou
       assert.equal(inserted[0].completion_tokens, 22);
       assert.equal(inserted[0].total_tokens, 33);
     }, {
-      requestTimeoutMs: 1,
+      aiTimeoutConfig: {
+        initialAttemptMs: 50,
+        repairAttemptMs: 1,
+        limitedAttemptMs: 50,
+        totalRequestMs: 100
+      },
       analyticsClient: {
         from: () => ({
           insert: async (event) => {
@@ -1168,8 +1263,10 @@ test("rejects quick-shaped JSON for guided final analysis", { concurrency: false
 test("repairs an invalid quick result card before returning success", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   let upstreamCalls = 0;
+  const upstreamBodies = [];
   global.fetch = async (url, options) => {
     if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamBodies.push(JSON.parse(options.body));
     upstreamCalls += 1;
     const content = upstreamCalls === 1
       ? {
@@ -1214,6 +1311,8 @@ test("repairs an invalid quick result card before returning success", { concurre
       assert.equal(payload.generationMeta.evidenceConfidence, "high");
       assert.equal(payload.generationMeta.qualityStatus, "passed");
       assert.equal(upstreamCalls, 2);
+      assertPromptContainsCompleteDimensionSchema(upstreamBodies[1].messages[1].content);
+      assert.match(upstreamBodies[1].messages[1].content, /只返回完整梦境画像 JSON 对象本身/);
     });
   } finally {
     global.fetch = nativeFetch;
@@ -1306,8 +1405,10 @@ test("repair stage receives its own timeout after a slow initial quick response"
 test("uses a limited-evidence final card when quick card repair is still incomplete", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   let upstreamCalls = 0;
+  const upstreamBodies = [];
   global.fetch = async (url, options) => {
     if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamBodies.push(JSON.parse(options.body));
     upstreamCalls += 1;
     const completeCard = createResultCardPayload();
     completeCard.dimensions = completeCard.dimensions.map((dimension) => ({
@@ -1361,6 +1462,138 @@ test("uses a limited-evidence final card when quick card repair is still incompl
         assert.ok(dimension.rationale.length > 0);
       });
       assert.equal(upstreamCalls, 3);
+      assertPromptContainsCompleteDimensionSchema(upstreamBodies[2].messages[1].content);
+      assert.match(upstreamBodies[2].messages[1].content, /只返回完整梦境画像 JSON 对象本身/);
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("short dream can complete through limited-evidence result card with all four dimensions", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  const upstreamBodies = [];
+
+  const shortDreamAnalysis = {
+    dreamSummary: "你只记得梦里出现了一扇门，画面很短，但门这个入口意象仍然提供了一个可以被温和观察的线索。",
+    coreTheme: "这个短梦更像是在围绕一个入口、边界或尚未展开的方向感出现。",
+    coreInterpretation: "梦中实际能确认的内容很少，主要是“一扇门”这个画面。它可能不是一个现成答案，而更像一个入口线索：也许与你正在靠近某个选择、边界或新的阶段有关。因为梦境信息有限，下面的理解需要保持谨慎；重点不是给门套上通用含义，而是先观察这个画面给你留下了什么感受，以及它是否让你想到近期某个还没有进入的情境。",
+    evidence: [
+      { dreamFragment: "一扇门", interpretation: "门是这个短梦中最清楚的画面，因此可以作为入口、边界或方向感的线索来观察。" },
+      { dreamFragment: "只记得门", interpretation: "梦境只留下门，也说明目前可用信息有限，适合做谨慎而开放的整理。" }
+    ],
+    emotionalReading: {
+      primaryEmotion: "好奇",
+      secondaryEmotions: ["迟疑"],
+      intensity: 35,
+      evidence: "情绪线索主要来自你只记得一扇门，这可能带来轻微的好奇或迟疑，但不等同于现实中的长期状态。"
+    },
+    symbolReading: [
+      {
+        symbol: "门",
+        context: "门是这次短梦中唯一清楚留下来的画面。",
+        possibleMeaning: "在这次语境里，它可能和入口、边界或某个还未展开的方向有关。",
+        evidence: "你只记得梦里有一扇门。",
+        reflectionQuestion: "这扇门让你更想靠近、停下，还是先观察？"
+      }
+    ],
+    reflectionQuestions: [
+      "这扇门让你想到最近哪个尚未进入的情境？",
+      "面对这扇门时，你更接近好奇还是迟疑？",
+      "如果只保留门这个画面，它最想提醒你观察什么？"
+    ],
+    gentleAction: "你可以用一分钟写下：这扇门的颜色、状态，以及它让你想到的一个现实小片段。",
+    safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+  };
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamBodies.push(JSON.parse(options.body));
+    upstreamCalls += 1;
+
+    if (upstreamCalls === 1) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({ analysis: shortDreamAnalysis, dreamResultCard: { dimensions: [] } }) } }]
+        })
+      };
+    }
+
+    if (upstreamCalls === 2) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{ message: { content: JSON.stringify({ dimensions: [] }) } }]
+        })
+      };
+    }
+
+    const card = createResultCardPayload();
+    card.archetype = {
+      id: "observer",
+      summary: "本次梦境更接近观察者，也许与你先停下来观察一个入口有关。",
+      evidence: ["梦里只留下门这个画面。", "你没有进入门，而是记住了它的存在。"]
+    };
+    card.coreInsight = "这个短梦也许先邀请你看见一个入口。";
+    card.dimensions = [
+      { id: "symbol_depth", score: 35, summary: "门提供了单一但清楚的象征线索。", rationale: ["梦里只留下门这个画面。"] },
+      { id: "emotion_intensity", score: 20, summary: "情绪强度较轻。", rationale: ["门带来的好奇和迟疑比较轻。"] },
+      { id: "self_awareness", score: 30, summary: "你能记住门这个画面。", rationale: ["只记得门说明这个画面被你注意到了。"] },
+      { id: "growth_signal", score: 25, summary: "变化线索仍然有限。", rationale: ["门像入口，但梦里还没有进入门。"] }
+    ];
+    card.symbols = [{
+      name: "门",
+      generalPossibility: "门有时可以和入口或边界有关。",
+      contextMeaning: "在这次短梦里，它可能只是一个值得继续观察的入口线索。",
+      evidence: "梦里只留下门这个画面。",
+      reflectionQuestion: "这扇门让你想到什么尚未进入的地方？"
+    }];
+    card.emotionalProfile = {
+      primary: "好奇",
+      secondary: ["迟疑"],
+      intensity: 20,
+      evidence: "你只记得门，这个片段可能带来轻微好奇。"
+    };
+    card.reflectionQuestions = ["这扇门让你想到哪个入口？"];
+
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              dreamResultCard: card,
+              generationMeta: {
+                source: "ai_generated",
+                promptVersion: "quick-v2",
+                qualityStatus: "passed",
+                limitedEvidence: true,
+                evidenceConfidence: "low"
+              }
+            })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "门。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.dreamResultCardStatus, "ai_generated");
+      assert.equal(payload.generationMeta.limitedEvidence, true);
+      assert.equal(payload.generationMeta.evidenceConfidence, "low");
+      assert.deepEqual(payload.dreamResultCard.dimensions.map((dimension) => dimension.id), resultCardDimensionIds);
+      assert.equal(upstreamCalls, 3);
+      assertPromptContainsCompleteDimensionSchema(upstreamBodies[2].messages[1].content);
     });
   } finally {
     global.fetch = nativeFetch;
@@ -1583,6 +1816,77 @@ test("returns incomplete and refunds quota after quick card generation fails all
   }
 });
 
+test("records validation issue code when quick card keeps missing required dimensions", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const inserted = [];
+  let upstreamCalls = 0;
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    const partialCard = createResultCardPayload();
+    partialCard.dimensions = partialCard.dimensions.filter((dimension) => dimension.id === "symbol_depth");
+    const content = upstreamCalls === 1
+      ? {
+          analysis: createQuickAnalysisPayload(),
+          dreamResultCard: partialCard
+        }
+      : partialCard;
+
+    return {
+      ok: true,
+      json: async () => ({
+        usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
+        choices: [{ message: { content: JSON.stringify(content) } }]
+      })
+    };
+  };
+
+  try {
+    const accessControl = createAiAccessControl({
+      guestDailyLimit: 1,
+      userDailyLimit: 1,
+      guestRequestsPerMinute: 100,
+      userRequestsPerMinute: 100,
+      maxConcurrentPerPrincipal: 1
+    });
+
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 422);
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
+      assert.equal(payload.analysis, undefined);
+      assert.equal(payload.dreamResultCard, undefined);
+      assert.equal(payload.usage.remaining, 1);
+      assert.equal(upstreamCalls, 3);
+      assert.equal(inserted.length, 1);
+      assert.equal(inserted[0].outcome, "generation_incomplete");
+      assert.equal(inserted[0].error_code, "missing_dimension_emotion_intensity");
+      assert.equal(inserted[0].quality_retry_count, 2);
+      assert.doesNotMatch(JSON.stringify(inserted[0]), /学校走廊|发着光|Bearer|test-key/);
+    }, {
+      accessControl,
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
 test("returns a safe incomplete error when result-card model JSON stays invalid through the final attempt", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   let upstreamCalls = 0;
@@ -1637,7 +1941,14 @@ test("result-card upstream timeout is not classified as incomplete generation", 
       assert.equal(response.status, 504);
       assert.equal(payload.error.code, "UPSTREAM_TIMEOUT");
       assert.equal(upstreamCalls, 1);
-    }, { requestTimeoutMs: 1 });
+    }, {
+      aiTimeoutConfig: {
+        initialAttemptMs: 5,
+        repairAttemptMs: 50,
+        limitedAttemptMs: 50,
+        totalRequestMs: 100
+      }
+    });
   } finally {
     global.fetch = nativeFetch;
   }

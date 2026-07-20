@@ -58,6 +58,18 @@ function sanitizeStageDurations(value) {
   return Object.keys(durations).length ? durations : null;
 }
 
+function sanitizeValidationIssueCodes(value) {
+  if (!Array.isArray(value)) {
+    return [];
+  }
+
+  return Array.from(new Set(value
+    .filter((item) => typeof item === "string")
+    .map((item) => item.trim().toLowerCase())
+    .filter((item) => /^[a-z0-9_]{1,100}$/.test(item))))
+    .slice(0, 12);
+}
+
 function calculateEstimatedCost(usage = {}, env = process.env) {
   const promptTokens = toNonNegativeInteger(usage.prompt_tokens);
   const completionTokens = toNonNegativeInteger(usage.completion_tokens);
@@ -93,6 +105,7 @@ function buildUsageEvent(context = {}) {
     estimated_cost_usd: calculateEstimatedCost(usage, context.env),
     generation_stage: sanitizeGenerationStage(context.generationStage),
     stage_durations: sanitizeStageDurations(context.stageDurations),
+    validation_issue_codes: sanitizeValidationIssueCodes(context.validationIssueCodes),
     final_error_code: sanitizeErrorCode(context.finalErrorCode)
   };
 }

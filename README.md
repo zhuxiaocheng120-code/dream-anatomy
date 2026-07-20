@@ -21,7 +21,7 @@
 - 隐私与数据中心提供隐私政策、用户协议、AI 使用说明、显式同意、梦境导出、单条删除、清空全部梦境、游客本机数据清理和账户注销入口。
 - 原生微信小程序基础工程位于 `miniprogram/`，支持快速解析、梦境画像、本机保存、本机梦境日记、详情、删除、导出、清除本机数据和安全微信身份桥接；当前不接 Supabase 登录、云同步、支付、会员或小程序产品行为分析事件。小程序视觉已同步 Web 的旧纸、私人档案、心理工作室和手稿记录语言。
 - 快速解析 V2 会要求结果包含梦境摘要、核心主题、核心解析、梦境证据与解释、情绪画像、主要意象、自我思考、今日小行动和温和提醒，并在服务端做基础质量检查。
-- 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用时会回退到明确标记的本地示例结果，AI 输出质量不完整时不会伪装成本地 mock。
+- 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用或 AI 输出质量不完整时会显示明确错误、保留输入，不会展示本地示例或保存半成品。
 - 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
 - 梦境日记区域会在同一个列表中显示快速解析和深度引导记录，并可以点击查看单条记录详情。
 - 梦境详情会展示梦境标题、日期、时间、完整原文、AI 摘要、情绪标签、梦境意象和分析类型；如果用户填写过睡眠感受，会显示“65% · 不错”这类主观记录，并支持在详情中修改或补充。详情页也支持在本条记录里保存“自我思考”。
@@ -39,7 +39,7 @@
 - Dream Home 的“重要梦境”当前固定显示为 `0`，因为现有记录和数据库 schema 没有收藏或重要标记字段。
 - “AI 洞察”和“标签 / 分类”目前只是标有 `Coming Soon` 的非交互视觉区域，不包含模拟数据或可用功能。
 
-这个应用不是诊断工具、治疗服务、算命工具，也不会预测未来。它只用于梦境记录和温和的自我探索。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API，连接失败时会显示本地示例结果。
+这个应用不是诊断工具、治疗服务、算命工具，也不会预测未来。它只用于梦境记录和温和的自我探索。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API，生成失败时会给出明确提示，而不是用本地示例伪装成成功结果。
 
 ## Project Structure
 
@@ -121,7 +121,7 @@
 - Optional public contact setting: `PUBLIC_SUPPORT_EMAIL`. This is safe to expose in browser runtime config and is used by the legal documents. Do not put private inboxes or secrets here.
 - Start the app with `npm start`.
 - Open `http://localhost:3000` in your browser.
-- Without `DEEPSEEK_API_KEY`, the page can still open; analysis API requests will fail safely and the frontend will show clearly marked local fallback results.
+- Without `DEEPSEEK_API_KEY`, the page can still open; analysis API requests will fail safely, preserve the user's input, and show a clear error instead of generated examples.
 - Without Supabase values, the page can still open; account actions will show a configuration prompt.
 - Run unit tests with `npm test`.
 

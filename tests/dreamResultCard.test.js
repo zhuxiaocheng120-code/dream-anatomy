@@ -56,7 +56,8 @@ function createResultCardFixture() {
   return {
     archetype: {
       id: "creator",
-      summary: "本次梦境更接近创造者原型，也许和表达有关。"
+      summary: "本次梦境更接近创造者原型，也许和表达有关。",
+      evidence: ["门发光。", "你停在门前。"]
     },
     coreInsight: "这个梦也许在提醒你重新看见表达。",
     dimensions: [
@@ -364,7 +365,8 @@ test("renders an existing dream result card with its required sections", () => {
   ]) {
     assert.match(renderedText, new RegExp(expected));
   }
-  assert.equal(findElements(container, (element) => element.tagName === "DETAILS").length, 4);
+  assert.doesNotMatch(renderedText, /这是一条较早生成的梦境画像。/);
+  assert.equal(findElements(container, (element) => element.textContent === "为什么").length, 4);
   assert.equal(findElements(container, (element) => element.className === "result-card-symbol").length, 3);
 });
 

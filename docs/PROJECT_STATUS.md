@@ -51,7 +51,7 @@
 - Dream Journal 记录点击后继续进入现有 Dream Detail 页面；Dream Journal 和 Dream Detail 只读取已经保存的分析正文与梦境画像，不自动重复调用 AI。
 - Dream Journal 没有记录时会显示温和空状态，并提供“记录第一个梦”入口。
 
-未登录时梦境记录仍只保存在当前浏览器的 localStorage 中；登录后，梦境日记会优先使用 Supabase 云端记录，并保留 localStorage 作为缓存和失败兜底。快速解析、深度追问和深度最终报告请求会通过本项目后端代理发送给配置的 DeepSeek API；如果 API key 未配置或调用失败，前端会显示明确标记的本地示例结果。
+未登录时梦境记录仍只保存在当前浏览器的 localStorage 中；登录后，梦境日记会优先使用 Supabase 云端记录，并保留 localStorage 作为缓存和失败兜底。快速解析请求会通过本项目后端代理发送给配置的 DeepSeek API；如果 API key 未配置、调用失败或结构化输出不完整，前端会显示明确错误并保留输入，不会展示本地示例或保存半成品。
 真实 Supabase 云同步仍需要使用实际 Supabase 项目完成注册、邮箱验证、跨浏览器、双账号隔离和断网恢复验收。
 
 ## 当前文件
