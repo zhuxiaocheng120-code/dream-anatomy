@@ -3,6 +3,7 @@ require("dotenv").config();
 const express = require("express");
 const crypto = require("node:crypto");
 const path = require("path");
+const DreamArchetypes = require("./src/dreamArchetypes");
 const DreamResultCard = require("./src/dreamResultCard");
 const { createAccountDeletionService } = require("./server/accountDeletion");
 const { createAdminAuth } = require("./server/adminAuth");
@@ -203,6 +204,15 @@ function buildQuickRetryUserPrompt(dreamText, issues) {
     buildUserPrompt(dreamText),
     "",
     "上一次输出没有通过质量检查，请修复以下缺失项后重新返回完整 JSON：",
+    issues.map((issue) => `- ${issue}`).join("\n")
+  ].join("\n");
+}
+
+function buildResultCardRetryUserPrompt(dreamText, issues) {
+  return [
+    buildResultCardUserPrompt(dreamText),
+    "",
+    "上一次梦境画像输出没有通过质量检查，请只返回完整梦境画像 JSON，并补齐以下缺失项：",
     issues.map((issue) => `- ${issue}`).join("\n")
   ].join("\n");
 }
@@ -629,6 +639,8 @@ function validateRawResultCardCompleteness(card) {
 
   if (!isPlainObject(card.archetype) || !hasModelText(card.archetype.id) || !hasModelText(card.archetype.summary) || !hasModelTextList(card.archetype.evidence, 2)) {
     issues.push("梦境原型缺少真实 id、summary 或至少 2 条 evidence。");
+  } else if (!DreamArchetypes.getArchetypeById(card.archetype.id)) {
+    issues.push("梦境原型必须使用稳定原型集合中的 id。");
   }
 
   if (!hasModelText(card.coreInsight)) {
@@ -887,6 +899,22 @@ function normalizeQuickCombinedOutput(parsed, dreamText) {
   };
 }
 
+function normalizeStandaloneResultCardOutput(parsed, dreamText) {
+  if (!isPlainObject(parsed)) {
+    return { output: null, issues: ["返回内容不是合法 JSON 对象。"] };
+  }
+
+  const rawCardIssues = validateRawResultCardCompleteness(parsed);
+  const dreamResultCard = rawCardIssues.length ? null : normalizeDeepSeekResultCardOutput(parsed);
+  const cardIssues = rawCardIssues.length
+    ? rawCardIssues
+    : (dreamResultCard ? validateResultCardQuality(dreamResultCard, dreamText) : ["梦境画像暂时未能完整生成。"]);
+
+  return !dreamResultCard || cardIssues.length
+    ? { output: null, issues: cardIssues }
+    : { output: dreamResultCard, issues: [] };
+}
+
 function getAnalyticsOutcome(errorCode) {
   if (errorCode === "UPSTREAM_TIMEOUT") {
     return "timeout";
@@ -984,6 +1012,14 @@ function getUserPrompt(dreamText, analysisType, options = {}) {
   return buildUserPrompt(dreamText);
 }
 
+function getRetryUserPrompt(dreamText, analysisType, issues) {
+  if (analysisType === "result_card") {
+    return buildResultCardRetryUserPrompt(dreamText, issues);
+  }
+
+  return buildQuickRetryUserPrompt(dreamText, issues);
+}
+
 async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
 
@@ -1010,7 +1046,7 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
           {
             role: "user",
             content: options.retryIssues && options.retryIssues.length
-              ? buildQuickRetryUserPrompt(dreamText, options.retryIssues)
+              ? getRetryUserPrompt(dreamText, analysisType, options.retryIssues)
               : getUserPrompt(dreamText, analysisType, options)
           }
         ]
@@ -1053,24 +1089,39 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
   analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, completion.usage);
   let normalized = null;
 
-  if (parsed && analysisType === "result_card") {
-    const rawCardIssues = validateRawResultCardCompleteness(parsed);
-    normalized = rawCardIssues.length ? null : normalizeDeepSeekResultCardOutput(parsed);
-    const cardIssues = rawCardIssues.length
-      ? rawCardIssues
-      : (normalized ? validateResultCardQuality(normalized, dreamText) : ["梦境画像暂时未能完整生成。"]);
-    if (!normalized || cardIssues.length) {
-      const incompleteError = new Error("Dream result card generation was incomplete.");
-      incompleteError.code = "GENERATION_INCOMPLETE";
-      incompleteError.statusCode = 422;
-      incompleteError.status = 422;
-      incompleteError.generationMeta = {
-        source: "generation_failed",
-        promptVersion: quickPromptVersion,
-        qualityStatus: "incomplete"
-      };
-      incompleteError.analyticsMeta = analyticsMeta;
-      throw incompleteError;
+  if (analysisType === "result_card") {
+    let result = normalizeStandaloneResultCardOutput(parsed, dreamText);
+    normalized = result.output;
+
+    if (!normalized) {
+      analyticsMeta.qualityRetryCount += 1;
+      let retryCompletion;
+      try {
+        retryCompletion = await requestDeepSeekCompletion(dreamText, analysisType, {
+          ...options,
+          retryIssues: result.issues
+        });
+      } catch (error) {
+        error.analyticsMeta = analyticsMeta;
+        throw error;
+      }
+      analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, retryCompletion.usage);
+      result = normalizeStandaloneResultCardOutput(retryCompletion.parsed, dreamText);
+      normalized = result.output;
+
+      if (!normalized) {
+        const incompleteError = new Error("Dream result card generation was incomplete.");
+        incompleteError.code = "GENERATION_INCOMPLETE";
+        incompleteError.statusCode = 422;
+        incompleteError.status = 422;
+        incompleteError.generationMeta = {
+          source: "generation_failed",
+          promptVersion: quickPromptVersion,
+          qualityStatus: "incomplete"
+        };
+        incompleteError.analyticsMeta = analyticsMeta;
+        throw incompleteError;
+      }
     }
   } else if (parsed && analysisType === "guided_questions") {
     normalized = normalizeGuidedQuestionsOutput(parsed);
@@ -1232,7 +1283,6 @@ async function handleDreamAnalysisRequest(request, response) {
     sendApiError(response, apiError, identity ? accessControl.getUsage(identity) : null);
   }
 }
-
 async function requireAdminAndAnalyticsClient(request) {
   await getAdminAuth().requireAdminIdentity(request);
   const client = getAnalyticsClient();

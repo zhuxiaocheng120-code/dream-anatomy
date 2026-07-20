@@ -16,6 +16,16 @@
   const missingScoreText = "线索不足，暂不评分";
   const shareMissingScoreText = "暂不评分";
   const partialHistoricalMessage = "这是一条较早生成的梦境画像。";
+  const generationErrorMessages = {
+    GENERATION_INCOMPLETE: "这次画像仍未能完整生成，可以稍后再试。",
+    RESULT_CARD_INCOMPLETE: "这次画像仍未能完整生成，可以稍后再试。",
+    UPSTREAM_TIMEOUT: "AI 回应时间较长，请稍后重新生成。",
+    RATE_LIMITED: "操作太快了，请稍等后再试。",
+    REQUEST_IN_PROGRESS: "操作太快了，请稍等后再试。",
+    DAILY_LIMIT_REACHED: "今天的免费生成次数已经用完。",
+    UPSTREAM_UNAVAILABLE: "梦境画像服务暂时不可用。",
+    AUTH_INVALID: "登录状态已失效，请重新登录。"
+  };
   const missingDimensionSummaries = {
     symbol_depth: "这次记录中的象征线索较少，可以先从最想记住的画面开始观察。",
     emotion_intensity: "这次记录中没有足够明确的情绪强度线索，可以先留意醒来后的身体感受和情绪余韵。",
@@ -316,10 +326,16 @@
     return root;
   }
 
+  function getGenerationErrorMessage(error, fallbackMessage) {
+    const code = error && typeof error.code === "string" ? error.code : "";
+    return generationErrorMessages[code] || fallbackMessage || "暂时无法生成梦境画像，请稍后再试。";
+  }
+
   function createDreamResultCardController(options = {}) {
     const documentRef = options.document || (typeof document !== "undefined" ? document : null);
 
     function renderEmptyCard(container, record) {
+      let isGenerating = false;
       const statusValue = getDreamResultCardStatusFromRecord(record);
       const isGenerationFailed = statusValue === "generation_failed";
       const empty = createElement(documentRef, "section", "dream-result-card dream-result-card-empty");
@@ -338,9 +354,11 @@
       const button = createElement(documentRef, "button", "primary-button", isGenerationFailed ? "重新生成梦境画像" : "生成梦境画像");
       button.type = "button";
       button.addEventListener("click", async () => {
+        if (isGenerating) return;
         if (typeof options.requestResultCard !== "function") return;
+        isGenerating = true;
         button.disabled = true;
-        status.textContent = "正在整理梦境画像……";
+        status.textContent = isGenerationFailed ? "正在重新整理梦境画像……" : "正在整理梦境画像……";
         try {
           const rawCard = await options.requestResultCard(record);
           const normalizedCard = normalizeDreamResultCard(rawCard, record);
@@ -352,8 +370,9 @@
             : "";
           render(container, { ...record, reportContent: { ...(record.reportContent || {}), dreamResultCard: normalizedCard, dreamResultCardStatus: "ai_generated" } }, statusMessage);
         } catch (error) {
+          isGenerating = false;
           button.disabled = false;
-          status.textContent = options.generationErrorMessage || "暂时无法生成梦境画像，请稍后再试。";
+          status.textContent = getGenerationErrorMessage(error, options.generationErrorMessage);
         }
       });
       empty.append(button, status);
