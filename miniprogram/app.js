@@ -1,4 +1,5 @@
 const { getConfig } = require("./config/config.example");
+const auth = require("./services/authAdapter");
 
 App({
   globalData: {
@@ -6,5 +7,6 @@ App({
   },
   onLaunch() {
     this.globalData.config = getConfig();
+    auth.initialize({ wx }).catch(() => {});
   }
 });

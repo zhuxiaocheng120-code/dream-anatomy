@@ -5,6 +5,18 @@ function createWxHarness(options = {}) {
   const storage = new Map(Object.entries(options.storage || {}));
   const requests = [];
   const wx = {
+    login(payload = {}) {
+      const response = typeof options.login === "function"
+        ? options.login(payload)
+        : { code: "wx-code-1" };
+      setImmediate(() => {
+        if (response.fail) {
+          payload.fail(response.fail);
+        } else {
+          payload.success(response);
+        }
+      });
+    },
     request(payload) {
       requests.push(payload);
       const response = typeof options.respond === "function"
@@ -32,21 +44,87 @@ function createWxHarness(options = {}) {
   return { wx, requests, storage };
 }
 
-test("mini program config, auth, and analytics adapters stay guest-only and secret-free", async () => {
+test("mini program config, auth, and analytics adapters keep guest fallback and establish explicit WeChat identity", async () => {
   const { getConfig } = require("../miniprogram/config/config.example");
   const auth = require("../miniprogram/services/authAdapter");
   const analytics = require("../miniprogram/services/productAnalyticsAdapter");
-
+  const { wx, requests, storage } = createWxHarness({
+    respond: (payload) => {
+      if (payload.url.endsWith("/api/v1/wechat-auth/login")) {
+        return {
+          statusCode: 200,
+          data: {
+            sessionToken: "wechat-session-token",
+            expiresAt: "2026-07-27T00:00:00.000Z",
+            account: { mode: "wechat", authenticated: true, cloudSyncAvailable: false }
+          }
+        };
+      }
+      if (payload.url.endsWith("/api/v1/wechat-auth/session")) {
+        return {
+          statusCode: 200,
+          data: {
+            expiresAt: "2026-07-27T00:00:00.000Z",
+            account: { mode: "wechat", authenticated: true, cloudSyncAvailable: false }
+          }
+        };
+      }
+      if (payload.url.endsWith("/api/v1/wechat-auth/logout")) {
+        return { statusCode: 200, data: { ok: true } };
+      }
+      return { statusCode: 500, data: { error: { code: "UPSTREAM_UNAVAILABLE" } } };
+    }
+  });
   const config = getConfig();
   assert.equal(config.API_BASE_URL, "https://dream-anatomy.onrender.com");
   assert.equal(config.REQUEST_TIMEOUT_MS, 45000);
+  auth.clearLocalSession({ wx });
   assert.deepEqual(auth.getAuthState(), { mode: "guest", authenticated: false, cloudSyncAvailable: false });
-  assert.equal(await auth.getAccessToken(), "");
-  assert.deepEqual(await auth.login(), auth.getAuthState());
-  assert.deepEqual(await auth.logout(), auth.getAuthState());
+  assert.deepEqual(await auth.initialize({ wx }), { mode: "guest", authenticated: false, cloudSyncAvailable: false });
+
+  const loggedIn = await auth.login({ wx });
+  assert.deepEqual(loggedIn, { mode: "wechat", authenticated: true, cloudSyncAvailable: false });
+  assert.equal(await auth.getAccessToken({ wx }), "wechat-session-token");
+  assert.equal(storage.has(auth.WECHAT_SESSION_TOKEN_KEY), true);
+  assert.equal(requests[0].url, "https://dream-anatomy.onrender.com/api/v1/wechat-auth/login");
+  assert.equal(requests[0].method, "POST");
+  assert.equal(requests[0].data.code, "wx-code-1");
+  assert.equal(Object.hasOwn(requests[0].data, "openid"), false);
+  assert.equal(Object.hasOwn(requests[0].data, "accountId"), false);
+
+  const restored = await auth.initialize({ wx });
+  assert.deepEqual(restored, { mode: "wechat", authenticated: true, cloudSyncAvailable: false });
+  assert.equal(requests[1].url, "https://dream-anatomy.onrender.com/api/v1/wechat-auth/session");
+  assert.equal(requests[1].header.Authorization, "Bearer wechat-session-token");
+
+  assert.deepEqual(await auth.logout({ wx }), { mode: "guest", authenticated: false, cloudSyncAvailable: false });
+  assert.equal(requests[2].url, "https://dream-anatomy.onrender.com/api/v1/wechat-auth/logout");
+  assert.equal(requests[2].header.Authorization, "Bearer wechat-session-token");
+  assert.equal(storage.has(auth.WECHAT_SESSION_TOKEN_KEY), false);
+  assert.deepEqual(auth.getAuthState(), { mode: "guest", authenticated: false, cloudSyncAvailable: false });
   assert.equal(auth.isCloudSyncAvailable(), false);
   assert.equal(analytics.trackEvent("app_opened"), false);
   assert.equal(analytics.flush(), false);
+  auth.clearLocalSession({ wx });
+});
+
+test("mini program auth clears invalid local session and keeps guest features available", async () => {
+  const auth = require("../miniprogram/services/authAdapter");
+  const { wx, storage } = createWxHarness({
+    storage: { [auth.WECHAT_SESSION_TOKEN_KEY]: "expired-token" },
+    respond: () => ({
+      statusCode: 401,
+      data: { error: { code: "AUTH_INVALID", message: "微信登录状态已失效，请重新登录。" } }
+    })
+  });
+
+  assert.deepEqual(await auth.initialize({ wx }), { mode: "guest", authenticated: false, cloudSyncAvailable: false });
+  assert.equal(storage.has(auth.WECHAT_SESSION_TOKEN_KEY), false);
+  await assert.rejects(
+    () => auth.login({ wx: createWxHarness({ login: () => ({ fail: { errMsg: "login failed" } }) }).wx }),
+    (error) => /微信身份/.test(error.message)
+  );
+  assert.deepEqual(auth.getAuthState(), { mode: "guest", authenticated: false, cloudSyncAvailable: false });
 });
 
 test("quick analysis request uses Render backend structure and no Authorization header", async () => {
