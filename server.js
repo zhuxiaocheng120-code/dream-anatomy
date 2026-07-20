@@ -35,6 +35,11 @@ const defaultRepairAttemptTimeoutMs = parsePositiveInteger(process.env.AI_REPAIR
 const defaultLimitedAttemptTimeoutMs = parsePositiveInteger(process.env.AI_LIMITED_ATTEMPT_TIMEOUT_MS, 25000);
 const defaultTotalRequestTimeoutMs = parsePositiveInteger(process.env.AI_TOTAL_REQUEST_TIMEOUT_MS, 90000);
 const requiredResultCardDimensionIds = ["symbol_depth", "emotion_intensity", "self_awareness", "growth_signal"];
+const knownDreamAnchorTerms = [
+  "学校", "教室", "走廊", "考试", "动物", "黑狗", "狗", "猫", "死亡", "追赶", "飞行", "迷路",
+  "海洋", "水", "河", "雨", "下雨", "门", "桥", "妈妈", "父亲", "恋人", "前女友", "前男友",
+  "朋友", "发光", "跑", "奔跑", "房间", "家", "楼梯", "电梯", "车", "火车", "森林", "植物"
+];
 
 app.set("trust proxy", "loopback");
 app.use(express.json({ limit: "32kb" }));
@@ -316,12 +321,15 @@ function getResultCardObjectSchemaLines(indent = "    ") {
   ];
 }
 
-function getResultCardEnvelopeSchemaLines(indent = "    ") {
+function getResultCardEnvelopeSchemaLines(indent = "    ", options = {}) {
+  const limitedEvidence = options.limitedEvidence === true;
+  const evidenceConfidence = limitedEvidence ? "low" : "high";
+
   return [
     `${indent}"dreamResultCard": {`,
     ...getResultCardObjectSchemaLines(`${indent}  `),
     `${indent}},`,
-    `${indent}"generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": false, "evidenceConfidence": "high" }`
+    `${indent}"generationMeta": { "source": "ai_generated", "promptVersion": "quick-analysis-v2", "qualityStatus": "passed", "limitedEvidence": ${limitedEvidence}, "evidenceConfidence": "${evidenceConfidence}" }`
   ];
 }
 
@@ -339,11 +347,26 @@ function buildSystemPrompt() {
 }
 
 function buildUserPrompt(dreamText) {
+  const evidenceProfile = getDreamEvidenceProfile(dreamText);
+  const analysisModeLines = evidenceProfile.limitedEvidence
+    ? [
+        "服务端已判定当前梦境为有限线索模式：梦境内容较短或可识别梦境线索少于 2 个。",
+        "不要强行提供两个不存在的梦境细节；不得编造梦里没有出现的人物、地点、情绪或事件。",
+        "快速解析应基于当前唯一或少量真实线索展开：梦境摘要 15-60 个中文字符，核心主题至少 8 个中文字符，核心解析 60-120 个中文字符。",
+        "证据与解释至少 1 条，必须引用当前梦境真实出现的线索；反思问题仍返回 3 个，可以围绕同一个真实意象从不同角度提问。",
+        "Dream Result Card 仍必须完整：有效 archetype、四个维度、每项 0-100 数字分数、rationale、主要意象、情绪画像、反思问题和安全提醒。"
+      ]
+    : [
+        "当前梦境为标准线索模式：快速解析不能只返回几句通用话，必须至少引用两个梦中的具体场景、人物、动作或物件。",
+        "梦境摘要约 80-160 个中文字符；核心解析约 250-450 个中文字符，并引用至少两个梦境细节。",
+        "证据与解释至少 2 条，至少 2 条证据必须引用当前梦境细节并解释其依据。"
+      ];
+
   return [
     `promptVersion: ${quickPromptVersion}`,
     "请基于用户的梦境碎片生成快速解析，并在同一次上下文中生成梦境画像。",
     "请先完成定性分析，再生成四维评分。不要单纯增加字数；每个结论都要有梦境细节依据。",
-    "快速解析不能只返回几句通用话，必须至少引用两个梦中的具体场景、人物、动作或物件。",
+    ...analysisModeLines,
     "禁止把 fallback、mock、模板或通用解释伪装成正常 AI 输出。",
     "所有解释都要分清：梦中实际发生的内容，以及你提供的可能理解。",
     "主要意象最多 3 个。每个意象必须结合这次梦的语境，不能写“梦见某物代表固定含义”。",
@@ -358,9 +381,13 @@ function buildUserPrompt(dreamText) {
     "返回 JSON 结构必须严格符合：",
     "{",
     '  "analysis": {',
-    '    "dreamSummary": "80-160 个中文字符，使用梦中的具体人物、场景和事件，不重复原文，不添加梦里没有发生的内容",',
+    evidenceProfile.limitedEvidence
+      ? '    "dreamSummary": "15-60 个中文字符，只使用梦中真实出现的线索，不添加梦里没有发生的内容",'
+      : '    "dreamSummary": "80-160 个中文字符，使用梦中的具体人物、场景和事件，不重复原文，不添加梦里没有发生的内容",',
     '    "coreTheme": "一句话说明这次梦最值得关注的心理主题",',
-    '    "coreInterpretation": "250-450 个中文字符，引用至少两个梦境细节，使用可能/也许/可以理解为",',
+    evidenceProfile.limitedEvidence
+      ? '    "coreInterpretation": "60-120 个中文字符，引用当前真实梦境线索，使用可能/也许/可以理解为，不编造第二个细节",'
+      : '    "coreInterpretation": "250-450 个中文字符，引用至少两个梦境细节，使用可能/也许/可以理解为",',
     '    "evidence": [{ "dreamFragment": "梦境片段", "interpretation": "为什么这个片段支持当前分析" }],',
     '    "emotionalReading": { "primaryEmotion": "主要情绪", "secondaryEmotions": ["次要情绪"], "intensity": 0, "evidence": "情绪来自哪个具体梦境片段，并说明不代表现实固定心理状态" },',
     '    "symbolReading": [{ "symbol": "意象", "context": "本次梦里的具体语境", "possibleMeaning": "可能与什么有关", "evidence": "支持判断的梦境片段", "reflectionQuestion": "与用户自身有关的开放问题" }],',
@@ -368,7 +395,7 @@ function buildUserPrompt(dreamText) {
     '    "gentleAction": "一个很小、低压力、非治疗性质的行动",',
     '    "safetyReminder": "这不是诊断、治疗或预言，只是一种自我探索视角。"',
     "  },",
-    ...getResultCardEnvelopeSchemaLines("  "),
+    ...getResultCardEnvelopeSchemaLines("  ", { limitedEvidence: evidenceProfile.limitedEvidence }),
     "}",
     "梦境内容：",
     dreamText
@@ -922,12 +949,98 @@ function getTextLength(value) {
   return normalizeText(value).length;
 }
 
+function splitDreamClauses(text) {
+  return normalizeText(text)
+    .split(/[。！？!?；;\n，,、]+/)
+    .map((item) => item.trim())
+    .filter(Boolean);
+}
+
+function addNonOverlappingAnchor(anchors, term) {
+  if (!term) return;
+
+  for (const anchor of Array.from(anchors)) {
+    if (anchor.includes(term)) {
+      return;
+    }
+    if (term.includes(anchor)) {
+      anchors.delete(anchor);
+    }
+  }
+
+  anchors.add(term);
+}
+
+function extractCandidateDreamDetails(dreamText) {
+  const text = normalizeText(dreamText);
+  const candidates = new Set();
+  const clauses = splitDreamClauses(text);
+  const stopWords = new Set(["我", "你", "他", "她", "它", "我们", "他们", "梦见", "看到", "一直", "然后", "最后", "突然", "旁边", "这个", "那个"]);
+  const actionPattern = /[\u4e00-\u9fa5]{1,8}(?:在|和|跟|与|被|给|把|向|从|到|进|出|找|看|跑|飞|坐|开会|考试|散落|递给|穿过|响|下雨)[\u4e00-\u9fa5]{0,8}/gu;
+
+  for (const match of text.matchAll(actionPattern)) {
+    const value = normalizeText(match[0]);
+    if (value.length >= 2) {
+      candidates.add(value);
+    }
+  }
+
+  clauses.forEach((clause) => {
+    const cleaned = clause
+      .replace(/^(我|梦见|我梦见|看到|我看到|然后|最后|突然|一直)/u, "")
+      .replace(/[的了着过]/gu, "")
+      .trim();
+
+    if (cleaned.length >= 2 && !stopWords.has(cleaned)) {
+      candidates.add(cleaned.slice(0, 12));
+    }
+  });
+
+  return Array.from(candidates);
+}
+
+function getMeaningfulDreamAnchors(dreamText) {
+  const text = normalizeText(dreamText);
+  const anchors = new Set();
+
+  [...knownDreamAnchorTerms].sort((left, right) => right.length - left.length).forEach((term) => {
+    if (text.includes(term)) {
+      addNonOverlappingAnchor(anchors, term);
+    }
+  });
+
+  return Array.from(anchors);
+}
+
+function getDreamEvidenceProfile(dreamText) {
+  const text = normalizeText(dreamText);
+  const clauses = splitDreamClauses(text);
+  const meaningfulAnchors = getMeaningfulDreamAnchors(text);
+  const candidateDetails = extractCandidateDreamDetails(text);
+  const combinedDetails = Array.from(new Set([...meaningfulAnchors, ...candidateDetails]));
+  const hasOnlySimplePunctuation = !/[，,、；;]/.test(text);
+  const veryShortText = text.length <= 12;
+  const simpleEvent = clauses.length <= 1 && veryShortText && hasOnlySimplePunctuation;
+  const limitedEvidence = simpleEvent || (combinedDetails.length < 2 && text.length <= 32);
+
+  return {
+    normalizedLength: text.length,
+    meaningfulAnchors,
+    meaningfulAnchorCount: meaningfulAnchors.length,
+    distinctDetailCount: combinedDetails.length,
+    candidateDetails,
+    clauseCount: clauses.length,
+    simpleEvent,
+    limitedEvidence,
+    evidenceConfidence: limitedEvidence ? "low" : "high"
+  };
+}
+
 function getDreamAnchors(dreamText) {
   const text = normalizeText(dreamText);
   const anchors = new Set();
-  const knownTerms = ["学校", "教室", "走廊", "考试", "动物", "黑狗", "狗", "猫", "死亡", "追赶", "飞行", "迷路", "海洋", "水", "河", "门", "桥", "妈妈", "父亲", "恋人", "朋友", "下雨", "发光"];
 
-  knownTerms.forEach((term) => {
+  knownDreamAnchorTerms.forEach((term) => {
     if (text.includes(term)) {
       anchors.add(term);
     }
@@ -967,41 +1080,69 @@ function collectAnalysisText(analysis) {
 function validateQuickAnalysisQuality(analysis, dreamText) {
   const issues = [];
   const dreamAnchors = getDreamAnchors(dreamText);
+  const evidenceProfile = getDreamEvidenceProfile(dreamText);
+  const thresholds = evidenceProfile.limitedEvidence
+    ? {
+        dreamSummary: 15,
+        coreTheme: 8,
+        coreInterpretation: 60,
+        evidenceCount: 1,
+        anchoredEvidenceCount: 1,
+        evidenceInterpretation: 16,
+        emotionalEvidence: 10,
+        gentleAction: 12
+      }
+    : {
+        dreamSummary: 40,
+        coreTheme: 18,
+        coreInterpretation: 120,
+        evidenceCount: 2,
+        anchoredEvidenceCount: 2,
+        evidenceInterpretation: 20,
+        emotionalEvidence: 16,
+        gentleAction: 20
+      };
 
   if (!analysis) {
     return ["缺少完整 analysis。"];
   }
 
-  if (getTextLength(analysis.dreamSummary) < 40) {
-    issues.push("梦境摘要过短，必须使用当前梦境的具体人物、场景和事件。");
+  if (getTextLength(analysis.dreamSummary) < thresholds.dreamSummary) {
+    issues.push(evidenceProfile.limitedEvidence
+      ? "有限线索模式下，梦境摘要仍需围绕当前真实线索做清楚整理。"
+      : "梦境摘要过短，必须使用当前梦境的具体人物、场景和事件。");
   }
 
-  if (getTextLength(analysis.coreTheme) < 18) {
+  if (getTextLength(analysis.coreTheme) < thresholds.coreTheme) {
     issues.push("核心主题过短或缺失。");
   }
 
-  if (getTextLength(analysis.coreInterpretation) < 120) {
-    issues.push("核心解析过短，必须引用至少两个梦境细节。");
+  if (getTextLength(analysis.coreInterpretation) < thresholds.coreInterpretation) {
+    issues.push(evidenceProfile.limitedEvidence
+      ? "有限线索模式下，核心解析过短，必须引用当前真实梦境线索。"
+      : "核心解析过短，必须引用至少两个梦境细节。");
   }
 
-  if (!Array.isArray(analysis.evidence) || analysis.evidence.length < 2) {
-    issues.push("证据与解释至少需要 2 条。");
+  if (!Array.isArray(analysis.evidence) || analysis.evidence.length < thresholds.evidenceCount) {
+    issues.push(evidenceProfile.limitedEvidence ? "有限线索模式下，证据与解释至少需要 1 条。" : "证据与解释至少需要 2 条。");
   } else {
     const anchoredEvidenceCount = analysis.evidence.filter((item) => (
       hasDreamAnchor(`${item.dreamFragment} ${item.interpretation}`, dreamAnchors)
-      && getTextLength(item.interpretation) >= 20
+      && getTextLength(item.interpretation) >= thresholds.evidenceInterpretation
     )).length;
 
-    if (anchoredEvidenceCount < 2) {
-      issues.push("至少 2 条证据必须引用当前梦境细节并解释其依据。");
+    if (anchoredEvidenceCount < thresholds.anchoredEvidenceCount) {
+      issues.push(evidenceProfile.limitedEvidence
+        ? "有限线索模式下，至少 1 条证据必须引用当前梦境真实细节并解释其依据。"
+        : "至少 2 条证据必须引用当前梦境细节并解释其依据。");
     }
   }
 
   if (
     !analysis.emotionalReading ||
     !analysis.emotionalReading.primaryEmotion ||
-    getTextLength(analysis.emotionalReading.evidence) < 16 ||
-    analysis.emotionalReading.intensity === null
+    getTextLength(analysis.emotionalReading.evidence) < thresholds.emotionalEvidence ||
+    !hasModelScore(analysis.emotionalReading.intensity)
   ) {
     issues.push("情绪分析必须包含主要情绪、强度和具体梦境片段依据。");
   }
@@ -1016,7 +1157,7 @@ function validateQuickAnalysisQuality(analysis, dreamText) {
     issues.push("反思问题至少有 1 个必须包含当前梦境的具体线索。");
   }
 
-  if (getTextLength(analysis.gentleAction) < 20) {
+  if (getTextLength(analysis.gentleAction) < thresholds.gentleAction) {
     issues.push("今日小行动过短或缺失。");
   }
 
@@ -1077,6 +1218,7 @@ function validateResultCardQuality(card, dreamText) {
 
 function normalizeQuickCombinedOutput(parsed, dreamText) {
   if (!isPlainObject(parsed)) return { output: null, issues: ["返回内容不是 JSON 对象。"] };
+  const evidenceProfile = getDreamEvidenceProfile(dreamText);
 
   const analysis = normalizeQuickAnalysisOutput(parsed.analysis)
     || normalizeLegacyQuickAnalysisOutput(parsed);
@@ -1095,7 +1237,7 @@ function normalizeQuickCombinedOutput(parsed, dreamText) {
   const cardIssues = rawCardIssues.length
     ? rawCardIssues
     : (dreamResultCard ? validateResultCardQuality(dreamResultCard, dreamText) : ["梦境画像暂时未能完整生成。"]);
-  const generationMeta = normalizeGenerationMeta(parsed.generationMeta);
+  const generationMeta = normalizeGenerationMeta(parsed.generationMeta, { limitedEvidence: evidenceProfile.limitedEvidence });
 
   if (!dreamResultCard || cardIssues.length) {
     return {
@@ -1119,9 +1261,11 @@ function normalizeQuickCombinedOutput(parsed, dreamText) {
 
 function normalizeStandaloneResultCardOutput(parsed, dreamText) {
   const envelope = extractResultCardEnvelope(parsed);
+  const evidenceProfile = getDreamEvidenceProfile(dreamText);
+  const generationMeta = normalizeGenerationMeta(envelope.generationMeta, { limitedEvidence: evidenceProfile.limitedEvidence });
 
   if (!envelope.card) {
-    return { output: null, issues: ["返回内容不是合法 Dream Result Card JSON 对象。"], generationMeta: envelope.generationMeta };
+    return { output: null, issues: ["返回内容不是合法 Dream Result Card JSON 对象。"], generationMeta };
   }
 
   const rawCardIssues = validateRawResultCardCompleteness(envelope.card);
@@ -1131,8 +1275,8 @@ function normalizeStandaloneResultCardOutput(parsed, dreamText) {
     : (dreamResultCard ? validateResultCardQuality(dreamResultCard, dreamText) : ["梦境画像暂时未能完整生成。"]);
 
   return !dreamResultCard || cardIssues.length
-    ? { output: null, issues: cardIssues, generationMeta: envelope.generationMeta }
-    : { output: dreamResultCard, issues: [], generationMeta: envelope.generationMeta };
+    ? { output: null, issues: cardIssues, generationMeta }
+    : { output: dreamResultCard, issues: [], generationMeta };
 }
 
 function extractResultCardEnvelope(parsed) {
@@ -1151,8 +1295,8 @@ function normalizeGenerationMeta(rawMeta, overrides = {}) {
   const limitedEvidence = typeof overrides.limitedEvidence === "boolean"
     ? overrides.limitedEvidence
     : meta.limitedEvidence === true;
-  const evidenceConfidence = overrides.limitedEvidence === true
-    ? "low"
+  const evidenceConfidence = typeof overrides.limitedEvidence === "boolean"
+    ? (limitedEvidence ? "low" : "high")
     : ["low", "medium", "high"].includes(meta.evidenceConfidence)
     ? meta.evidenceConfidence
     : (limitedEvidence ? "low" : "high");
@@ -1548,9 +1692,6 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
         }
         analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, limitedCompletion.usage);
         repairedCard = normalizeStandaloneResultCardOutput(limitedCompletion.parsed, dreamText);
-        if (repairedCard.output) {
-          repairedCard.generationMeta = normalizeGenerationMeta(repairedCard.generationMeta, { limitedEvidence: true });
-        }
       }
 
       if (repairedCard.output) {
@@ -1995,6 +2136,7 @@ module.exports = {
   buildResultCardRetryUserPrompt,
   buildResultCardUserPrompt,
   buildUserPrompt,
+  getDreamEvidenceProfile,
   normalizeGuidedQuestionsOutput,
   normalizeQuickAnalysisOutput,
   normalizeQuickCombinedOutput,
