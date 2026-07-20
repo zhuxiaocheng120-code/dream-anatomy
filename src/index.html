@@ -222,6 +222,29 @@
         <form class="dream-form" data-quick-form>
           <label for="quickDream">梦境碎片</label>
           <textarea id="quickDream" rows="7" placeholder="写下你还记得的画面、情绪、人物或地点。"></textarea>
+          <section class="sleep-quality-panel" aria-labelledby="quickSleepQualityTitle">
+            <div class="sleep-quality-copy">
+              <h3 id="quickSleepQualityTitle">昨晚的睡眠感受</h3>
+              <p>可选。按照你醒来后的主观感受记录，不是医学测量。</p>
+            </div>
+            <div class="sleep-quality-control">
+              <label class="sr-only" for="quickSleepQualityRange">昨晚的睡眠感受</label>
+              <input
+                id="quickSleepQualityRange"
+                class="sleep-quality-range"
+                type="range"
+                min="0"
+                max="100"
+                step="5"
+                value="50"
+                aria-valuetext="未填写，滑动记录，可跳过"
+              >
+              <div class="sleep-quality-control-footer">
+                <p class="sleep-quality-value" data-quick-sleep-quality-display aria-live="polite">滑动记录，可跳过</p>
+                <button class="text-button" type="button" data-quick-sleep-quality-clear>清除</button>
+              </div>
+            </div>
+          </section>
           <div class="button-row">
             <button type="submit">保存并解析</button>
             <button class="secondary-button" type="reset">清空</button>
@@ -626,6 +649,7 @@
     <script src="dreamJournal.js"></script>
     <script src="dreamArchetypes.js"></script>
     <script src="dreamResultCard.js"></script>
+    <script src="sleepQuality.js"></script>
     <script src="adminAnalytics.js"></script>
     <script src="app.js"></script>
   </body>

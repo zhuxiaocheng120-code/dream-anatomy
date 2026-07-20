@@ -168,6 +168,25 @@ test("maps a local dream record to the Supabase row shape for the current user",
   assert.equal(row.sync_status, "synced");
 });
 
+test("maps empty sleep quality to null and preserves score metadata", () => {
+  const record = createRecord({
+    sleepQuality: null,
+    reportContent: {
+      summary: "梦境整理",
+      dreamResultCard: { coreInsight: "也许在靠近选择。" },
+      sleepQualityScore: 65,
+      sleepQualityLabel: "不错",
+      sleepQualityUpdatedAt: "2026-07-20T08:00:00.000Z"
+    }
+  });
+  const row = DreamSync.mapLocalRecordToSupabaseRow(record, user);
+
+  assert.equal(row.sleep_quality, null);
+  assert.equal(row.report_content.sleepQualityScore, 65);
+  assert.equal(row.report_content.sleepQualityLabel, "不错");
+  assert.equal(row.report_content.dreamResultCard.coreInsight, "也许在靠近选择。");
+});
+
 test("maps Supabase user reflection report content back to a local dream record", () => {
   const localRecord = DreamSync.mapSupabaseRowToLocalRecord({
     id: "cloud-one",
@@ -191,6 +210,33 @@ test("maps Supabase user reflection report content back to a local dream record"
 
   assert.equal(localRecord.reportContent.userReflection, "门让我想到一个还没做的决定。");
   assert.equal(localRecord.reportContent.userReflectionUpdatedAt, "2026-07-20T09:00:00.000Z");
+});
+
+test("maps null Supabase sleep quality back without manufacturing 未记录", () => {
+  const localRecord = DreamSync.mapSupabaseRowToLocalRecord({
+    id: "cloud-sleep",
+    user_id: "user-1",
+    local_record_id: "local-sleep",
+    created_at: "2026-07-20T08:00:00.000Z",
+    raw_dream_text: "我梦见门。",
+    dream_summary: "门",
+    emotions: ["好奇"],
+    symbols: ["门"],
+    sleep_quality: null,
+    analysis_type: "快速解析",
+    report_content: {
+      summary: "门",
+      sleepQualityScore: 80,
+      sleepQualityLabel: "不错",
+      sleepQualityUpdatedAt: "2026-07-20T09:00:00.000Z"
+    },
+    source: "app",
+    sync_status: "synced"
+  });
+
+  assert.equal(localRecord.sleepQuality, undefined);
+  assert.equal(localRecord.reportContent.sleepQualityScore, 80);
+  assert.equal(localRecord.reportContent.sleepQualityLabel, "不错");
 });
 
 test("ignores a forged local user id when mapping rows for the current session user", () => {

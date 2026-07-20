@@ -373,7 +373,10 @@ test("export excludes tokens principal hashes email and full user ids", async ()
     reportContent: {
       dreamResultCard: { coreInsight: "也许在靠近选择。" },
       userReflection: "这个梦让我想到一个还没有说出口的选择。",
-      userReflectionUpdatedAt: "2026-07-20T09:00:00.000Z"
+      userReflectionUpdatedAt: "2026-07-20T09:00:00.000Z",
+      sleepQualityScore: 65,
+      sleepQualityLabel: "不错",
+      sleepQualityUpdatedAt: "2026-07-20T09:30:00.000Z"
     }
   };
   const { controller, downloads } = createHarness({
@@ -389,9 +392,36 @@ test("export excludes tokens principal hashes email and full user ids", async ()
   const exportedText = JSON.stringify(downloads[0].data);
   assert.match(exportedText, /我梦见一扇门/);
   assert.match(exportedText, /这个梦让我想到一个还没有说出口的选择/);
+  assert.match(exportedText, /sleepQualityScore/);
+  assert.match(exportedText, /65/);
+  assert.match(exportedText, /不错/);
   assert.doesNotMatch(exportedText, /private@example\.com/);
   assert.doesNotMatch(exportedText, /12345678-1234-1234-1234-123456789abc/);
   assert.doesNotMatch(exportedText, /access_token|refresh_token|principal_hash/i);
+});
+
+test("export does not manufacture sleep quality for untouched records", async () => {
+  const record = {
+    id: "dream-without-sleep",
+    createdAt: "2026-07-17T01:02:03.000Z",
+    rawDreamText: "我梦见一扇门。",
+    dreamSummary: "门",
+    emotions: "好奇",
+    symbols: "门",
+    analysisType: "快速解析",
+    reportContent: {
+      dreamResultCard: { coreInsight: "也许在靠近选择。" }
+    }
+  };
+  const { controller, downloads } = createHarness({ records: [record] });
+
+  await controller.exportData();
+
+  const exportedRecord = downloads[0].data.dreams[0];
+  assert.equal(exportedRecord.sleepQuality, undefined);
+  assert.equal(exportedRecord.reportContent.sleepQualityScore, undefined);
+  assert.equal(exportedRecord.reportContent.sleepQualityLabel, undefined);
+  assert.equal(exportedRecord.reportContent.sleepQualityUpdatedAt, undefined);
 });
 
 test("export does not include full cloud record UUIDs", async () => {

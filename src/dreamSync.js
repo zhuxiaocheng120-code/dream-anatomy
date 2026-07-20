@@ -55,6 +55,15 @@
     return value || "未记录";
   }
 
+  function normalizeSleepQualityValue(value) {
+    if (value === null || value === undefined) {
+      return null;
+    }
+
+    const text = String(value).trim();
+    return text && text !== "未记录" ? text : null;
+  }
+
   function getLocalRecordId(record) {
     return String(record.localRecordId || record.local_record_id || record.id);
   }
@@ -78,7 +87,7 @@
       dream_summary: record.dreamSummary || record.dream_summary || "",
       emotions: toTextArray(record.emotions),
       symbols: toTextArray(record.symbols),
-      sleep_quality: record.sleepQuality || record.sleep_quality || "未记录",
+      sleep_quality: normalizeSleepQualityValue(record.sleepQuality || record.sleep_quality),
       analysis_type: record.analysisType || record.analysis_type || "快速解析",
       report_content: record.reportContent || record.report_content || {},
       source: options.source || record.source || localStorageSource,
@@ -98,7 +107,7 @@
       dreamSummary: row.dream_summary || "未记录",
       emotions: textFromList(row.emotions),
       symbols: textFromList(row.symbols),
-      sleepQuality: row.sleep_quality || "未记录",
+      sleepQuality: normalizeSleepQualityValue(row.sleep_quality) || undefined,
       analysisType: row.analysis_type || "梦境",
       reportContent: row.report_content || {},
       source: row.source || localStorageSource,
