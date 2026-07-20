@@ -140,6 +140,10 @@ Current boundaries:
 - The current Mini Program visual refresh uses local WXML/WXSS decorations only; it does not rely on remote images or font files.
 - Real-device validation has not been completed yet; use WeChat Developer Tools and a test AppID before release.
 
+## Brand Assets
+
+Dream Anatomy 的 Web Beta 品牌标识说明见 [docs/BRAND_ASSETS.md](docs/BRAND_ASSETS.md)。当前资产包括原创的云朵梦境向导 Icon、横向 Lockup 和单色版本，并记录了 reduced-motion 行为、原创边界和未来小程序 PNG 导出说明。
+
 ## AI API Protection
 
 The shared AI endpoint is `POST /api/v1/dream-analysis`. The legacy `POST /api/dream-analysis` route currently calls the same handler for Web compatibility.

@@ -41,6 +41,39 @@ body {
   background-size: 34px 34px, 34px 34px, auto;
 }
 
+@keyframes dreamGuideFloat {
+  0%,
+  100% {
+    transform: translateY(0);
+  }
+
+  50% {
+    transform: translateY(-3px);
+  }
+}
+
+@keyframes dreamSoftEnter {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes dreamDimensionReveal {
+  from {
+    transform: scaleX(0);
+  }
+
+  to {
+    transform: scaleX(1);
+  }
+}
+
 button,
 textarea,
 input {
@@ -91,6 +124,44 @@ button {
   font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
   font-weight: 800;
   line-height: 1.2;
+  transition: color 180ms ease, transform 180ms ease;
+}
+
+.brand:hover,
+.brand:focus-visible {
+  transform: scale(1.02);
+}
+
+.brand-mark {
+  width: 38px;
+  height: auto;
+  flex: 0 0 auto;
+  pointer-events: none;
+  animation: dreamGuideFloat 8s ease-in-out infinite;
+}
+
+.hero-brand-seal {
+  width: min(280px, 86vw);
+  height: auto;
+  margin-bottom: 22px;
+  pointer-events: none;
+  animation: dreamSoftEnter 520ms ease both;
+}
+
+.dream-guide-seal {
+  width: 68px;
+  height: auto;
+  margin-bottom: 16px;
+  pointer-events: none;
+  animation: dreamGuideFloat 9s ease-in-out infinite;
+}
+
+.auth-brand-mark {
+  width: 46px;
+  height: auto;
+  margin-bottom: 10px;
+  pointer-events: none;
+  animation: dreamSoftEnter 420ms ease both;
 }
 
 .text-button {
@@ -293,6 +364,21 @@ button {
   align-items: center;
   gap: 40px;
   padding: 64px 0 36px;
+}
+
+.hero-content,
+.dream-card,
+.dream-home-welcome,
+.dream-home-quote,
+.dream-home-reflection,
+.work-panel,
+.quick-result,
+.dream-result-card,
+.journal-card,
+.dream-detail,
+.privacy-data-panel,
+.auth-dialog {
+  animation: dreamSoftEnter 520ms ease both;
 }
 
 .eyebrow {
@@ -947,7 +1033,8 @@ input {
   --sleep-quality-thumb-height: 26px;
   --sleep-quality-thumb-shadow: 0 8px 18px rgba(76, 61, 45, 0.16);
   --sleep-quality-thumb-shadow-active: 0 11px 24px rgba(76, 61, 45, 0.22);
-  --sleep-quality-cloud-thumb: url("data:image/svg+xml,%3Csvg width='44' height='32' viewBox='0 0 44 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M13.6 24.5C8.4 24.5 4.5 21.1 4.5 16.7c0-4 3.2-7.2 7.2-7.2.8 0 1.6.1 2.3.4C15.6 6.3 19.1 4.2 23 4.2c4.9 0 9 3.2 10.1 7.7.6-.2 1.2-.3 1.9-.3 3.6 0 6.5 2.8 6.5 6.2 0 3.9-3.3 6.7-7.6 6.7H13.6Z' fill='%23fff8eb'/%3E%3Cpath d='M13.6 24.5C8.4 24.5 4.5 21.1 4.5 16.7c0-4 3.2-7.2 7.2-7.2.8 0 1.6.1 2.3.4C15.6 6.3 19.1 4.2 23 4.2c4.9 0 9 3.2 10.1 7.7.6-.2 1.2-.3 1.9-.3 3.6 0 6.5 2.8 6.5 6.2 0 3.9-3.3 6.7-7.6 6.7H13.6Z' fill='none' stroke='%238a6f52' stroke-opacity='.58' stroke-width='1.35'/%3E%3Cpath d='M14.2 22.9h18.9' stroke='%235f6549' stroke-opacity='.18' stroke-width='1.2' stroke-linecap='round'/%3E%3C/svg%3E");
+  --sleep-quality-cloud-thumb-style: dream-guide-slider-thumb-v1;
+  --sleep-quality-cloud-thumb: url("data:image/svg+xml,%3Csvg width='44' height='32' viewBox='0 0 44 32' xmlns='http://www.w3.org/2000/svg'%3E%3Cpath d='M12.8 24.4C7.8 24.4 4 21.2 4 16.9c0-4 3.2-7.1 7.2-7.1.8 0 1.5.1 2.2.4C15.1 6.5 18.6 4.4 22.6 4.4c5 0 9.1 3.3 10.2 7.7.5-.1 1.1-.2 1.7-.2 3.1 0 5.7 2.5 5.7 5.6 0 4-3.3 6.9-7.7 6.9H12.8Z' fill='%23fff8eb'/%3E%3Cpath d='M12.8 24.4C7.8 24.4 4 21.2 4 16.9c0-4 3.2-7.1 7.2-7.1.8 0 1.5.1 2.2.4C15.1 6.5 18.6 4.4 22.6 4.4c5 0 9.1 3.3 10.2 7.7.5-.1 1.1-.2 1.7-.2 3.1 0 5.7 2.5 5.7 5.6 0 4-3.3 6.9-7.7 6.9H12.8Z' fill='none' stroke='%235f6549' stroke-opacity='.68' stroke-width='1.35' stroke-linecap='round' stroke-linejoin='round'/%3E%3Cpath d='M14.7 22.4h16.7' stroke='%238a6f52' stroke-opacity='.24' stroke-width='1.15' stroke-linecap='round'/%3E%3C/svg%3E");
   width: 100%;
   min-height: 34px;
   padding: 0;
@@ -1071,6 +1158,37 @@ input {
     --sleep-quality-thumb-width: 40px;
     --sleep-quality-thumb-height: 29px;
     min-height: 42px;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    scroll-behavior: auto !important;
+    transition-duration: 0.01ms !important;
+    animation-duration: 0.01ms !important;
+    animation-iteration-count: 1 !important;
+  }
+
+  .brand-mark,
+  .dream-guide-seal,
+  .hero-brand-seal,
+  .auth-brand-mark,
+  .hero-content,
+  .dream-card,
+  .dream-home-welcome,
+  .dream-home-quote,
+  .dream-home-reflection,
+  .work-panel,
+  .quick-result,
+  .dream-result-card,
+  .journal-card,
+  .dream-detail,
+  .privacy-data-panel,
+  .auth-dialog,
+  .result-card-progress span {
+    animation: none !important;
   }
 }
 
@@ -2158,6 +2276,8 @@ input:focus-visible {
   display: block;
   height: 100%;
   background: var(--teal);
+  transform-origin: left center;
+  animation: dreamDimensionReveal 620ms ease both;
 }
 
 .result-card-rationale summary {
