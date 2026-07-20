@@ -258,6 +258,231 @@ test("returns a normalized result card from strict DeepSeek JSON", { concurrency
   }
 });
 
+test("retries standalone result-card generation once when the first card is incomplete", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const upstreamBodies = [];
+  const inserted = [];
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamBodies.push(JSON.parse(options.body));
+    const firstAttempt = upstreamBodies.length === 1;
+    const partialCard = createResultCardPayload();
+    partialCard.dimensions = [
+      {
+        id: "symbol_depth",
+        score: 70,
+        summary: "学校走廊和门提供了一些象征线索。",
+        rationale: ["学校走廊和门形成过渡线索。"]
+      }
+    ];
+
+    return {
+      ok: true,
+      json: async () => ({
+        usage: firstAttempt
+          ? { prompt_tokens: 80, completion_tokens: 120, total_tokens: 200 }
+          : { prompt_tokens: 20, completion_tokens: 40, total_tokens: 60 },
+        choices: [{
+          message: {
+            content: JSON.stringify(firstAttempt ? partialCard : createResultCardPayload())
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "result_card"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(upstreamBodies.length, 2);
+      assert.match(upstreamBodies[1].messages[1].content, /上一次梦境画像输出没有通过质量检查/);
+      assert.match(upstreamBodies[1].messages[1].content, /emotion_intensity|情绪强度/);
+      assert.doesNotMatch(upstreamBodies[1].messages[1].content, /"analysis"/);
+      assert.deepEqual(payload.analysis.dimensions.map((dimension) => dimension.score), [88, 0, 42, 76]);
+      assert.equal(inserted.length, 1);
+      assert.equal(inserted[0].analysis_type, "result_card");
+      assert.equal(inserted[0].outcome, "success");
+      assert.equal(inserted[0].quality_retry_count, 1);
+      assert.equal(inserted[0].prompt_tokens, 100);
+      assert.equal(inserted[0].completion_tokens, 160);
+      assert.equal(inserted[0].total_tokens, 260);
+      assert.doesNotMatch(JSON.stringify(inserted[0]), /学校走廊|发着光|test-key|Bearer/);
+    }, {
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("retries standalone result-card generation when the first archetype id is unknown", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const upstreamBodies = [];
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamBodies.push(JSON.parse(options.body));
+    const card = createResultCardPayload();
+    if (upstreamBodies.length === 1) {
+      card.archetype.id = "random_unknown";
+    }
+    return {
+      ok: true,
+      json: async () => ({ choices: [{ message: { content: JSON.stringify(card) } }] })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "result_card"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(upstreamBodies.length, 2);
+      assert.match(upstreamBodies[1].messages[1].content, /梦境原型必须使用稳定原型集合中的 id/);
+      assert.equal(payload.analysis.archetype.id, "seeker");
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("returns a clear incomplete error after two standalone result-card quality failures", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const upstreamBodies = [];
+  const inserted = [];
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamBodies.push(JSON.parse(options.body));
+    const partialCard = createResultCardPayload();
+    partialCard.dimensions = partialCard.dimensions.slice(0, 1);
+    partialCard.archetype.evidence = ["只有一条线索。"];
+    return {
+      ok: true,
+      json: async () => ({
+        usage: { prompt_tokens: 10, completion_tokens: 20, total_tokens: 30 },
+        choices: [{ message: { content: JSON.stringify(partialCard) } }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "result_card"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 422);
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
+      assert.equal(payload.generationMeta.source, "generation_failed");
+      assert.equal(payload.analysis, undefined);
+      assert.equal(upstreamBodies.length, 2);
+      assert.equal(inserted.length, 1);
+      assert.equal(inserted[0].analysis_type, "result_card");
+      assert.equal(inserted[0].outcome, "generation_incomplete");
+      assert.equal(inserted[0].error_code, "GENERATION_INCOMPLETE");
+      assert.equal(inserted[0].quality_retry_count, 1);
+    }, {
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("records result-card quality retry metadata when the retry attempt times out", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const inserted = [];
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    if (upstreamCalls === 1) {
+      const partialCard = createResultCardPayload();
+      partialCard.dimensions = partialCard.dimensions.slice(0, 1);
+      return {
+        ok: true,
+        json: async () => ({
+          usage: { prompt_tokens: 11, completion_tokens: 22, total_tokens: 33 },
+          choices: [{ message: { content: JSON.stringify(partialCard) } }]
+        })
+      };
+    }
+
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        reject(error);
+      });
+    });
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "result_card"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 504);
+      assert.equal(payload.error.code, "UPSTREAM_TIMEOUT");
+      assert.equal(upstreamCalls, 2);
+      assert.equal(inserted.length, 1);
+      assert.equal(inserted[0].analysis_type, "result_card");
+      assert.equal(inserted[0].outcome, "timeout");
+      assert.equal(inserted[0].error_code, "UPSTREAM_TIMEOUT");
+      assert.equal(inserted[0].quality_retry_count, 1);
+      assert.equal(inserted[0].prompt_tokens, 11);
+      assert.equal(inserted[0].completion_tokens, 22);
+      assert.equal(inserted[0].total_tokens, 33);
+    }, {
+      requestTimeoutMs: 1,
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
 test("rejects incomplete standalone result-card generations before saving partial scores", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   global.fetch = async (url, options) => {
@@ -773,10 +998,12 @@ test("does not accept non-numeric result-card scores as generated zeros", { conc
   }
 });
 
-test("returns only a safe error when result-card model JSON is invalid", { concurrency: false }, async () => {
+test("retries once and returns a safe incomplete error when result-card model JSON is invalid", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
   global.fetch = async (url, options) => {
     if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
     return { ok: true, json: async () => ({ choices: [{ message: { content: "not json" } }] }) };
   };
 
@@ -786,9 +1013,46 @@ test("returns only a safe error when result-card model JSON is invalid", { concu
         dreamText: "学校走廊里的门",
         analysisType: "result_card"
       });
-      assert.equal(response.status, 502);
-      assert.equal((await response.json()).error.code, "UPSTREAM_UNAVAILABLE");
+      const payload = await response.json();
+
+      assert.equal(response.status, 422);
+      assert.equal(payload.error.code, "GENERATION_INCOMPLETE");
+      assert.equal(payload.generationMeta.source, "generation_failed");
+      assert.equal(payload.analysis, undefined);
+      assert.equal(upstreamCalls, 2);
     });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("result-card upstream timeout is not classified as incomplete generation", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        const error = new Error("aborted");
+        error.name = "AbortError";
+        reject(error);
+      });
+    });
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "学校走廊里的门",
+        analysisType: "result_card"
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 504);
+      assert.equal(payload.error.code, "UPSTREAM_TIMEOUT");
+      assert.equal(upstreamCalls, 1);
+    }, { requestTimeoutMs: 1 });
   } finally {
     global.fetch = nativeFetch;
   }

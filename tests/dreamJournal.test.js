@@ -2056,6 +2056,115 @@ test("Dream Detail keeps the missing-card fallback and shows a safe error when g
   assert.match(collectText(harness.dreamDetailContent).join("\n"), /暂时无法生成梦境画像，请稍后再试。/);
 });
 
+test("Dream Detail maps result-card regeneration API errors to specific user messages", async () => {
+  const cases = [
+    {
+      code: "GENERATION_INCOMPLETE",
+      status: 422,
+      expected: "这次画像仍未能完整生成，可以稍后再试。"
+    },
+    {
+      code: "UPSTREAM_TIMEOUT",
+      status: 504,
+      expected: "AI 回应时间较长，请稍后重新生成。"
+    },
+    {
+      code: "RATE_LIMITED",
+      status: 429,
+      expected: "操作太快了，请稍等后再试。"
+    },
+    {
+      code: "DAILY_LIMIT_REACHED",
+      status: 429,
+      expected: "今天的免费生成次数已经用完。"
+    },
+    {
+      code: "UPSTREAM_UNAVAILABLE",
+      status: 502,
+      expected: "梦境画像服务暂时不可用。"
+    }
+  ];
+
+  for (const item of cases) {
+    const record = createRecord({
+      id: `failed-${item.code}`,
+      reportContent: {
+        summary: "旧记录",
+        dreamResultCardStatus: "generation_failed"
+      }
+    });
+    const harness = createAppIntegrationHarness({
+      realDreamResultCard: true,
+      records: [record],
+      fetch: async () => ({
+        ok: false,
+        status: item.status,
+        json: async () => ({
+          error: {
+            code: item.code,
+            message: "服务器提示"
+          }
+        })
+      })
+    });
+
+    harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+    const generationButton = findElements(
+      harness.dreamDetailContent,
+      (element) => element.tagName === "BUTTON" && element.textContent === "重新生成梦境画像"
+    )[0];
+
+    await generationButton.trigger("click");
+
+    const text = collectText(harness.dreamDetailContent).join("\n");
+    assert.match(text, new RegExp(item.expected.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")));
+  }
+});
+
+test("Dream Detail prevents duplicate result-card regeneration requests while one is running", async () => {
+  const record = createRecord({
+    id: "duplicate-result-card-generation",
+    reportContent: {
+      summary: "旧记录",
+      dreamResultCardStatus: "generation_failed"
+    }
+  });
+  let fetchCount = 0;
+  let resolveFetch;
+  const fetchPromise = new Promise((resolve) => {
+    resolveFetch = resolve;
+  });
+  const harness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    records: [record],
+    fetch: async () => {
+      fetchCount += 1;
+      return fetchPromise;
+    }
+  });
+
+  harness.windowRef.DreamAnatomyApp.openDreamDetail(record.id);
+  const generationButton = findElements(
+    harness.dreamDetailContent,
+    (element) => element.tagName === "BUTTON" && element.textContent === "重新生成梦境画像"
+  )[0];
+
+  const firstClick = generationButton.trigger("click");
+  const secondClick = generationButton.trigger("click");
+  await Promise.resolve();
+  await Promise.resolve();
+
+  assert.equal(fetchCount, 1);
+  assert.match(collectText(harness.dreamDetailContent).join("\n"), /正在重新整理梦境画像……/);
+
+  resolveFetch({
+    ok: true,
+    json: async () => ({ analysis: createResultCardFixture() })
+  });
+  await firstClick;
+  await secondClick;
+});
+
 test("opening Dream Journal and Dream Detail does not automatically call AI", () => {
   let fetchCount = 0;
   const record = createRecord({
