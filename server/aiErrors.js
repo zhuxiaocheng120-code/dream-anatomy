@@ -7,6 +7,7 @@ const defaultMessages = {
   PRODUCT_ANALYTICS_WRITE_FAILED: "产品分析暂时无法记录，请稍后再试。",
   ACCOUNT_DELETION_FAILED: "账户注销暂时没有完成，请稍后重试。",
   WECHAT_AUTH_UNAVAILABLE: "微信身份服务暂时不可用，请稍后再试。",
+  LEGAL_CONSENT_REQUIRED: "请先确认当前版本的用户协议、隐私政策、AI 使用说明和境外处理说明。",
   FEATURE_DISABLED: "这个功能正在开发中。",
   RATE_LIMITED: "请求太频繁了，请稍后再试。",
   DAILY_LIMIT_REACHED: "今天的免费解析次数已经用完，稍后再来继续记录梦境。",

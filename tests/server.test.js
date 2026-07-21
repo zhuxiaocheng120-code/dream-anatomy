@@ -316,6 +316,9 @@ async function withServer(run, options = {}) {
   if (options.authResolver) {
     app.locals.aiAuthResolver = options.authResolver;
   }
+  if (options.legalConsentVerifier) {
+    app.locals.legalConsentVerifier = options.legalConsentVerifier;
+  }
   if (options.requestTimeoutMs !== undefined) {
     app.locals.aiRequestTimeoutMs = options.requestTimeoutMs;
   }
@@ -357,6 +360,7 @@ async function withServer(run, options = {}) {
     await new Promise((resolve, reject) => server.close((error) => error ? reject(error) : resolve()));
     delete app.locals.aiAccessControl;
     delete app.locals.aiAuthResolver;
+    delete app.locals.legalConsentVerifier;
     delete app.locals.aiRequestTimeoutMs;
     delete app.locals.aiTimeoutConfig;
     delete app.locals.analyticsClient;
@@ -2370,6 +2374,63 @@ test("successful authenticated request uses user quota metadata", { concurrency:
           userId: "real-user",
           rateLimitKey: "user:real-user"
         })
+      },
+      legalConsentVerifier: {
+        ensureAccepted: async () => true
+      },
+      accessControl: createAiAccessControl({
+        userDailyLimit: 5,
+        userRequestsPerMinute: 5,
+        guestDailyLimit: 1,
+        guestRequestsPerMinute: 1,
+        maxConcurrentPerPrincipal: 1
+      })
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("authenticated dream analysis requires current legal and cross-border consent before DeepSeek", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+    return { ok: true, json: async () => ({}) };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      }, {
+        headers: { Authorization: "Bearer valid-token" }
+      });
+      const payload = await response.json();
+
+      assert.equal(response.status, 403);
+      assert.equal(payload.error.code, "LEGAL_CONSENT_REQUIRED");
+      assert.match(payload.error.message, /境外处理说明/);
+      assert.equal(payload.usage.authenticated, true);
+      assert.equal(payload.usage.remaining, 5);
+      assert.equal(upstreamCalls, 0);
+    }, {
+      authResolver: {
+        resolveIdentity: async () => ({
+          type: "authenticated",
+          userId: "real-user",
+          rateLimitKey: "user:real-user"
+        })
+      },
+      legalConsentVerifier: {
+        ensureAccepted: async () => {
+          throw Object.assign(new Error("请先确认当前版本的用户协议、隐私政策、AI 使用说明和境外处理说明。"), {
+            code: "LEGAL_CONSENT_REQUIRED",
+            status: 403
+          });
+        }
       },
       accessControl: createAiAccessControl({
         userDailyLimit: 5,

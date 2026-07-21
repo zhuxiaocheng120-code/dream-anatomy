@@ -6,7 +6,11 @@ const path = require("path");
 const runtimeConfig = {
   SUPABASE_URL: process.env.SUPABASE_URL || "",
   SUPABASE_ANON_KEY: process.env.SUPABASE_ANON_KEY || "",
-  PUBLIC_SUPPORT_EMAIL: process.env.PUBLIC_SUPPORT_EMAIL || ""
+  PUBLIC_OPERATOR_NAME: process.env.PUBLIC_OPERATOR_NAME || "",
+  PUBLIC_SUPPORT_EMAIL: process.env.PUBLIC_SUPPORT_EMAIL || "",
+  PUBLIC_AI_MODEL_NAME: process.env.PUBLIC_AI_MODEL_NAME || "",
+  PUBLIC_AI_MODEL_FILING_NUMBER: process.env.PUBLIC_AI_MODEL_FILING_NUMBER || "",
+  PUBLIC_AI_APP_REGISTRATION_NUMBER: process.env.PUBLIC_AI_APP_REGISTRATION_NUMBER || ""
 };
 
 const outputPath = path.join(__dirname, "..", "src", "runtime-env.js");

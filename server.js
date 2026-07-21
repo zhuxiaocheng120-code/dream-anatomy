@@ -14,6 +14,7 @@ const { createAiAccessControl } = require("./server/aiAccessControl");
 const { createAiAuthResolver } = require("./server/aiAuth");
 const { buildUsageEvent, createPrincipalHash, recordUsageEventSafely } = require("./server/aiAnalytics");
 const { createApiError, formatApiError } = require("./server/aiErrors");
+const { createLegalConsentVerifier } = require("./server/legalConsent");
 const {
   PRODUCT_ANALYTICS_VERSION,
   deleteProductEventsForIdentity,
@@ -50,6 +51,7 @@ app.get("/runtime-env.js", (request, response) => {
 app.use(express.static(path.join(__dirname, "src")));
 
 const defaultAiAuthResolver = createAiAuthResolver();
+const defaultLegalConsentVerifier = createLegalConsentVerifier();
 const defaultAiAccessControl = createAiAccessControl({
   guestDailyLimit: process.env.AI_GUEST_DAILY_LIMIT,
   userDailyLimit: process.env.AI_USER_DAILY_LIMIT,
@@ -65,6 +67,10 @@ function parsePositiveInteger(value, fallback) {
 
 function getAiAuthResolver() {
   return app.locals.aiAuthResolver || defaultAiAuthResolver;
+}
+
+function getLegalConsentVerifier() {
+  return app.locals.legalConsentVerifier || defaultLegalConsentVerifier;
 }
 
 function getAiAccessControl() {
@@ -1794,6 +1800,13 @@ async function handleDreamAnalysisRequest(request, response) {
     identity = await getAiAuthResolver().resolveIdentity(request);
   } catch (error) {
     sendApiError(response, error);
+    return;
+  }
+
+  try {
+    await getLegalConsentVerifier().ensureAccepted({ request, identity });
+  } catch (error) {
+    sendApiError(response, error, accessControl.getUsage(identity));
     return;
   }
 

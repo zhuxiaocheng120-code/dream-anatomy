@@ -21,6 +21,14 @@
       <text class="link" bindtap="openAi">《AI 使用说明》</text>
     </label>
   </checkbox-group>
+  <checkbox-group class="section consent" bindchange="toggleCrossBorderAgreement">
+    <label class="small muted">
+      <checkbox value="cross-border-accepted" checked="{{crossBorderAgreed}}" />
+      我已阅读
+      <text class="link" bindtap="openCrossBorder">《境外处理说明》</text>
+      ，并单独同意必要的境外处理
+    </label>
+  </checkbox-group>
 
   <error-state message="{{errorMessage}}"></error-state>
   <loading-state wx:if="{{submitting}}" text="正在整理梦境线索……"></loading-state>

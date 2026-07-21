@@ -40,6 +40,7 @@ const privacyConfirmInput = document.querySelector("[data-privacy-confirm-input]
 const privacyConfirmCancel = document.querySelector("[data-privacy-confirm-cancel]");
 const privacyConfirmSubmit = document.querySelector("[data-privacy-confirm-submit]");
 const registerLegalConsent = document.querySelector("[data-legal-consent-checkbox]");
+const registerCrossBorderConsent = document.querySelector("[data-cross-border-consent-checkbox]");
 const authLegalLinks = Array.from(document.querySelectorAll("[data-auth-legal-link]"));
 const guidedForm = document.querySelector("[data-guided-form]");
 const guidedDream = document.querySelector("#guidedDream");
@@ -160,6 +161,7 @@ const privacyDataController = window.DreamPrivacyData
         confirmSubmit: privacyConfirmSubmit,
         confirmTitle: privacyConfirmTitle,
         documentShell: privacyDocumentShell,
+        registerCrossBorderConsent,
         registerConsent: registerLegalConsent,
         status: privacyStatus,
         view: privacyDataView
@@ -537,7 +539,7 @@ async function requestDreamAnalysis(payload) {
     error.generationMeta = data ? data.generationMeta : null;
     error.isValidationError = response.status === 400 || error.code === "INVALID_REQUEST";
     error.isIncompleteGeneration = response.status === 422 || error.code === "GENERATION_INCOMPLETE";
-    error.isAccessControlledError = ["AUTH_INVALID", "FEATURE_DISABLED", "RATE_LIMITED", "DAILY_LIMIT_REACHED", "REQUEST_IN_PROGRESS"].includes(error.code);
+    error.isAccessControlledError = ["AUTH_INVALID", "FEATURE_DISABLED", "LEGAL_CONSENT_REQUIRED", "RATE_LIMITED", "DAILY_LIMIT_REACHED", "REQUEST_IN_PROGRESS"].includes(error.code);
     throw error;
   }
 
@@ -1880,7 +1882,7 @@ if (quickForm) {
 
     if (privacyDataController && !(await privacyDataController.ensureGuestAiConsent())) {
       if (status) {
-        status.textContent = "请先确认用户协议、隐私政策和 AI 使用说明，再开始快速解析。";
+        status.textContent = "请先确认用户协议、隐私政策、AI 使用说明和境外处理说明，再开始快速解析。";
       }
       return;
     }

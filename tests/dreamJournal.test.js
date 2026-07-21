@@ -1219,6 +1219,27 @@ test("quick decode shows stable API auth and quota errors without saving fallbac
   assert.match(quotaHarness.quickFormStatus.textContent, /今天的免费解析次数已经用完/);
   assert.match(quotaHarness.quickFormStatus.textContent, /登录后可获得更多免费解析次数/);
   assert.equal(quotaHarness.getSavedRecords().length, 0);
+
+  const legalHarness = createAppIntegrationHarness({
+    realDreamResultCard: true,
+    noDreamJournal: true,
+    fakeDreamJournal: false,
+    fetch: async () => ({
+      ok: false,
+      status: 403,
+      json: async () => ({
+        error: { code: "LEGAL_CONSENT_REQUIRED", message: "请先确认当前版本的用户协议、隐私政策、AI 使用说明和境外处理说明。" },
+        usage: { authenticated: true, limit: 10, remaining: 10, resetAt: "2026-07-15T00:00:00.000Z" }
+      })
+    })
+  });
+
+  legalHarness.quickDream.value = "我梦见自己在门前停住。";
+  await legalHarness.quickForm.trigger("submit");
+
+  assert.equal(legalHarness.quickResult.hidden, true);
+  assert.match(legalHarness.quickFormStatus.textContent, /境外处理说明/);
+  assert.equal(legalHarness.getSavedRecords().length, 0);
 });
 
 test("quick decode shows an incomplete generation message without mock fallback", async () => {
