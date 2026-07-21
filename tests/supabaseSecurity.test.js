@@ -31,11 +31,18 @@ test("browser runtime environment exposes only public Supabase settings", () => 
 
   assert.match(runtimeWriter, /SUPABASE_URL: process\.env\.SUPABASE_URL \|\| ""/);
   assert.match(runtimeWriter, /SUPABASE_ANON_KEY: process\.env\.SUPABASE_ANON_KEY \|\| ""/);
+  assert.match(runtimeWriter, /PUBLIC_OPERATOR_NAME: process\.env\.PUBLIC_OPERATOR_NAME \|\| ""/);
+  assert.match(runtimeWriter, /PUBLIC_SUPPORT_EMAIL: process\.env\.PUBLIC_SUPPORT_EMAIL \|\| ""/);
+  assert.match(runtimeWriter, /PUBLIC_AI_MODEL_NAME: process\.env\.PUBLIC_AI_MODEL_NAME \|\| ""/);
+  assert.match(runtimeWriter, /PUBLIC_AI_MODEL_FILING_NUMBER: process\.env\.PUBLIC_AI_MODEL_FILING_NUMBER \|\| ""/);
+  assert.match(runtimeWriter, /PUBLIC_AI_APP_REGISTRATION_NUMBER: process\.env\.PUBLIC_AI_APP_REGISTRATION_NUMBER \|\| ""/);
   assert.doesNotMatch(runtimeWriter, /DEEPSEEK_API_KEY|SERVICE_ROLE|service_role|SUPABASE_SERVICE|refresh_token|access_token/);
   assert.match(gitignore, /^\.env$/m);
   assert.match(gitignore, /^src\/runtime-env\.js$/m);
   assert.match(gitignore, /^src\/vendor\/supabase\.js$/m);
   assert.match(envExample, /^DEEPSEEK_API_KEY=$/m);
+  assert.match(envExample, /^PUBLIC_OPERATOR_NAME=朱校成$/m);
+  assert.match(envExample, /^PUBLIC_SUPPORT_EMAIL=zhuxiaocheng120@gmail\.com$/m);
   assert.doesNotMatch(envExample, /sk-[A-Za-z0-9_-]{16,}|sb_secret/i);
   assert.doesNotMatch(envExample, /^SUPABASE_SERVICE_ROLE_KEY=.+$/m);
 });
@@ -133,27 +140,59 @@ test("legal consent migration creates current-user RLS policies", () => {
   assert.doesNotMatch(migration, /to anon/);
 });
 
+test("cross-border legal consent migration adds additive consent fields", () => {
+  const migration = readProjectFile("supabase/migrations/20260721000000_add_cross_border_legal_consent.sql");
+
+  assert.match(migration, /alter table public\.legal_consents/);
+  assert.match(migration, /add column if not exists cross_border_consent_version text/);
+  assert.match(migration, /add column if not exists cross_border_accepted_at timestamptz/);
+  assert.doesNotMatch(migration, /drop table|create table public\.legal_consents|disable row level security|to anon/i);
+});
+
 test("public support email is exposed without exposing secrets", () => {
   const runtimeWriter = readProjectFile("scripts/writeRuntimeEnv.js");
   const envExample = readProjectFile(".env.example");
 
+  assert.match(runtimeWriter, /PUBLIC_OPERATOR_NAME: process\.env\.PUBLIC_OPERATOR_NAME \|\| ""/);
   assert.match(runtimeWriter, /PUBLIC_SUPPORT_EMAIL: process\.env\.PUBLIC_SUPPORT_EMAIL \|\| ""/);
   assert.doesNotMatch(runtimeWriter, /SUPABASE_SERVICE_ROLE_KEY|ANALYTICS_HASH_SECRET|DEEPSEEK_API_KEY/);
-  assert.match(envExample, /^PUBLIC_SUPPORT_EMAIL=$/m);
+  assert.match(envExample, /^PUBLIC_OPERATOR_NAME=朱校成$/m);
+  assert.match(envExample, /^PUBLIC_SUPPORT_EMAIL=zhuxiaocheng120@gmail\.com$/m);
 });
 
 test("privacy data controls setup documents deletion and legal boundaries", () => {
   const docs = readProjectFile("docs/PRIVACY_DATA_CONTROLS_SETUP.md");
 
   assert.match(docs, /20260717001000_create_legal_consents\.sql/);
+  assert.match(docs, /20260721000000_add_cross_border_legal_consent\.sql/);
+  assert.match(docs, /PUBLIC_OPERATOR_NAME/);
   assert.match(docs, /PUBLIC_SUPPORT_EMAIL/);
-  assert.match(docs, /正式发布前.*专业法律/);
+  assert.match(docs, /zhuxiaocheng120@gmail\.com/);
+  assert.match(docs, /美国俄勒冈州/);
+  assert.match(docs, /印度孟买/);
   assert.match(docs, /authenticated AI 使用统计/);
   assert.match(docs, /guest AI 使用统计不会被删除/);
   assert.match(docs, /SUPABASE_SERVICE_ROLE_KEY/);
   assert.match(docs, /ANALYTICS_HASH_SECRET/);
   assert.match(docs, /注销账户/);
-  assert.doesNotMatch(docs, /永久保存|永不删除|完全匿名|已通过律师审核/);
+  assert.doesNotMatch(docs, /永久保存|永不删除|完全匿名|已通过律师审核|联系方式尚未配置/);
+});
+
+test("legal privacy setup and export docs include public beta release gates", () => {
+  const legalDocs = readProjectFile("docs/LEGAL_AND_PRIVACY_SETUP.md");
+  const exportDocs = readProjectFile("docs/DATA_EXPORT.md");
+  const combined = `${legalDocs}\n${exportDocs}`;
+
+  assert.match(combined, /朱校成/);
+  assert.match(combined, /zhuxiaocheng120@gmail\.com/);
+  assert.match(combined, /2026-07-21/);
+  assert.match(combined, /境外处理/);
+  assert.match(combined, /dream-anatomy-archive-YYYY-MM-DD\.html/);
+  assert.match(combined, /dream-anatomy-export-YYYY-MM-DD\.json/);
+  assert.match(combined, /生成式 AI/);
+  assert.match(combined, /release gate/i);
+  assert.match(combined, /不代表获得任何行政许可或备案/);
+  assert.doesNotMatch(combined, /编造|假编号/);
 });
 
 test("product analytics setup documents consent, retention, and deletion boundaries", () => {

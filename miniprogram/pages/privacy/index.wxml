@@ -12,6 +12,7 @@
     <button class="button secondary" data-type="privacy" bindtap="openDocument">隐私政策</button>
     <button class="button secondary" data-type="terms" bindtap="openDocument">用户协议</button>
     <button class="button secondary" data-type="ai" bindtap="openDocument">AI 使用说明</button>
+    <button class="button secondary" data-type="cross-border" bindtap="openDocument">境外处理说明</button>
   </view>
 
   <legal-document wx:if="{{activeDocument}}" document="{{activeDocument}}"></legal-document>

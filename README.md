@@ -18,7 +18,7 @@
 - 快速解析输入区提供可选的“昨晚的睡眠感受”百分比 Slider；未操作时不会保存默认分数，填写后会保存文字标签和 `reportContent.sleepQualityScore` 等本地/云端可同步字段。
 - AI 后端提供版本化接口 `POST /api/v1/dream-analysis`，旧的 `POST /api/dream-analysis` 暂时保留为兼容别名。接口会识别 Supabase Bearer token、应用 Beta 免费额度、短时限流、单用户并发限制和 DeepSeek 超时保护。
 - 服务器会把 AI 使用统计以隐私保护形式写入 Supabase `ai_usage_events`，用于运营分析和服务改进；管理员可在只读运营后台查看聚合数据。
-- 隐私与数据中心提供隐私政策、用户协议、AI 使用说明、显式同意、梦境导出、单条删除、清空全部梦境、游客本机数据清理和账户注销入口。
+- 隐私与数据中心提供适用于当前公开测试版的隐私政策、用户协议、AI 使用说明与风险提示、境外处理单独同意、可阅读 HTML 梦境档案导出、原始 JSON 备份导出、单条删除、清空全部梦境、游客本机数据清理和账户注销入口。
 - 原生微信小程序基础工程位于 `miniprogram/`，支持快速解析、梦境画像、本机保存、本机梦境日记、详情、删除、导出、清除本机数据和安全微信身份桥接；当前不接 Supabase 登录、云同步、支付、会员或小程序产品行为分析事件。小程序视觉已同步 Web 的旧纸、私人档案、心理工作室和手稿记录语言。
 - 快速解析 V2 会要求结果包含梦境摘要、核心主题、核心解析、梦境证据与解释、情绪画像、主要意象、自我思考、今日小行动和温和提醒，并在服务端做基础质量检查。
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用或 AI 输出质量不完整时会显示明确错误、保留输入，不会展示本地示例或保存半成品。
@@ -118,7 +118,7 @@
 - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` locally to enable the account UI. These are browser-safe Supabase project values, not service role secrets.
 - Optional AI protection settings are available in `.env.example`: `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_GUEST_REQUESTS_PER_MINUTE`, `AI_USER_REQUESTS_PER_MINUTE`, `AI_MAX_CONCURRENT_PER_PRINCIPAL`, staged DeepSeek timeout settings, and `DEEP_GUIDANCE_ENABLED`.
 - Optional admin analytics settings are available in `.env.example`: `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER_IDS`, `ANALYTICS_HASH_SECRET`, `AI_INPUT_COST_PER_1M_TOKENS`, and `AI_OUTPUT_COST_PER_1M_TOKENS`. These are server-only values and must not be exposed in browser runtime config.
-- Optional public contact setting: `PUBLIC_SUPPORT_EMAIL`. This is safe to expose in browser runtime config and is used by the legal documents. Do not put private inboxes or secrets here.
+- Public legal/contact settings: `PUBLIC_OPERATOR_NAME=朱校成` and `PUBLIC_SUPPORT_EMAIL=zhuxiaocheng120@gmail.com`. Optional public AI display fields are `PUBLIC_AI_MODEL_NAME`, `PUBLIC_AI_MODEL_FILING_NUMBER`, and `PUBLIC_AI_APP_REGISTRATION_NUMBER`; leave filing/registration values empty unless real values are confirmed. These are safe public display fields, not secrets.
 - Start the app with `npm start`.
 - Open `http://localhost:3000` in your browser.
 - Without `DEEPSEEK_API_KEY`, the page can still open; analysis API requests will fail safely, preserve the user's input, and show a clear error instead of generated examples.
@@ -177,9 +177,11 @@ The current `dream_records` cloud storage path is covered by [docs/SUPABASE_SECU
 
 ## Privacy And Data Controls
 
-Privacy/data controls setup is documented in [docs/PRIVACY_DATA_CONTROLS_SETUP.md](docs/PRIVACY_DATA_CONTROLS_SETUP.md). The legal documents are Beta technical copy and should receive professional review before production launch.
+Privacy/data controls setup is documented in [docs/PRIVACY_DATA_CONTROLS_SETUP.md](docs/PRIVACY_DATA_CONTROLS_SETUP.md), legal deployment notes are in [docs/LEGAL_AND_PRIVACY_SETUP.md](docs/LEGAL_AND_PRIVACY_SETUP.md), and export behavior is in [docs/DATA_EXPORT.md](docs/DATA_EXPORT.md). The current user-facing legal files apply to the public beta version dated `2026-07-21`.
 
-Apply `supabase/migrations/20260717001000_create_legal_consents.sql` to store authenticated legal consent versions. Account deletion uses `DELETE /api/v1/account`, verifies the Supabase Bearer token on the server, ignores body `userId` and `email`, deletes authenticated AI usage events and authenticated product events matched by recalculated HMAC when `ANALYTICS_HASH_SECRET` is configured, deletes the Supabase Auth user, and then performs scoped cleanup for that user's dream records, legal consent, and product analytics preference. Guest AI and product analytics events are not deleted because they cannot be reliably tied to the account.
+Apply `supabase/migrations/20260717001000_create_legal_consents.sql` and `supabase/migrations/20260721000000_add_cross_border_legal_consent.sql` to store authenticated legal consent and separate cross-border processing consent versions. Account deletion uses `DELETE /api/v1/account`, verifies the Supabase Bearer token on the server, ignores body `userId` and `email`, deletes authenticated AI usage events and authenticated product events matched by recalculated HMAC when `ANALYTICS_HASH_SECRET` is configured, deletes the Supabase Auth user, and then performs scoped cleanup for that user's dream records, legal consent, and product analytics preference. Guest AI and product analytics events are not deleted because they cannot be reliably tied to the account.
+
+Current public service locations documented in the legal files: Render Web/API runs in 美国俄勒冈州（Oregon, US West）, Supabase is in 印度孟买（South Asia / Mumbai，ap-south-1）, and AI analysis uses DeepSeek API.
 
 ## Product Analytics
 

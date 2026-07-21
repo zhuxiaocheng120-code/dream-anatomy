@@ -265,13 +265,21 @@ test("mini program legal versions match Web and guest consent follows versions",
   assert.deepEqual(miniLegal.getLegalVersions(), {
     privacyPolicyVersion: webLegal.PRIVACY_POLICY_VERSION,
     termsVersion: webLegal.TERMS_VERSION,
-    aiDisclaimerVersion: webLegal.AI_DISCLAIMER_VERSION
+    aiDisclaimerVersion: webLegal.AI_DISCLAIMER_VERSION,
+    crossBorderConsentVersion: webLegal.CROSS_BORDER_CONSENT_VERSION
   });
   assert.equal(miniLegal.hasAcceptedLegalVersions(wx), false);
   miniLegal.saveGuestLegalConsent(wx);
   assert.equal(miniLegal.hasAcceptedLegalVersions(wx), true);
   wx.setStorageSync(miniLegal.LEGAL_CONSENT_KEY, {
     privacyPolicyVersion: "old",
+    termsVersion: webLegal.TERMS_VERSION,
+    aiDisclaimerVersion: webLegal.AI_DISCLAIMER_VERSION,
+    crossBorderConsentVersion: webLegal.CROSS_BORDER_CONSENT_VERSION
+  });
+  assert.equal(miniLegal.hasAcceptedLegalVersions(wx), false);
+  wx.setStorageSync(miniLegal.LEGAL_CONSENT_KEY, {
+    privacyPolicyVersion: webLegal.PRIVACY_POLICY_VERSION,
     termsVersion: webLegal.TERMS_VERSION,
     aiDisclaimerVersion: webLegal.AI_DISCLAIMER_VERSION
   });
@@ -280,6 +288,7 @@ test("mini program legal versions match Web and guest consent follows versions",
   assert.equal(miniLegal.getLegalDocument("privacy").title, "隐私政策");
   assert.equal(miniLegal.getLegalDocument("terms").title, "用户协议");
   assert.equal(miniLegal.getLegalDocument("ai").title, "AI 使用说明");
+  assert.equal(miniLegal.getLegalDocument("cross-border").title, "境外处理说明");
 });
 
 test("result card normalization avoids fake zero scores and unsafe text", () => {

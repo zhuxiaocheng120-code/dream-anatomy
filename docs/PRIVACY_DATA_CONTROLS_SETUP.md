@@ -1,126 +1,104 @@
 # Privacy And Data Controls Setup
 
-This document describes the Dream Anatomy Web Beta privacy/data controls added for legal document display, explicit consent, dream export/deletion, guest local cleanup, and account deletion.
+This document describes Dream Anatomy public beta privacy/data controls: legal document display, explicit consent, separate cross-border processing consent, readable and raw data export, dream deletion, guest local cleanup, and account deletion.
 
-The legal documents in this repository are Beta technical copy based on the current code and data flow. They are not a substitute for professional legal review. Before a production launch, the policies, terms, AI disclaimer, contact process, and deletion process should be reviewed by qualified professionals.
+## Public Operator Information
 
-正式发布前，这些法律文件和用户数据流程仍需完成专业法律审阅。
+- Operator: 朱校成
+- Entity type: 个人运营者
+- Public contact email: zhuxiaocheng120@gmail.com
 
-## Supabase Migration
+These values are public display information, not secrets.
 
-Apply this migration in Supabase SQL Editor after the existing `dream_records` and `ai_usage_events` migrations:
+## Supabase Migrations
+
+Apply these migrations in timestamp order after the existing `dream_records` and analytics migrations:
 
 ```text
 supabase/migrations/20260717001000_create_legal_consents.sql
+supabase/migrations/20260721000000_add_cross_border_legal_consent.sql
 ```
 
-The migration creates `public.legal_consents` with:
+The first migration creates `public.legal_consents` with per-user RLS. The second migration additively stores:
 
-- `user_id uuid primary key references auth.users(id) on delete cascade`
-- `privacy_policy_version`
-- `terms_version`
-- `ai_disclaimer_version`
-- `accepted_at`
-- `updated_at`
+- `cross_border_consent_version`
+- `cross_border_accepted_at`
 
-It enables and forces RLS. Authenticated users can select, insert, and update only their own consent row. The table has no anon policy.
+Do not edit the already executed base migration in production. Apply the additive migration through Supabase SQL Editor.
 
-## Render Environment Variables
+## Render Public Environment Variables
 
-Add the public support email before Beta release:
+Configure these public values on Render:
 
 ```text
-PUBLIC_SUPPORT_EMAIL=
+PUBLIC_OPERATOR_NAME=朱校成
+PUBLIC_SUPPORT_EMAIL=zhuxiaocheng120@gmail.com
+PUBLIC_AI_MODEL_NAME=
+PUBLIC_AI_MODEL_FILING_NUMBER=
+PUBLIC_AI_APP_REGISTRATION_NUMBER=
 ```
 
-This value is intentionally public and is written into `runtime-env.js`. If it is missing, the app shows “联系方式尚未配置”.
+`PUBLIC_AI_MODEL_FILING_NUMBER` and `PUBLIC_AI_APP_REGISTRATION_NUMBER` should remain empty unless real filing or registration information is confirmed. Do not invent placeholder numbers.
 
-Keep these values server-only:
+`runtime-env.js` may expose only browser-safe public settings such as Supabase URL/anon key and the public values above. Keep these server-only:
 
 ```text
 SUPABASE_SERVICE_ROLE_KEY=
 ANALYTICS_HASH_SECRET=
 DEEPSEEK_API_KEY=
+WECHAT_MINIPROGRAM_APP_SECRET=
+WECHAT_IDENTITY_HASH_SECRET=
+WECHAT_SESSION_HASH_SECRET=
 ```
 
-Do not expose service role, analytics secret, DeepSeek key, access tokens, refresh tokens, or Authorization headers in browser runtime config.
+## Service Providers And Regions
 
-## Legal Document Versions
+- Render provides Web/API service in 美国俄勒冈州（Oregon, US West）.
+- Supabase provides authentication and cloud database in 印度孟买（South Asia / Mumbai，ap-south-1）.
+- DeepSeek API receives dream content needed for the user's active AI request.
+- WeChat is used for mini program identity verification; the current version does not request nickname, avatar, phone number, or friend data.
 
-Legal document text and versions are centralized in:
+## Legal Versions
 
-```text
-src/legalDocuments.js
-```
+Current public beta versions:
 
-Current version constants:
+- Privacy Policy: `2026-07-21`
+- Terms: `2026-07-21`
+- AI Usage Notice: `2026-07-21`
+- Cross-border processing consent: `2026-07-21`
 
-- `PRIVACY_POLICY_VERSION`
-- `TERMS_VERSION`
-- `AI_DISCLAIMER_VERSION`
-
-When legal text changes, update the relevant version constant. Existing users with missing or older `legal_consents` versions will be asked to confirm the latest versions again. `TOKEN_REFRESHED` should not repeatedly show the prompt for an already checked session.
+Legal document text and versions are centralized in `src/legalDocuments.js`.
 
 ## Consent Behavior
 
-Registration requires an unchecked-by-default explicit checkbox:
+Registration requires two unchecked-by-default boxes:
 
 ```text
-我已阅读并同意《用户协议》《隐私政策》和《AI使用说明》
+我已阅读并同意用户协议、隐私政策和 AI 使用说明
+我已阅读境外处理说明，并单独同意必要的境外处理
 ```
 
-Guest users must confirm legal/AI terms before their first AI request in the current browser. Guest consent is stored only in localStorage for that browser and version set. It is not represented as a cloud consent record.
+Guest users must confirm the same current version set before their first AI request in the current browser. Guest consent is stored only in localStorage for that browser and version set.
 
-Authenticated consent is stored in `public.legal_consents` through the user’s Supabase session and RLS policies.
+Authenticated consent is stored in `public.legal_consents` through the user’s Supabase session and RLS policies. If any required version is missing or stale, the privacy center shows `法律文件状态：待确认`.
 
-## Dream Data Controls
+The Web UI checks consent before starting AI analysis, and `POST /api/v1/dream-analysis` also verifies authenticated users' current legal and cross-border consent on the server before quota reservation or DeepSeek calls. This server check prevents direct API calls from bypassing the privacy center.
 
-The SPA view is:
+## Data Export
+
+The primary export is a readable HTML archive:
 
 ```text
-data-view="privacy-data"
+dream-anatomy-archive-YYYY-MM-DD.html
 ```
 
-The controller is:
-
-```text
-src/privacyData.js
-```
-
-It supports:
-
-- viewing legal documents
-- confirming current legal versions
-- exporting current user or guest dream data
-- deleting a single dream from Dream Detail
-- clearing all visible dream records for the current account or current guest browser
-- clearing current-account local cache after account deletion
-- calling the server account deletion API
-
-Dangerous actions use an in-app confirmation UI. `清空全部梦境` and `注销账户` require exact confirmation text.
-
-## Data Export Scope
-
-Export creates a UTF-8 JSON file named like:
+The secondary raw backup export is JSON:
 
 ```text
 dream-anatomy-export-YYYY-MM-DD.json
 ```
 
-The export includes current visible dream records, AI analysis result content, Dream Result Card content, and legal version metadata.
-
-It must not include:
-
-- email
-- full Supabase user UUID
-- access token
-- refresh token
-- Authorization header
-- `principal_hash`
-- admin analytics
-- other account data
-
-Export does not call DeepSeek and does not consume AI quota.
+Both exports include only the current user or current guest browser's visible dream records. They do not include email, full Supabase UUID, tokens, Authorization headers, principal hashes, WeChat identity hashes, session tokens, or admin statistics. Export does not call DeepSeek and does not consume AI quota.
 
 ## Account Deletion API
 
@@ -130,60 +108,36 @@ The server endpoint is:
 DELETE /api/v1/account
 ```
 
-Implementation:
-
-```text
-server/accountDeletion.js
-```
-
 The endpoint requires:
 
 - `Authorization: Bearer <supabase_access_token>`
 - JSON body `{ "confirmation": "注销账户" }`
 
-The server verifies the token and derives the current user from Supabase. It does not trust body `userId`, body `email`, localStorage, or any client-provided identity field.
+The server derives identity only from the verified Supabase token. It ignores body `userId`, body `email`, localStorage, and any client-provided identity.
 
-Deletion order:
+Deletion includes `authenticated AI 使用统计` and product events matched by recalculated HMAC when `ANALYTICS_HASH_SECRET` is configured. `guest AI 使用统计不会被删除`, and guest product events are not deleted, because historical guest signals cannot be reliably proven to belong to the account.
 
-1. If `ANALYTICS_HASH_SECRET` is configured, recalculate the authenticated analytics HMAC with `user:<verified user id>`.
-2. If the hash can be recalculated, delete matching `authenticated AI 使用统计` rows from `ai_usage_events`.
-3. If the hash can be recalculated, delete matching authenticated `product_events`; guest product events are not selected.
-4. Delete the Supabase Auth user through the server-only service role client.
-5. Perform scoped cleanup for this user’s `legal_consents` and `product_analytics_preferences`.
-6. Perform scoped cleanup for this user’s `dream_records`.
-7. Client clears current-account local cache.
-8. Client signs out and returns to the public home state.
+## Release Gate For Generative AI
 
-If any server-side step fails, the endpoint returns a stable error and request id. It must not report success before all server-side deletion steps complete.
-If Supabase Auth deletion fails, dream records and legal consent are not deleted first, so the user can retry the account deletion flow. The `legal_consents` and `dream_records` foreign keys are expected to cascade after Auth deletion; the explicit scoped cleanup is retained as a server-side fallback.
+Before providing generative AI functionality to the public in mainland China at larger scale, confirm:
 
-## Analytics Deletion Boundary
+- The called model's filing or registration information.
+- Whether the Dream Anatomy application or feature needs local registration.
+- Whether model name, filing number, or launch number must be displayed in the product.
 
-Account deletion deletes authenticated AI usage events that match the recalculated principal hash for the verified user when `ANALYTICS_HASH_SECRET` is configured. Configure this secret before Beta release; without it, the server cannot reliably match historical authenticated analytics rows to the verified user.
-
-`guest AI 使用统计不会被删除`, because historical guest signals cannot be reliably proven to belong to the account being deleted.
-
-The same HMAC boundary applies to product analytics: account deletion removes matching authenticated `product_events` and the verified user’s `product_analytics_preferences` when `ANALYTICS_HASH_SECRET` is configured. `guest product_events 不会被删除`, because historical guest events cannot be reliably tied to the account. Product analytics is optional and default off; its aggregate admin figures are labeled `基于已同意产品分析的用户样本`.
-
-AI usage statistics are stored for product operation analysis and service improvement for the necessary period. The current version does not run automatic cleanup. Future changes to retention behavior should be reflected in privacy documents and deployment docs.
-
-Do not describe `principal_hash` as fully anonymous. It is a de-identified operational identifier and must not be displayed in full or used to reverse-search real users from the admin UI.
+Current documents and code do not represent an administrative license, filing, or approval. No fake filing or registration number should be displayed.
 
 ## Manual Online Verification
 
-Use synthetic test accounts and non-private dream text.
+Use synthetic accounts and non-private dream text.
 
-1. Apply `20260717001000_create_legal_consents.sql` in Supabase SQL Editor.
-2. Configure `PUBLIC_SUPPORT_EMAIL` on Render.
-3. Confirm `runtime-env.js` exposes only `SUPABASE_URL`, `SUPABASE_ANON_KEY`, and `PUBLIC_SUPPORT_EMAIL`.
-4. Register without checking legal consent and confirm registration is blocked.
-5. Register with consent, verify email, and log in.
-6. Confirm stale or missing legal consent prompts for current versions.
-7. Create a quick dream record, export data, and confirm the JSON contains only current-user records and no token/email/principal hash.
-8. Delete one dream from Dream Detail and confirm it disappears only for the current user.
-9. Clear all dreams and confirm only the current user’s dream records are removed.
-10. Log in with a second account and confirm it cannot see or delete the first account’s data.
-11. Call `DELETE /api/v1/account` with the current account and exact confirmation text.
-12. Confirm the user’s dream records, legal consent row, product analytics preference, Auth user, authenticated AI usage events, and authenticated product events are removed.
-13. Confirm guest AI and product analytics rows are not deleted.
-14. Confirm the browser returns to the public home and cannot access Dream Journal, Dream Home, or admin data as the deleted user.
+1. Apply `20260717001000_create_legal_consents.sql`.
+2. Apply `20260721000000_add_cross_border_legal_consent.sql`.
+3. Configure public Render variables.
+4. Confirm `runtime-env.js` exposes only browser-safe public values.
+5. Confirm registration is blocked unless both consent boxes are checked.
+6. Confirm missing or stale legal consent prompts current versions.
+7. Create a quick dream record and export both HTML and JSON.
+8. Confirm exports contain current dream records and no token/email/principal hash.
+9. Delete one dream, clear all dreams, and delete the account using synthetic data.
+10. Confirm authenticated analytics deletion follows the HMAC boundary and guest analytics remain untouched.

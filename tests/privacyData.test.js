@@ -117,7 +117,8 @@ function createHarness(options = {}) {
     confirmInput: createFakeElement("input"),
     confirmCancel: createFakeElement("button"),
     confirmSubmit: createFakeElement("button"),
-    registerConsent: createFakeElement("input")
+    registerConsent: createFakeElement("input"),
+    registerCrossBorderConsent: createFakeElement("input")
   };
   const storage = options.storage || createStorage();
   const downloads = [];
@@ -159,6 +160,9 @@ function createHarness(options = {}) {
     },
     downloadJson: (filename, data) => {
       downloads.push({ filename, data });
+    },
+    downloadFile: (filename, content, mimeType) => {
+      downloads.push({ filename, content, mimeType });
     },
     fetchJson: options.fetchJson
   });
@@ -262,11 +266,15 @@ test("renders privacy center entry and legal documents with Chinese text", () =>
   assert.match(viewText, /隐私政策/);
   assert.match(viewText, /用户协议/);
   assert.match(viewText, /AI 使用说明/);
-  assert.match(viewText, /导出我的数据/);
-  assert.match(viewText, /帮助改进 Dream Anatomy/);
-  assert.match(viewText, /删除我的产品分析数据/);
+  assert.match(viewText, /法律文件状态：待确认/);
+  assert.match(viewText, /境外处理说明 v2026-07-21/);
+  assert.match(viewText, /导出可阅读的梦境档案/);
+  assert.match(viewText, /导出原始数据备份（JSON）/);
+  assert.match(viewText, /匿名使用统计（可选）/);
+  assert.match(viewText, /管理匿名统计数据/);
   assert.match(documentText, /support@example\.com/);
-  assert.match(documentText, /Beta 技术版本/);
+  assert.match(documentText, /当前公开测试版本/);
+  assert.doesNotMatch(documentText, /正式发布前仍需完成专业法律审阅/);
 });
 
 test("product analytics consent defaults off and saves only authenticated preferences", async () => {
@@ -279,7 +287,7 @@ test("product analytics consent defaults off and saves only authenticated prefer
   const { controller, elements } = createHarness({ productAnalytics });
 
   controller.render();
-  const toggle = elements.view.children[1].children[5].children[2].children[0];
+  const toggle = elements.view.children[1].children[6].children[2].children[0];
   assert.equal(toggle.checked, false);
   await toggle.trigger("change", { target: { checked: true } });
   await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client: {} });
@@ -299,7 +307,7 @@ test("turning off analytics clears the queue and deletion uses the analytics con
   const { controller, elements } = createHarness({ productAnalytics });
 
   controller.render();
-  const analyticsCard = elements.view.children[1].children[5];
+  const analyticsCard = elements.view.children[1].children[6];
   const toggle = analyticsCard.children[2].children[0];
   await toggle.trigger("change", { target: { checked: false } });
   await analyticsCard.children[3].trigger("click");
@@ -316,7 +324,7 @@ test("privacy controller upserts authenticated analytics preference through the 
 
   controller.render();
   await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
-  const toggle = elements.view.children[1].children[5].children[2].children[0];
+  const toggle = elements.view.children[1].children[6].children[2].children[0];
   await toggle.trigger("change", { target: { checked: true } });
 
   assert.deepEqual(client.state.upserts, [{
@@ -356,8 +364,181 @@ test("guest AI consent stores only current local legal versions after explicit c
 
   const saved = JSON.parse(storage.getItem("dreamAnatomy.legalConsent.guest"));
   assert.deepEqual(saved, LegalDocuments.getLegalVersions());
+  assert.equal(saved.crossBorderConsentVersion, "2026-07-21");
   assert.equal(confirmations.length, 1);
+  assert.match(confirmations[0].body, /境外处理/);
   assert.doesNotMatch(JSON.stringify(saved), /token|email|user/i);
+});
+
+test("authenticated AI use requires current legal and cross-border consent", async () => {
+  const client = createLegalConsentClient({
+    row: {
+      privacy_policy_version: LegalDocuments.PRIVACY_POLICY_VERSION,
+      terms_version: LegalDocuments.TERMS_VERSION,
+      ai_disclaimer_version: LegalDocuments.AI_DISCLAIMER_VERSION,
+      cross_border_consent_version: "old"
+    }
+  });
+  const { appCalls, controller, elements } = createHarness();
+
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
+
+  assert.equal(await controller.ensureGuestAiConsent(), false);
+  assert.deepEqual(appCalls.at(-1), { type: "showView", viewName: "privacy-data" });
+  assert.match(elements.status.textContent, /境外处理|法律文件/);
+
+  client.state.row = {
+    user_id: "user-1",
+    privacy_policy_version: LegalDocuments.PRIVACY_POLICY_VERSION,
+    terms_version: LegalDocuments.TERMS_VERSION,
+    ai_disclaimer_version: LegalDocuments.AI_DISCLAIMER_VERSION,
+    cross_border_consent_version: LegalDocuments.CROSS_BORDER_CONSENT_VERSION,
+    accepted_at: "2026-07-21T01:00:00.000Z",
+    cross_border_accepted_at: "2026-07-21T01:00:00.000Z"
+  };
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
+
+  assert.equal(await controller.ensureGuestAiConsent(), true);
+});
+
+test("legal confirmation requires both general and cross-border consent", async () => {
+  const client = createLegalConsentClient();
+  const { controller, elements } = createHarness();
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
+  controller.render();
+
+  await assert.rejects(() => controller.acceptCurrentLegalVersions(), /请先勾选/);
+  const acceptCard = elements.view.children[1].children[0];
+  acceptCard.children[4].children[0].checked = true;
+  await assert.rejects(() => controller.acceptCurrentLegalVersions(), /境外处理/);
+  acceptCard.children[5].children[0].checked = true;
+
+  const consent = await controller.acceptCurrentLegalVersions();
+
+  assert.equal(client.state.upserts.length, 1);
+  assert.equal(client.state.upserts[0].row.cross_border_consent_version, "2026-07-21");
+  assert.match(client.state.upserts[0].row.cross_border_accepted_at, /^\d{4}-\d{2}-\d{2}T/);
+  assert.match(client.state.upserts[0].row.accepted_at, /^\d{4}-\d{2}-\d{2}T/);
+  assert.equal(consent.cross_border_consent_version, "2026-07-21");
+  assert.match(elements.status.textContent, /已确认当前版本/);
+});
+
+test("loaded current consent refreshes the rendered legal status card", async () => {
+  const client = createLegalConsentClient({
+    row: {
+      user_id: "user-1",
+      privacy_policy_version: LegalDocuments.PRIVACY_POLICY_VERSION,
+      terms_version: LegalDocuments.TERMS_VERSION,
+      ai_disclaimer_version: LegalDocuments.AI_DISCLAIMER_VERSION,
+      cross_border_consent_version: LegalDocuments.CROSS_BORDER_CONSENT_VERSION,
+      accepted_at: "2026-07-21T08:30:00",
+      cross_border_accepted_at: "2026-07-21T08:30:00"
+    }
+  });
+  const { controller, elements } = createHarness();
+  controller.render();
+
+  assert.match(collectText(elements.view).join("\n"), /法律文件状态：待确认/);
+
+  await controller.handleSession({ authEvent: "SIGNED_IN", user: { id: "user-1" }, client });
+
+  const renderedText = collectText(elements.view).join("\n");
+  assert.match(renderedText, /法律文件状态：已确认当前版本/);
+  assert.match(renderedText, /确认时间：2026-07-21 08:30/);
+});
+
+test("registration consent requires legal and cross-border checkboxes", () => {
+  const { controller, elements } = createHarness();
+
+  elements.registerConsent.checked = true;
+  elements.registerCrossBorderConsent.checked = false;
+  assert.equal(controller.validateRegistrationConsent(), false);
+  assert.match(elements.status.textContent, /境外处理/);
+
+  elements.registerCrossBorderConsent.checked = true;
+  assert.equal(controller.validateRegistrationConsent(), true);
+});
+
+test("readable HTML export escapes content and excludes secrets", async () => {
+  const record = {
+    id: "dream-1",
+    createdAt: "2026-07-17T01:02:03.000Z",
+    rawDreamText: "我梦见一扇门 <script>alert(1)</script>。",
+    dreamSummary: "门",
+    emotions: "好奇",
+    symbols: "门",
+    analysisType: "快速解析",
+    reportContent: {
+      coreInterpretation: "门也许和一个选择有关。",
+      dreamResultCard: {
+        archetype: { nameZh: "寻路者", nameEn: "The Seeker" },
+        coreInsight: "门也许像一个选择。",
+        dimensions: [
+          { id: "symbol_depth", name: "象征深度", score: 70, summary: "门是突出意象。", rationale: ["门反复成为焦点。"] },
+          { id: "emotion_intensity", name: "情绪强度", score: 30, summary: "情绪描述较轻。", rationale: ["记录中没有强烈情绪词。"] }
+        ],
+        safetyReminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+      },
+      userReflection: "这个梦让我想到一个还没有说出口的选择。",
+      userReflectionUpdatedAt: "2026-07-20T09:00:00.000Z",
+      sleepQualityScore: 65,
+      sleepQualityLabel: "比较安稳",
+      sleepQualityUpdatedAt: "2026-07-20T09:30:00.000Z"
+    }
+  };
+  const { controller, downloads } = createHarness({
+    records: [record],
+    user: { id: "12345678-1234-1234-1234-123456789abc", email: "private@example.com" }
+  });
+
+  await controller.exportReadableArchive();
+
+  assert.equal(downloads.length, 1);
+  assert.match(downloads[0].filename, /^dream-anatomy-archive-\d{4}-\d{2}-\d{2}\.html$/);
+  assert.equal(downloads[0].mimeType, "text/html;charset=utf-8");
+
+  const exportedText = downloads[0].content;
+  assert.match(exportedText, /我梦见一扇门/);
+  assert.match(exportedText, /&lt;script&gt;alert\(1\)&lt;\/script&gt;/);
+  assert.doesNotMatch(exportedText, /<script/i);
+  assert.doesNotMatch(exportedText, /https?:\/\/|<link|<img/i);
+  assert.match(exportedText, /Dream Result Card|梦境画像/);
+  assert.match(exportedText, /象征深度/);
+  assert.match(exportedText, /这个梦让我想到一个还没有说出口的选择/);
+  assert.match(exportedText, /睡眠感受：65% · 比较安稳/);
+  assert.doesNotMatch(exportedText, /private@example\.com/);
+  assert.doesNotMatch(exportedText, /12345678-1234-1234-1234-123456789abc/);
+  assert.doesNotMatch(exportedText, /access_token|refresh_token|principal_hash/i);
+});
+
+test("readable HTML export includes saved quick-analysis frontend field names", async () => {
+  const record = {
+    id: "dream-quick",
+    createdAt: "2026-07-17T01:02:03.000Z",
+    rawDreamText: "我在走廊里寻找一扇门。",
+    dreamSummary: "走廊与门",
+    emotions: "迟疑",
+    symbols: ["走廊", "门"],
+    analysisType: "快速解析",
+    reportContent: {
+      summary: "你记录了走廊和门的画面。",
+      theme: "寻找方向",
+      jungian: "走廊和门可以理解为对方向和边界的探索。",
+      question: "这扇门让你想到最近哪个选择？",
+      action: "你可以用两分钟写下门前的感受。",
+      reminder: "这不是诊断、治疗或预言，只是一种自我探索视角。"
+    }
+  };
+  const { controller, downloads } = createHarness({ records: [record] });
+
+  await controller.exportReadableArchive();
+
+  const exportedText = downloads[0].content;
+  assert.match(exportedText, /寻找方向/);
+  assert.match(exportedText, /走廊和门可以理解为对方向和边界的探索/);
+  assert.match(exportedText, /这扇门让你想到最近哪个选择/);
+  assert.match(exportedText, /两分钟写下门前的感受/);
+  assert.match(exportedText, /这不是诊断、治疗或预言/);
 });
 
 test("export excludes tokens principal hashes email and full user ids", async () => {
@@ -637,6 +818,7 @@ test("acceptCurrentLegalVersions saves versions for the current authenticated us
   assert.equal(client.state.upserts[0].row.user_id, "user-1");
   assert.deepEqual(client.state.upserts[0].upsertOptions, { onConflict: "user_id" });
   assert.equal(client.state.upserts[0].row.privacy_policy_version, LegalDocuments.getLegalVersions().privacyPolicyVersion);
+  assert.match(client.state.upserts[0].row.accepted_at, /^\d{4}-\d{2}-\d{2}T/);
 });
 
 test("switching accounts reloads the matching account consent record", async () => {
