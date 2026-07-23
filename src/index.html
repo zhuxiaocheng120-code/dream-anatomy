@@ -38,7 +38,7 @@
     <main id="top">
       <section class="view-panel home-view is-active" data-view="home" aria-labelledby="app-title">
         <div data-public-home>
-          <div class="hero">
+          <div class="hero archive-hero">
           <div class="hero-content">
             <img class="hero-brand-seal" src="assets/brand/dream-anatomy-lockup.svg" alt="">
             <p class="eyebrow">你的梦境自我探索工具</p>
@@ -46,9 +46,11 @@
             <p class="summary">
               记录梦境碎片，生成温和的荣格式梦境分析。它不会给出诊断、治疗或预言，只提供一种安静的自我探索视角。
             </p>
+            <p class="archive-microcopy">梦不是答案，而是线索。</p>
+            <div class="manuscript-divider" aria-hidden="true"></div>
           </div>
 
-          <aside class="dream-card" aria-label="梦境记录示例">
+          <aside class="dream-card archival-card" aria-label="梦境记录示例">
             <p class="card-label">今晚的梦</p>
             <h2>“我在一片森林里，看见一扇发光的门。”</h2>
             <p>你可以从一个画面、一种情绪，或一个反复出现的象征开始记录。</p>
@@ -56,25 +58,25 @@
         </div>
 
           <section class="entry-section" aria-labelledby="entry-title">
-          <div class="section-heading">
+          <div class="section-heading classical-section-heading">
             <p class="eyebrow">MVP Entrance</p>
             <h2 id="entry-title">选择你想开始的方式</h2>
           </div>
 
           <div class="entry-grid">
-            <button class="entry-card" type="button" data-view-target="quick">
+            <button class="entry-card archival-card" type="button" data-view-target="quick">
               <span class="entry-number">01</span>
               <strong>快速解析</strong>
               <span>写下一段刚醒来还记得的梦境碎片，先获得一个简短整理入口。</span>
             </button>
 
-            <button class="entry-card" type="button" data-view-target="guided" data-feature-flag="deep-guidance">
+            <button class="entry-card archival-card" type="button" data-view-target="guided" data-feature-flag="deep-guidance">
               <span class="entry-number">02</span>
               <strong>深度引导 <span class="feature-status-badge" data-feature-status>正在开发中</span></strong>
               <span>通过几个温和问题，慢慢补充梦里的情绪、联想和现实连接。</span>
             </button>
 
-            <button class="entry-card" type="button" data-view-target="diary">
+            <button class="entry-card archival-card" type="button" data-view-target="diary">
               <span class="entry-number">03</span>
               <strong>梦境日记</strong>
               <span>查看之后会保存的梦境记录，作为私人梦境档案的入口。</span>
@@ -115,7 +117,7 @@
             <cite data-dream-home-quote-author></cite>
           </blockquote>
 
-          <section class="dream-home-reflection" data-dream-home-reflection aria-labelledby="dream-home-reflection-title">
+          <section class="dream-home-reflection archival-card" data-dream-home-reflection aria-labelledby="dream-home-reflection-title">
             <svg class="dream-home-divider-sketch" viewBox="0 0 240 28" aria-hidden="true" data-sketch-visual="dream-home-divider">
               <path d="M8 14c34-12 58 8 88 0 28-7 47-18 78-6 18 7 34 6 58-2" />
               <path d="M84 17c9 5 17 5 26 0" />
@@ -134,7 +136,7 @@
           </section>
 
           <section aria-labelledby="dream-home-stats-title">
-            <div class="dream-home-section-heading">
+            <div class="dream-home-section-heading classical-section-heading">
               <p class="eyebrow">Dream Archive</p>
               <h2 id="dream-home-stats-title">你的梦境档案</h2>
             </div>
@@ -162,7 +164,7 @@
 
           <div class="dream-home-main">
             <section class="dream-home-actions" aria-labelledby="dream-home-actions-title">
-              <div class="dream-home-section-heading">
+              <div class="dream-home-section-heading classical-section-heading">
                 <p class="eyebrow">Quick Actions</p>
                 <h2 id="dream-home-actions-title">继续探索</h2>
               </div>
@@ -177,7 +179,7 @@
             </section>
 
             <section class="dream-home-recent" aria-labelledby="dream-home-recent-title">
-              <div class="dream-home-section-heading">
+              <div class="dream-home-section-heading classical-section-heading">
                 <p class="eyebrow">Recent Dreams</p>
                 <h2 id="dream-home-recent-title">最近的梦</h2>
               </div>
@@ -223,7 +225,7 @@
           </aside>
         </div>
 
-        <form class="dream-form" data-quick-form>
+        <form class="dream-form archival-card" data-quick-form>
           <label for="quickDream">梦境碎片</label>
           <textarea id="quickDream" rows="7" placeholder="写下你还记得的画面、情绪、人物或地点。"></textarea>
           <section class="sleep-quality-panel" aria-labelledby="quickSleepQualityTitle">
@@ -270,8 +272,8 @@
           </p>
         </form>
 
-        <section id="quickResult" class="quick-result" aria-label="快速解析结果" aria-live="polite" hidden>
-          <div class="result-heading">
+        <section id="quickResult" class="quick-result archival-card" aria-label="快速解析结果" aria-live="polite" hidden>
+          <div class="result-heading classical-section-heading">
             <p class="eyebrow">Quick Dream Decode</p>
             <h3>快速解析结果</h3>
             <p>通过安全后端代理整理梦境线索；生成不完整时会保留你的输入并提示稍后重试。</p>
@@ -340,7 +342,7 @@
           </aside>
         </div>
 
-        <form class="dream-form guided-form" data-guided-form>
+        <form class="dream-form guided-form archival-card" data-guided-form>
           <label for="guidedDream">梦境内容</label>
           <textarea id="guidedDream" rows="7" placeholder="写下你想慢慢探索的梦境。可以只是几个画面、人物、地点、颜色，或醒来后的感觉。"></textarea>
           <div class="button-row">
@@ -360,8 +362,8 @@
           <p>可以只回答一部分问题；没有回答的问题会被轻轻跳过。</p>
         </div>
 
-        <section class="deep-report" data-deep-report aria-label="Dream Anatomy Report" aria-live="polite" hidden>
-          <div class="result-heading">
+        <section class="deep-report archival-card" data-deep-report aria-label="Dream Anatomy Report" aria-live="polite" hidden>
+          <div class="result-heading classical-section-heading">
             <p class="eyebrow">Dream Anatomy Report</p>
             <h3>深度析梦报告</h3>
             <p>以下内容会综合你的梦境原文和引导回答，整理成一份温和的结构化报告。</p>
@@ -419,6 +421,7 @@
               <p class="eyebrow">Dream Archive</p>
               <h2 id="diary-title">梦境日记</h2>
               <p class="summary">你的每一个梦，都值得被温柔收藏。</p>
+              <p class="archive-microcopy">有些意象不是结论，而是邀请。</p>
               <p class="status journal-sync-status" data-journal-sync-status aria-live="polite"></p>
               <p class="status dream-journal-loading" data-journal-loading aria-live="polite"></p>
             </div>
@@ -459,8 +462,8 @@
           </div>
         </div>
 
-        <section class="dream-detail" data-dream-detail aria-label="梦境记录详情" aria-live="polite" hidden>
-          <div class="detail-heading">
+        <section class="dream-detail archival-card" data-dream-detail aria-label="梦境记录详情" aria-live="polite" hidden>
+          <div class="detail-heading classical-section-heading">
             <div>
               <p class="eyebrow">梦境详情</p>
               <h3>梦境记录详情</h3>
@@ -546,7 +549,7 @@
         </div>
       </section>
 
-      <section class="view-panel work-panel privacy-data-panel" data-view="privacy-data" aria-labelledby="privacy-data-title" hidden>
+      <section class="view-panel work-panel privacy-data-panel archival-card" data-view="privacy-data" aria-labelledby="privacy-data-title" hidden>
         <div data-privacy-data-view>
           <div class="page-visual-shell privacy-ledger-shell">
             <div class="panel-copy page-visual-copy">
@@ -574,7 +577,7 @@
 
     <section class="auth-modal" data-auth-modal aria-labelledby="auth-title" aria-modal="true" role="dialog" hidden>
       <div class="auth-backdrop" data-auth-close></div>
-      <div class="auth-dialog">
+      <div class="auth-dialog archival-card">
         <div class="auth-dialog-heading">
           <div>
             <img class="auth-brand-mark" src="assets/brand/dream-guide-mark.svg" alt="">

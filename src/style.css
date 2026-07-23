@@ -1,21 +1,27 @@
 :root {
   color-scheme: light;
-  --paper: #f1eadc;
-  --aged-paper: #fff7e8;
-  --warm-charcoal: #302a23;
-  --sepia: #8a6f52;
-  --muted-olive: #5f6549;
-  --dusty-sage: #9fa58b;
-  --soft-brown: #7b624b;
+  --warm-ivory: #fbf3e4;
+  --paper: #efe3cf;
+  --aged-paper: #fff6e4;
+  --parchment-fiber: rgba(112, 91, 61, 0.055);
+  --warm-charcoal: #30261d;
+  --dark-walnut: #2b2118;
+  --sepia: #856649;
+  --muted-olive: #5c6544;
+  --dusty-sage: #9ea58a;
+  --soft-brown: #765c43;
+  --bronze-gold: #a77a3d;
+  --archive-hairline: rgba(66, 49, 33, 0.18);
+  --manuscript-shadow: 0 26px 70px rgba(74, 49, 26, 0.11);
   --bg: var(--paper);
   --surface: var(--aged-paper);
-  --surface-strong: #fffdf6;
-  --ink: var(--warm-charcoal);
-  --muted: #6d6358;
-  --border: rgba(76, 61, 45, 0.16);
+  --surface-strong: #fffaf0;
+  --ink: var(--dark-walnut);
+  --muted: #66594d;
+  --border: var(--archive-hairline);
   --violet: #5f6549;
   --violet-dark: #454b34;
-  --gold: var(--sepia);
+  --gold: var(--bronze-gold);
   --teal: var(--muted-olive);
   --blue: #5f6e6a;
   --ring: rgba(115, 121, 93, 0.26);
@@ -35,10 +41,13 @@ body {
   font-family: "PingFang SC", "Microsoft YaHei", Inter, ui-sans-serif, system-ui, sans-serif;
   color: var(--ink);
   background:
-    linear-gradient(90deg, rgba(112, 96, 70, 0.035) 1px, transparent 1px),
-    linear-gradient(180deg, rgba(112, 96, 70, 0.028) 1px, transparent 1px),
-    linear-gradient(180deg, #f8f0e2 0%, var(--bg) 52%, #ece1cf 100%);
-  background-size: 34px 34px, 34px 34px, auto;
+    radial-gradient(circle at 18% 12%, rgba(167, 122, 61, 0.1), transparent 28%),
+    radial-gradient(circle at 86% 2%, rgba(92, 101, 68, 0.08), transparent 24%),
+    linear-gradient(90deg, var(--parchment-fiber) 1px, transparent 1px),
+    linear-gradient(180deg, rgba(112, 91, 61, 0.038) 1px, transparent 1px),
+    repeating-linear-gradient(107deg, rgba(255, 255, 255, 0.15) 0 2px, rgba(92, 75, 52, 0.018) 2px 5px),
+    linear-gradient(180deg, var(--warm-ivory) 0%, var(--bg) 52%, #e6d8bd 100%);
+  background-size: auto, auto, 34px 34px, 34px 34px, 180px 180px, auto;
 }
 
 @keyframes dreamGuideFloat {
@@ -49,6 +58,32 @@ body {
 
   50% {
     transform: translateY(-3px);
+  }
+}
+
+@keyframes archiveLogoBreath {
+  0%,
+  100% {
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    transform: translate3d(0, -4px, 0) scale(1.018);
+  }
+}
+
+@keyframes archiveLineDrift {
+  0%,
+  100% {
+    opacity: 0.96;
+  }
+
+  45% {
+    opacity: 0.82;
+  }
+
+  70% {
+    opacity: 1;
   }
 }
 
@@ -137,7 +172,9 @@ button {
   height: auto;
   flex: 0 0 auto;
   pointer-events: none;
-  animation: dreamGuideFloat 8s ease-in-out infinite;
+  animation:
+    archiveLogoBreath 11s ease-in-out infinite,
+    archiveLineDrift 15s ease-in-out infinite;
 }
 
 .hero-brand-seal {
@@ -145,7 +182,9 @@ button {
   height: auto;
   margin-bottom: 22px;
   pointer-events: none;
-  animation: dreamSoftEnter 520ms ease both;
+  animation:
+    archiveLogoBreath 12s ease-in-out infinite,
+    archiveLineDrift 17s ease-in-out infinite;
 }
 
 .dream-guide-seal {
@@ -153,7 +192,9 @@ button {
   height: auto;
   margin-bottom: 16px;
   pointer-events: none;
-  animation: dreamGuideFloat 9s ease-in-out infinite;
+  animation:
+    archiveLogoBreath 12s ease-in-out infinite,
+    archiveLineDrift 16s ease-in-out infinite;
 }
 
 .auth-brand-mark {
@@ -366,6 +407,26 @@ button {
   padding: 64px 0 36px;
 }
 
+.archive-hero {
+  position: relative;
+}
+
+.archive-hero::before {
+  position: absolute;
+  inset: 42px auto auto -28px;
+  width: 118px;
+  height: 118px;
+  pointer-events: none;
+  border: 1px solid rgba(167, 122, 61, 0.2);
+  border-radius: 50%;
+  background:
+    radial-gradient(circle, rgba(167, 122, 61, 0.12) 1px, transparent 2px),
+    radial-gradient(circle, transparent 48%, rgba(92, 101, 68, 0.14) 49%, transparent 52%);
+  background-size: 18px 18px, auto;
+  opacity: 0.58;
+  content: "";
+}
+
 .hero-content,
 .dream-card,
 .dream-home-welcome,
@@ -379,6 +440,30 @@ button {
 .privacy-data-panel,
 .auth-dialog {
   animation: dreamSoftEnter 520ms ease both;
+}
+
+.archive-microcopy {
+  max-width: 44ch;
+  margin: 20px 0 0;
+  padding-left: 16px;
+  border-left: 1px solid rgba(167, 122, 61, 0.42);
+  color: var(--soft-brown);
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
+  font-size: 1.04rem;
+  line-height: 1.75;
+}
+
+.manuscript-divider {
+  width: min(220px, 54vw);
+  height: 12px;
+  margin: 24px 0 0;
+  background:
+    linear-gradient(90deg, transparent, rgba(167, 122, 61, 0.54), transparent),
+    radial-gradient(circle at 50% 50%, rgba(92, 101, 68, 0.36) 0 2px, transparent 3px);
+  background-size: 100% 1px, 18px 12px;
+  background-position: center, center;
+  background-repeat: no-repeat, repeat-x;
+  opacity: 0.72;
 }
 
 .eyebrow {
@@ -425,6 +510,21 @@ h3 {
   line-height: 1.8;
 }
 
+.classical-section-heading {
+  position: relative;
+  padding-top: 10px;
+}
+
+.classical-section-heading::before {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 96px;
+  height: 1px;
+  background: linear-gradient(90deg, rgba(167, 122, 61, 0.68), transparent);
+  content: "";
+}
+
 .dream-card,
 .entry-card,
 .work-panel,
@@ -441,11 +541,27 @@ h3 {
 .empty-state {
   border: 1px solid var(--border);
   border-radius: 8px;
-  background: rgba(255, 247, 232, 0.88);
-  box-shadow: 0 22px 60px rgba(70, 52, 35, 0.09);
+  background:
+    linear-gradient(180deg, rgba(255, 250, 240, 0.92), rgba(244, 232, 207, 0.74)),
+    repeating-linear-gradient(0deg, transparent 0 31px, rgba(102, 82, 54, 0.035) 32px);
+  box-shadow: var(--manuscript-shadow);
+}
+
+.archival-card {
+  position: relative;
+}
+
+.archival-card::before {
+  position: absolute;
+  inset: 9px;
+  pointer-events: none;
+  border: 1px solid rgba(167, 122, 61, 0.13);
+  border-radius: 6px;
+  content: "";
 }
 
 .dream-card {
+  position: relative;
   padding: 28px;
 }
 

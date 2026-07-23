@@ -40,6 +40,73 @@ function cssMediaBlock(css, mediaQuery) {
   assert.fail(`${mediaQuery} block must close`);
 }
 
+test("classical archive refresh exposes shared tokens and restrained logo motion", () => {
+  const html = readSource("src/index.html");
+  const css = readSource("src/style.css");
+
+  [
+    "--warm-ivory:",
+    "--parchment-fiber:",
+    "--dark-walnut:",
+    "--bronze-gold:",
+    "--archive-hairline:",
+    "--manuscript-shadow:"
+  ].forEach((token) => assert.match(css, new RegExp(token)));
+
+  [
+    "@keyframes archiveLogoBreath",
+    "@keyframes archiveLineDrift"
+  ].forEach((keyframe) => assert.match(css, new RegExp(keyframe)));
+
+  [
+    ".brand-mark",
+    ".hero-brand-seal",
+    ".dream-guide-seal"
+  ].forEach((selector) => {
+    const block = cssRuleBlock(css, selector);
+    assert.match(block, /archiveLogoBreath/);
+    assert.match(block, /archiveLineDrift/);
+  });
+
+  const reducedMotion = cssMediaBlock(css, "@media (prefers-reduced-motion: reduce)");
+  assert.match(reducedMotion, /\.brand-mark/);
+  assert.match(reducedMotion, /\.hero-brand-seal/);
+  assert.match(reducedMotion, /\.dream-guide-seal/);
+
+  assert.match(html, /class="archive-microcopy"/);
+  assert.match(html, /梦不是答案，而是线索。/);
+});
+
+test("classical archive refresh keeps product hooks and visual boundaries", () => {
+  const html = readSource("src/index.html");
+  const css = readSource("src/style.css");
+
+  [
+    'class="hero archive-hero"',
+    "archival-card",
+    "classical-section-heading",
+    "manuscript-divider"
+  ].forEach((hook) => assert.match(html, new RegExp(hook)));
+
+  [
+    "data-view=\"home\"",
+    "data-view=\"quick\"",
+    "data-view=\"guided\"",
+    "data-view=\"diary\"",
+    "data-view=\"privacy-data\"",
+    "data-quick-form",
+    "data-journal-list-shell",
+    "data-dream-detail",
+    "data-privacy-data-view"
+  ].forEach((hook) => assert.match(html, new RegExp(hook)));
+
+  assert.match(css, /\.archival-card/);
+  assert.match(css, /\.archive-hero/);
+  assert.match(css, /\.classical-section-heading/);
+  assert.match(css, /\.manuscript-divider/);
+  assert.doesNotMatch(html, /https?:\/\/[^"']+\.(?:png|jpe?g|webp|gif|svg)/i);
+});
+
 test("site-wide visual refresh adds restrained page-level identity without external image assets", () => {
   const html = readSource("src/index.html");
   const css = readSource("src/style.css");
@@ -79,7 +146,7 @@ test("site-wide visual refresh adds restrained page-level identity without exter
   const addedCopyRegion = html.match(/<section class="view-panel work-panel" data-view="quick"[\s\S]*?<section class="view-panel work-panel" data-view="guided"/)[0]
     + html.match(/<section class="view-panel work-panel" data-view="guided"[\s\S]*?<section class="view-panel work-panel" data-view="diary"/)[0]
     + html.match(/<section class="view-panel work-panel" data-view="diary"[\s\S]*?<section class="view-panel work-panel admin-panel"/)[0]
-    + html.match(/<section class="view-panel work-panel privacy-data-panel"[\s\S]*?<\/section>\s*<\/main>/)[0];
+    + html.match(/<section[^>]+data-view="privacy-data"[\s\S]*?<\/section>\s*<\/main>/)[0];
   assert.doesNotMatch(addedCopyRegion, /算命|吉凶|未来预测|发财|倒霉|遇灾|一定代表/);
 
   [

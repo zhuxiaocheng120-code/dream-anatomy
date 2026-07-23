@@ -1202,7 +1202,7 @@ test("integrates Dream Home markup, browser scripts, app bridge, and responsive 
   assert.match(html, /自我探索不是判断对错，而是看见自己。/);
   assert.match(html, /data-sketch-visual="dream-home-archive"/);
   assert.match(html, /data-sketch-visual="dream-home-divider"/);
-  const reflection = html.match(/<section class="dream-home-reflection"[\s\S]*?<\/section>/)[0];
+  const reflection = html.match(/<section[^>]*class="[^"]*\bdream-home-reflection\b[^"]*"[^>]*data-dream-home-reflection[\s\S]*?<\/section>/)[0];
   assert.doesNotMatch(reflection, /算命|诊断|治疗|吉凶|未来预测|预言/);
   [
     "data-dream-home-greeting",
