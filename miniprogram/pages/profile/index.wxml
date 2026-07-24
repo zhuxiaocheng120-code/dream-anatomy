@@ -7,7 +7,18 @@
       <view class="subtitle" wx:if="{{!authState.authenticated}}">当前梦境仅保存在本机。你也可以使用微信身份继续，为后续云端同步做准备。</view>
       <view class="subtitle" wx:else>当前身份可以用于后续云端同步。现阶段梦境仍只保存在本机。</view>
     </view>
-    <view class="identity-seal archive-cloud-mark mini-cloud-breath mini-line-drift" aria-hidden="true" data-visual="profile-seal">{{authState.authenticated ? '微信身份档案' : '本机游客档案'}}</view>
+    <view class="identity-seal identity-seal-cloud" aria-hidden="true" data-visual="profile-seal">
+      <view class="mini-cloud-outline-mark archive-cloud-mark profile-cloud-mark">
+        <image class="mini-cloud-outline-layer mini-cloud-outline-base" src="/assets/brand/mini-cloud-outline-base.svg" mode="aspectFit"></image>
+        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-0" src="/assets/brand/mini-cloud-outline-flow-0.svg" mode="aspectFit"></image>
+        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-1" src="/assets/brand/mini-cloud-outline-flow-1.svg" mode="aspectFit"></image>
+        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-2" src="/assets/brand/mini-cloud-outline-flow-2.svg" mode="aspectFit"></image>
+        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-3" src="/assets/brand/mini-cloud-outline-flow-3.svg" mode="aspectFit"></image>
+        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-4" src="/assets/brand/mini-cloud-outline-flow-4.svg" mode="aspectFit"></image>
+        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-5" src="/assets/brand/mini-cloud-outline-flow-5.svg" mode="aspectFit"></image>
+      </view>
+      <view class="identity-seal-label">{{authState.authenticated ? '微信身份档案' : '本机游客档案'}}</view>
+    </view>
   </view>
   <view class="section card profile-card">
     <view>账户状态：{{authState.authenticated ? '微信身份已建立' : '游客'}}</view>

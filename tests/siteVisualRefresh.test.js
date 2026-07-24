@@ -85,8 +85,16 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
   assert.doesNotMatch(outlineRule, /animation\s*:/);
   assert.match(flowRule, /stroke-dasharray:/);
   assert.match(flowRule, /stroke-dashoffset:/);
-  assert.match(flowRule, /animation:\s*cloudOutlineFlow\s+1[012]s\s+linear\s+infinite/);
+  assert.match(flowRule, /animation:\s*cloudOutlineFlow\s+[456](?:\.\d+)?s\s+linear\s+infinite/);
   assert.doesNotMatch(flowRule, /transform\s*:/);
+  assert.match(flowRule, /filter:\s*drop-shadow/);
+
+  const baseStrokeWidth = Number(outlineRule.match(/stroke-width:\s*([0-9.]+)/)?.[1]);
+  const flowStrokeWidth = Number(flowRule.match(/stroke-width:\s*([0-9.]+)/)?.[1]);
+  const flowOpacity = Number(flowRule.match(/opacity:\s*([0-9.]+)/)?.[1]);
+  assert.ok(flowStrokeWidth >= baseStrokeWidth * 1.8, "animated cloud outline must be visibly thicker than the base outline");
+  assert.ok(flowStrokeWidth <= baseStrokeWidth * 2.5, "animated cloud outline must stay refined instead of overpowering the mark");
+  assert.ok(flowOpacity >= 0.65 && flowOpacity <= 0.9, "animated cloud outline must be visible without becoming neon");
 
   const reducedMotion = cssMediaBlock(css, "@media (prefers-reduced-motion: reduce)");
   assert.match(reducedMotion, /\.brand-mark/);
@@ -94,6 +102,7 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
   assert.match(reducedMotion, /\.dream-guide-seal/);
   assert.match(reducedMotion, /\.archive-cloud-mark/);
   assert.match(reducedMotion, /\.archive-cloud-outline-flow/);
+  assert.match(reducedMotion, /\.archive-cloud-outline-flow[\s\S]*display:\s*none/);
 
   assert.match(html, /class="archive-microcopy"/);
   assert.match(html, /梦不是答案，而是线索。/);
@@ -299,14 +308,13 @@ test("Dream Guide microanimations are restrained and respect reduced motion", ()
   const css = readSource("src/style.css");
 
   [
-    "@keyframes dreamGuideFloat",
     "@keyframes dreamSoftEnter",
-    "@keyframes dreamDimensionReveal"
+    "@keyframes dreamDimensionReveal",
+    "@keyframes cloudOutlineFlow"
   ].forEach((keyframe) => assert.match(css, new RegExp(keyframe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
 
-  assert.doesNotMatch(css, /@keyframes dreamGuideBlink|filter:\s*brightness/);
+  assert.doesNotMatch(css, /@keyframes dreamGuideFloat|@keyframes dreamGuideBlink|filter:\s*brightness/);
 
-  assert.match(css, /dreamGuideFloat[\s\S]*transform:/);
   assert.match(css, /dreamSoftEnter[\s\S]*opacity:/);
   assert.match(css, /dreamDimensionReveal[\s\S]*transform:/);
 

@@ -6,7 +6,15 @@
       <view class="subtitle">记录梦境文字、睡眠感受和醒来后的想法，AI 可帮助你整理摘要、情绪词和意象关键词。</view>
       <view class="microcopy">不急着解释，先把它留下来。</view>
     </view>
-    <view class="visual-orbit home-orbit archive-cloud-mark mini-cloud-breath mini-line-drift" aria-hidden="true" data-visual="home-archive"></view>
+    <view class="mini-cloud-outline-mark archive-cloud-mark home-cloud-mark" aria-hidden="true" data-visual="home-archive">
+      <image class="mini-cloud-outline-layer mini-cloud-outline-base" src="/assets/brand/mini-cloud-outline-base.svg" mode="aspectFit"></image>
+      <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-0" src="/assets/brand/mini-cloud-outline-flow-0.svg" mode="aspectFit"></image>
+      <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-1" src="/assets/brand/mini-cloud-outline-flow-1.svg" mode="aspectFit"></image>
+      <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-2" src="/assets/brand/mini-cloud-outline-flow-2.svg" mode="aspectFit"></image>
+      <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-3" src="/assets/brand/mini-cloud-outline-flow-3.svg" mode="aspectFit"></image>
+      <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-4" src="/assets/brand/mini-cloud-outline-flow-4.svg" mode="aspectFit"></image>
+      <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-5" src="/assets/brand/mini-cloud-outline-flow-5.svg" mode="aspectFit"></image>
+    </view>
   </view>
 
   <view class="section stack">

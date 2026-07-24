@@ -39,12 +39,11 @@ test("mini program visual language uses shared tokens and keeps page paths stabl
     "parchment",
     "warm charcoal",
     "muted olive",
-    "@keyframes miniCloudBreath",
-    "@keyframes miniLineDrift",
+    "@keyframes miniCloudOutlineFlow",
     ".archive-cloud-mark",
-    ".archive-cloud-line",
-    ".mini-cloud-breath",
-    ".mini-line-drift",
+    ".mini-cloud-outline-mark",
+    ".mini-cloud-outline-base",
+    ".mini-cloud-outline-flow",
     ".page-hero",
     ".visual-orbit",
     ".archive-panel",
@@ -57,19 +56,62 @@ test("mini program visual language uses shared tokens and keeps page paths stabl
 
 test("each mini program page has restrained page-level visual identity", () => {
   const expected = {
-    home: ["data-visual=\"home-archive\"", "mini-cloud-breath", "mini-line-drift", "不急着解释，先把它留下来"],
+    home: ["data-visual=\"home-archive\"", "mini-cloud-outline-mark", "mini-cloud-outline-flow", "不急着解释，先把它留下来"],
     quick: ["data-visual=\"quick-workbench\"", "结果仅供记录和回顾"],
     result: ["data-visual=\"result-report\"", "记录卡片预览"],
     journal: ["data-visual=\"journal-archive\"", "私人梦境档案"],
     detail: ["data-visual=\"detail-manuscript\"", "手稿记录"],
     privacy: ["data-visual=\"privacy-ledger\"", "档案文书"],
-    profile: ["data-visual=\"profile-seal\"", "mini-cloud-breath", "mini-line-drift", "本机游客档案"]
+    profile: ["data-visual=\"profile-seal\"", "mini-cloud-outline-mark", "mini-cloud-outline-flow", "本机游客档案"]
   };
 
   Object.entries(expected).forEach(([page, needles]) => {
     const source = read(`miniprogram/pages/${page}/index.wxml`);
     needles.forEach((needle) => assert.match(source, new RegExp(escapeRegExp(needle))));
     assert.match(source, /aria-hidden="true"/, `${page} decorative visual should be hidden`);
+  });
+});
+
+test("mini program cloud mark uses static outline plus visible moving stroke", () => {
+  const appWxss = read("miniprogram/app.wxss");
+  const home = read("miniprogram/pages/home/index.wxml");
+  const profile = read("miniprogram/pages/profile/index.wxml");
+
+  assert.match(appWxss, /@keyframes miniCloudOutlineFlow[\s\S]*opacity/);
+  assert.doesNotMatch(appWxss.match(/@keyframes miniCloudOutlineFlow[\s\S]*?\n\}/)[0], /transform:/);
+
+  const baseRule = appWxss.match(/\.mini-cloud-outline-base\s*\{([^}]*)\}/)?.[1] || "";
+  const flowRule = appWxss.match(/\.mini-cloud-outline-flow\s*\{([^}]*)\}/)?.[1] || "";
+  assert.match(baseRule, /opacity:\s*1/);
+  assert.match(flowRule, /animation:\s*miniCloudOutlineFlow\s+[4567](?:\.\d+)?s\s+steps\(1,\s*end\)\s+infinite/);
+  assert.match(flowRule, /filter:\s*drop-shadow/);
+  assert.doesNotMatch(flowRule, /transform\s*:/);
+
+  [home, profile].forEach((source) => {
+    assert.doesNotMatch(source, /<svg\b|<path\b/);
+    assert.match(source, /<view\b[^>]*class="[^"]*\bmini-cloud-outline-mark\b/);
+    assert.match(source, /<image\b[^>]*class="[^"]*\bmini-cloud-outline-layer\b[^"]*\bmini-cloud-outline-base\b/);
+    assert.match(source, /src="\/assets\/brand\/mini-cloud-outline-base\.svg"/);
+    assert.match(source, /class="[^"]*\bmini-cloud-outline-base\b/);
+    assert.match(source, /class="[^"]*\bmini-cloud-outline-flow\b/);
+    assert.match(source, /src="\/assets\/brand\/mini-cloud-outline-flow-0\.svg"/);
+    assert.match(source, /src="\/assets\/brand\/mini-cloud-outline-flow-5\.svg"/);
+    assert.match(source, /aria-hidden="true"/);
+    assert.doesNotMatch(source, /mini-cloud-breath|mini-line-drift/);
+  });
+
+  const baseAsset = read("miniprogram/assets/brand/mini-cloud-outline-base.svg");
+  assert.match(baseAsset, /stroke="#5f6549"/);
+  assert.match(baseAsset, /stroke-width="2"/);
+
+  const frameOffsets = [0, -30, -60, -90, -120, -150];
+  frameOffsets.forEach((offset, index) => {
+    const frame = read(`miniprogram/assets/brand/mini-cloud-outline-flow-${index}.svg`);
+    assert.match(frame, /stroke="#8a6f52"/);
+    assert.match(frame, /stroke-width="4"/);
+    assert.match(frame, /stroke-dasharray="44 46 30 62"/);
+    assert.match(frame, new RegExp(`stroke-dashoffset="${offset}"`));
+    assert.doesNotMatch(frame, /<script|onload=|onclick=|(?:href|src)=["']https?:|url\(["']?https?:|base64|<style/i);
   });
 });
 
