@@ -63,49 +63,13 @@ body {
   }
 }
 
-@keyframes archiveLogoBreath {
-  0%,
-  100% {
-    opacity: 0.97;
-    transform: translate3d(0, 0, 0) scale(1);
+@keyframes cloudOutlineFlow {
+  from {
+    stroke-dashoffset: 0;
   }
 
-  50% {
-    opacity: 1;
-    transform: translate3d(0, -3px, 0) scale(1.012);
-  }
-}
-
-@keyframes archiveLineDrift {
-  0%,
-  100% {
-    opacity: 0.95;
-  }
-
-  45% {
-    opacity: 0.88;
-  }
-
-  70% {
-    opacity: 0.99;
-  }
-}
-
-@keyframes archiveCloudLineDrift {
-  0%,
-  100% {
-    opacity: 0.94;
-    filter: drop-shadow(0 8px 18px rgba(74, 49, 26, 0.08));
-  }
-
-  42% {
-    opacity: 0.86;
-    filter: drop-shadow(0 10px 22px rgba(74, 49, 26, 0.1));
-  }
-
-  68% {
-    opacity: 0.98;
-    filter: drop-shadow(0 7px 16px rgba(92, 101, 68, 0.08));
+  to {
+    stroke-dashoffset: -116;
   }
 }
 
@@ -193,38 +157,36 @@ button {
   width: 38px;
   height: auto;
   flex: 0 0 auto;
+  display: block;
   pointer-events: none;
-  animation:
-    archiveLogoBreath 11s ease-in-out infinite,
-    archiveLineDrift 15s ease-in-out infinite;
+  overflow: visible;
 }
 
 .hero-brand-seal {
   width: min(280px, 86vw);
   height: auto;
+  display: block;
   margin-bottom: 22px;
   pointer-events: none;
-  animation:
-    archiveLogoBreath 12s ease-in-out infinite,
-    archiveLineDrift 17s ease-in-out infinite;
+  overflow: visible;
 }
 
 .dream-guide-seal {
   width: 68px;
   height: auto;
+  display: block;
   margin-bottom: 16px;
   pointer-events: none;
-  animation:
-    archiveLogoBreath 12s ease-in-out infinite,
-    archiveLineDrift 16s ease-in-out infinite;
+  overflow: visible;
 }
 
 .auth-brand-mark {
   width: 46px;
   height: auto;
+  display: block;
   margin-bottom: 10px;
   pointer-events: none;
-  animation: dreamSoftEnter 420ms ease both;
+  overflow: visible;
 }
 
 .archive-cloud-mark {
@@ -232,19 +194,68 @@ button {
   transform-origin: center;
 }
 
-.archive-cloud-line {
+.archive-cloud-outline {
   pointer-events: none;
-  transform-origin: center;
+  fill: none;
+  stroke: var(--muted-olive);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 2.15;
+  opacity: 0.92;
+  vector-effect: non-scaling-stroke;
 }
 
-.cloud-breath {
-  animation: archiveLogoBreath 10s ease-in-out infinite;
+.archive-cloud-fill {
+  fill: #fff8eb;
+  stroke: none;
 }
 
-.cloud-line-drift {
-  animation:
-    archiveLogoBreath 10s ease-in-out infinite,
-    archiveCloudLineDrift 12s ease-in-out infinite;
+.archive-cloud-outline-flow {
+  pointer-events: none;
+  fill: none;
+  opacity: 0.44;
+  stroke: var(--bronze-gold);
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  stroke-width: 1.45;
+  stroke-dasharray: 18 72;
+  stroke-dashoffset: 0;
+  vector-effect: non-scaling-stroke;
+  animation: cloudOutlineFlow 10s linear infinite;
+}
+
+.archive-cloud-detail {
+  fill: none;
+  stroke: var(--warm-charcoal);
+  stroke-linecap: round;
+  stroke-width: 1.95;
+  vector-effect: non-scaling-stroke;
+}
+
+.archive-cloud-smile {
+  stroke: var(--sepia);
+  stroke-width: 1.45;
+}
+
+.archive-cloud-star {
+  fill: var(--dusty-sage);
+  stroke: var(--muted-olive);
+  stroke-linejoin: round;
+  stroke-width: 1;
+  vector-effect: non-scaling-stroke;
+}
+
+.archive-lockup-title {
+  fill: var(--warm-charcoal);
+  font-family: "Songti SC", "Noto Serif CJK SC", "Source Han Serif SC", Georgia, serif;
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.archive-lockup-subtitle {
+  fill: var(--muted);
+  font-family: "PingFang SC", "Microsoft YaHei", Arial, sans-serif;
+  font-size: 18px;
 }
 
 .text-button {
@@ -469,9 +480,7 @@ button {
   content: "";
 }
 
-.hero-content,
 .dream-card,
-.dream-home-welcome,
 .dream-home-quote,
 .dream-home-reflection,
 .work-panel,
@@ -1392,9 +1401,7 @@ input {
   .dream-guide-seal,
   .hero-brand-seal,
   .archive-cloud-mark,
-  .archive-cloud-line,
-  .cloud-breath,
-  .cloud-line-drift,
+  .archive-cloud-outline-flow,
   .auth-brand-mark,
   .hero-content,
   .dream-card,

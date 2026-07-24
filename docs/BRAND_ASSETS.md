@@ -18,9 +18,11 @@
 
 ## 动效与可访问性
 
-Web 端 Logo 和页面使用克制的 CSS 微动画，主要通过 `transform`、`opacity` 和低强度线条漂移实现。云朵标识使用 `.archive-cloud-mark`、`.cloud-breath` 和 `.cloud-line-drift` 表达缓慢呼吸和手稿线条感，周期保持在 8-12 秒附近，避免 loading 感或卡通跳动。系统设置 `prefers-reduced-motion: reduce` 时，会关闭循环浮动、眨眼、进入动画和进度条揭示动画，只保留必要的即时状态反馈。
+Web 端页面中的可见 Logo 使用同源 inline SVG 渲染，以便云朵外轮廓能在真实 DOM 中形成静态底线和动态描边叠层。`src/assets/brand/` 中的 SVG 文件继续作为 favicon、源资产和导出基础保留，不再作为首页可见 Logo 的唯一渲染方式。
 
-装饰性 Logo 图片使用空 `alt`，品牌按钮本身保留可访问名称和键盘 focus。
+Web 端 Logo 的云朵位置和形状保持固定；动效只作用在 `.archive-cloud-outline-flow` 这条同路径描边叠层上，通过 `stroke-dasharray` 和 `stroke-dashoffset` 让一小段低透明度描边沿外轮廓缓慢流动。静态 `.archive-cloud-outline` 始终可见，周期保持在 8-12 秒附近，避免 loading 感、整体漂浮或卡通跳动。系统设置 `prefers-reduced-motion: reduce` 时，会关闭外轮廓流动、进入动画和进度条揭示动画，只保留静态云朵轮廓和必要的即时状态反馈。
+
+装饰性 inline Logo 使用 `aria-hidden="true"` 和 `focusable="false"`，品牌按钮本身保留可访问名称和键盘 focus。
 
 ## 小程序后续复用
 

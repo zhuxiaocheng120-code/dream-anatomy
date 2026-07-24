@@ -53,11 +53,9 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
     "--manuscript-shadow:"
   ].forEach((token) => assert.match(css, new RegExp(token)));
 
-  [
-    "@keyframes archiveLogoBreath",
-    "@keyframes archiveLineDrift",
-    "@keyframes archiveCloudLineDrift"
-  ].forEach((keyframe) => assert.match(css, new RegExp(keyframe)));
+  assert.match(css, /@keyframes cloudOutlineFlow/);
+  assert.match(css, /cloudOutlineFlow[\s\S]*stroke-dashoffset/);
+  assert.doesNotMatch(css.match(/@keyframes cloudOutlineFlow[\s\S]*?\n\}/)[0], /transform:/);
 
   [
     ".brand-mark",
@@ -65,32 +63,37 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
     ".dream-guide-seal"
   ].forEach((selector) => {
     const block = cssRuleBlock(css, selector);
-    assert.match(block, /archiveLogoBreath/);
-    assert.match(block, /archiveLineDrift/);
+    assert.doesNotMatch(block, /animation\s*:/);
+    assert.doesNotMatch(block, /transform\s*:/);
   });
 
   [
     ".archive-cloud-mark",
-    ".archive-cloud-line",
-    ".cloud-breath",
-    ".cloud-line-drift"
+    ".archive-cloud-outline",
+    ".archive-cloud-outline-flow"
   ].forEach((selector) => assert.match(css, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
 
   [
-    /class="[^"]*\bbrand-mark\b[^"]*\barchive-cloud-mark\b[^"]*\bcloud-breath\b/,
-    /class="[^"]*\bhero-brand-seal\b[^"]*\barchive-cloud-mark\b[^"]*\bcloud-breath\b/,
-    /class="[^"]*\bdream-guide-seal\b[^"]*\barchive-cloud-mark\b[^"]*\bcloud-breath\b/
+    /class="[^"]*\bbrand-mark\b[^"]*\barchive-cloud-mark\b/,
+    /class="[^"]*\bhero-brand-seal\b[^"]*\barchive-cloud-mark\b/,
+    /class="[^"]*\bdream-guide-seal\b[^"]*\barchive-cloud-mark\b/
   ].forEach((pattern) => assert.match(html, pattern));
 
-  assert.match(cssRuleBlock(css, ".cloud-breath"), /archiveLogoBreath\s+1[012]s/);
-  assert.match(cssRuleBlock(css, ".cloud-line-drift"), /archiveCloudLineDrift\s+1[012]s/);
+  const outlineRule = cssRuleBlock(css, ".archive-cloud-outline");
+  const flowRule = cssRuleBlock(css, ".archive-cloud-outline-flow");
+  assert.match(outlineRule, /stroke:/);
+  assert.doesNotMatch(outlineRule, /animation\s*:/);
+  assert.match(flowRule, /stroke-dasharray:/);
+  assert.match(flowRule, /stroke-dashoffset:/);
+  assert.match(flowRule, /animation:\s*cloudOutlineFlow\s+1[012]s\s+linear\s+infinite/);
+  assert.doesNotMatch(flowRule, /transform\s*:/);
 
   const reducedMotion = cssMediaBlock(css, "@media (prefers-reduced-motion: reduce)");
   assert.match(reducedMotion, /\.brand-mark/);
   assert.match(reducedMotion, /\.hero-brand-seal/);
   assert.match(reducedMotion, /\.dream-guide-seal/);
   assert.match(reducedMotion, /\.archive-cloud-mark/);
-  assert.match(reducedMotion, /\.cloud-line-drift/);
+  assert.match(reducedMotion, /\.archive-cloud-outline-flow/);
 
   assert.match(html, /class="archive-microcopy"/);
   assert.match(html, /梦不是答案，而是线索。/);
@@ -275,17 +278,19 @@ test("Dream Guide brand assets are wired into Web UI without changing navigation
   assert.match(html, /<link rel="icon" type="image\/svg\+xml" href="assets\/brand\/dream-guide-mark\.svg">/);
   assert.match(html, /<button class="brand text-button" type="button" data-view-target="home" aria-label="返回析梦 Dream Anatomy 首页">/);
 
-  [
-    "brand-mark",
-    "hero-brand-seal",
-    "dream-guide-seal",
-    "auth-brand-mark"
-  ].forEach((classHook) => assert.match(html, new RegExp(`class="[^"]*\\b${classHook}\\b`)));
+  ["brand-mark", "hero-brand-seal", "dream-guide-seal", "auth-brand-mark"].forEach((classHook) => {
+    const logoMatch = html.match(new RegExp(`<svg\\b[^>]*class="[^"]*\\b${classHook}\\b[^"]*"[^>]*>[\\s\\S]*?<\\/svg>`));
+    assert.ok(logoMatch, `${classHook} must render as inline SVG so its cloud lines can animate in the DOM`);
+    assert.match(logoMatch[0], /aria-hidden="true"/);
+    assert.match(logoMatch[0], /focusable="false"/);
+    assert.match(logoMatch[0], /class="[^"]*\barchive-cloud-outline\b/);
+    assert.match(logoMatch[0], /class="[^"]*\barchive-cloud-outline-flow\b/);
+    const outlinePaths = [...logoMatch[0].matchAll(/<path class="archive-cloud-outline(?:-flow)?" d="([^"]+)"/g)];
+    assert.equal(outlinePaths.length, 2, `${classHook} must include one static outline and one animated outline overlay`);
+    assert.equal(outlinePaths[0][1], outlinePaths[1][1], `${classHook} outline overlay must reuse the same cloud path`);
+  });
 
-  [
-    'src="assets/brand/dream-guide-mark.svg"',
-    'src="assets/brand/dream-anatomy-lockup.svg"'
-  ].forEach((assetReference) => assert.match(html, new RegExp(assetReference)));
+  assert.doesNotMatch(html, /<img\b[^>]*class="[^"]*\b(?:brand-mark|hero-brand-seal|dream-guide-seal|auth-brand-mark)\b/);
 
   assert.doesNotMatch(html, /\/admin\.html|new Router|createRouter|fetch\("assets\/brand/);
 });
@@ -310,7 +315,7 @@ test("Dream Guide microanimations are restrained and respect reduced motion", ()
   assert.match(reducedMotion, /transition-duration:\s*0\.01ms/);
   assert.match(reducedMotion, /\.brand-mark/);
   assert.match(reducedMotion, /\.archive-cloud-mark/);
-  assert.match(reducedMotion, /\.cloud-breath/);
+  assert.match(reducedMotion, /\.archive-cloud-outline-flow/);
   assert.match(reducedMotion, /\.result-card-progress span/);
 
   [
