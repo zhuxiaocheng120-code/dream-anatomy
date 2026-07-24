@@ -53,37 +53,59 @@ body {
 @keyframes dreamGuideFloat {
   0%,
   100% {
-    transform: translateY(0);
+    opacity: 0.98;
+    transform: translate3d(0, 0, 0) scale(1);
   }
 
   50% {
-    transform: translateY(-3px);
+    opacity: 1;
+    transform: translate3d(0, -2px, 0) scale(1.006);
   }
 }
 
 @keyframes archiveLogoBreath {
   0%,
   100% {
+    opacity: 0.97;
     transform: translate3d(0, 0, 0) scale(1);
   }
 
   50% {
-    transform: translate3d(0, -4px, 0) scale(1.018);
+    opacity: 1;
+    transform: translate3d(0, -3px, 0) scale(1.012);
   }
 }
 
 @keyframes archiveLineDrift {
   0%,
   100% {
-    opacity: 0.96;
+    opacity: 0.95;
   }
 
   45% {
-    opacity: 0.82;
+    opacity: 0.88;
   }
 
   70% {
-    opacity: 1;
+    opacity: 0.99;
+  }
+}
+
+@keyframes archiveCloudLineDrift {
+  0%,
+  100% {
+    opacity: 0.94;
+    filter: drop-shadow(0 8px 18px rgba(74, 49, 26, 0.08));
+  }
+
+  42% {
+    opacity: 0.86;
+    filter: drop-shadow(0 10px 22px rgba(74, 49, 26, 0.1));
+  }
+
+  68% {
+    opacity: 0.98;
+    filter: drop-shadow(0 7px 16px rgba(92, 101, 68, 0.08));
   }
 }
 
@@ -203,6 +225,26 @@ button {
   margin-bottom: 10px;
   pointer-events: none;
   animation: dreamSoftEnter 420ms ease both;
+}
+
+.archive-cloud-mark {
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.archive-cloud-line {
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.cloud-breath {
+  animation: archiveLogoBreath 10s ease-in-out infinite;
+}
+
+.cloud-line-drift {
+  animation:
+    archiveLogoBreath 10s ease-in-out infinite,
+    archiveCloudLineDrift 12s ease-in-out infinite;
 }
 
 .text-button {
@@ -1349,6 +1391,10 @@ input {
   .brand-mark,
   .dream-guide-seal,
   .hero-brand-seal,
+  .archive-cloud-mark,
+  .archive-cloud-line,
+  .cloud-breath,
+  .cloud-line-drift,
   .auth-brand-mark,
   .hero-content,
   .dream-card,

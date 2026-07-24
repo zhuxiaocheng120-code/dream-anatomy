@@ -42,8 +42,14 @@
 - `archive-rail`：档案索引线，用于结果页、梦境日记和隐私页。
 - `identity-seal`：游客身份印章，用于“我的”页面。
 - `empty-mark`：空状态圆形标记，用于首页和梦境日记空状态。
+- `archive-cloud-mark` / `archive-cloud-line`：云朵与线条动效语义类，不承载信息。
+- `mini-cloud-breath` / `mini-line-drift`：WXSS 微动效类，用于首页圆环和“我的”身份印章。
 
 这些点缀都应保持 `aria-hidden="true"`，不承载信息，不拦截点击，不复制 HEMISPHERIC 品牌、荣格历史画作或其他第三方作品。
+
+## 云朵与线条动效
+
+小程序端使用 `@keyframes miniCloudBreath` 和 `@keyframes miniLineDrift` 提供非常轻微的呼吸和线条漂移效果。动效只使用 WXSS，不使用 JS animation loop、不依赖远程图片或字体。微信运行环境如果不支持某些动画属性，会自然降级为静态圆环或印章视觉，不影响记录、整理、保存、导出或身份功能。
 
 ## 未来复用
 
@@ -53,6 +59,10 @@
 - `.archive-panel`
 - `.manuscript-panel`
 - `.visual-orbit`
+- `.archive-cloud-mark`
+- `.archive-cloud-line`
+- `.mini-cloud-breath`
+- `.mini-line-drift`
 - `.archive-rail`
 - `.corner-lines`
 - `.identity-seal`
@@ -74,6 +84,7 @@
 5. 删除和清空确认弹窗仍清楚可辨。
 6. 深度记录仍显示“正在开发中”，不能触发 API。
 7. 游客请求仍不发送 Authorization。
-8. 真机触摸区域、滚动和安全区正常。
+8. 首页圆环和“我的”身份印章有安静、缓慢、非加载感的微动效；低性能或不支持动画时保持静态可读。
+9. 真机触摸区域、滚动和安全区正常。
 
 当前自动化测试覆盖静态边界和服务逻辑；本仓库环境尚未完成真机验收。上线前需要在微信开发者工具和真机上补充视觉截图与交互验证。

@@ -6,7 +6,7 @@
       <view class="subtitle">记录梦境文字、睡眠感受和醒来后的想法，AI 可帮助你整理摘要、情绪词和意象关键词。</view>
       <view class="microcopy">不急着解释，先把它留下来。</view>
     </view>
-    <view class="visual-orbit home-orbit" aria-hidden="true" data-visual="home-archive"></view>
+    <view class="visual-orbit home-orbit archive-cloud-mark mini-cloud-breath mini-line-drift" aria-hidden="true" data-visual="home-archive"></view>
   </view>
 
   <view class="section stack">

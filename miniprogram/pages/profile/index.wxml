@@ -7,7 +7,7 @@
       <view class="subtitle" wx:if="{{!authState.authenticated}}">当前梦境仅保存在本机。你也可以使用微信身份继续，为后续云端同步做准备。</view>
       <view class="subtitle" wx:else>当前身份可以用于后续云端同步。现阶段梦境仍只保存在本机。</view>
     </view>
-    <view class="identity-seal" aria-hidden="true" data-visual="profile-seal">{{authState.authenticated ? '微信身份档案' : '本机游客档案'}}</view>
+    <view class="identity-seal archive-cloud-mark mini-cloud-breath mini-line-drift" aria-hidden="true" data-visual="profile-seal">{{authState.authenticated ? '微信身份档案' : '本机游客档案'}}</view>
   </view>
   <view class="section card profile-card">
     <view>账户状态：{{authState.authenticated ? '微信身份已建立' : '游客'}}</view>
