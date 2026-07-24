@@ -15,34 +15,15 @@ page {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
 }
 
-@keyframes miniCloudBreath {
+@keyframes miniCloudOutlineFlow {
   0%,
+  15.5% {
+    opacity: 0.78;
+  }
+
+  16%,
   100% {
-    opacity: 0.92;
-    transform: translate3d(0, 0, 0) scale(1);
-  }
-
-  50% {
-    opacity: 0.99;
-    transform: translate3d(0, -4rpx, 0) scale(1.012);
-  }
-}
-
-@keyframes miniLineDrift {
-  0%,
-  100% {
-    opacity: 0.58;
-    transform: translate3d(0, 0, 0);
-  }
-
-  46% {
-    opacity: 0.76;
-    transform: translate3d(2rpx, -2rpx, 0);
-  }
-
-  72% {
-    opacity: 0.66;
-    transform: translate3d(-1rpx, 1rpx, 0);
+    opacity: 0;
   }
 }
 
@@ -264,21 +245,62 @@ page {
 }
 
 .archive-cloud-mark,
-.archive-cloud-line {
+.mini-cloud-outline-mark {
+  display: block;
   pointer-events: none;
-  transform-origin: center;
+  overflow: visible;
 }
 
-.mini-cloud-breath {
-  animation: miniCloudBreath 12s ease-in-out infinite;
+.mini-cloud-outline-mark {
+  position: relative;
+  width: 188rpx;
+  height: 142rpx;
+  margin-top: 34rpx;
 }
 
-.visual-orbit.mini-line-drift::before,
-.visual-orbit.mini-line-drift::after,
-.identity-seal.mini-line-drift::before,
-.identity-seal.mini-line-drift::after,
-.archive-cloud-line.mini-line-drift {
-  animation: miniLineDrift 11s ease-in-out infinite;
+.mini-cloud-outline-layer {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  pointer-events: none;
+}
+
+.mini-cloud-outline-base {
+  opacity: 1;
+}
+
+.mini-cloud-outline-flow {
+  opacity: 0;
+  filter: drop-shadow(0 2rpx 3rpx rgba(74, 49, 26, 0.14));
+  animation: miniCloudOutlineFlow 6.4s steps(1, end) infinite;
+}
+
+.mini-cloud-outline-flow-1 {
+  animation-delay: -5.33s;
+}
+
+.mini-cloud-outline-flow-2 {
+  animation-delay: -4.27s;
+}
+
+.mini-cloud-outline-flow-3 {
+  animation-delay: -3.2s;
+}
+
+.mini-cloud-outline-flow-4 {
+  animation-delay: -2.13s;
+}
+
+.mini-cloud-outline-flow-5 {
+  animation-delay: -1.07s;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .mini-cloud-outline-flow {
+    display: none;
+    animation: none;
+  }
 }
 
 .corner-lines {
@@ -340,10 +362,10 @@ page {
   position: relative;
   align-items: center;
   justify-content: center;
-  width: 144rpx;
+  width: 196rpx;
   height: 144rpx;
-  border: 2rpx solid rgba(95, 101, 73, 0.24);
-  border-radius: 50%;
+  border: 0;
+  border-radius: 0;
   color: #7b624b;
   font-size: 24rpx;
   font-weight: 700;
@@ -365,6 +387,22 @@ page {
 .identity-seal::after {
   inset: 44rpx;
   border-color: rgba(95, 101, 73, 0.18);
+}
+
+.identity-seal-cloud .mini-cloud-outline-mark {
+  position: absolute;
+  inset: 0;
+  width: 196rpx;
+  height: 144rpx;
+  margin-top: 0;
+}
+
+.identity-seal-label {
+  position: relative;
+  z-index: 1;
+  max-width: 116rpx;
+  text-align: center;
+  line-height: 1.35;
 }
 
 .empty {

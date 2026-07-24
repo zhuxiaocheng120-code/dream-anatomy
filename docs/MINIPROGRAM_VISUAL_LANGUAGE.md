@@ -37,19 +37,19 @@
 
 本轮不依赖远程图片，也不下载版权不明素材。所有装饰均由 WXML/WXSS 原创绘制：
 
-- `visual-orbit`：圆环结构，用于首页主视觉。
+- `mini-cloud-outline-mark`：云朵轮廓图层容器，用于首页主视觉和“我的”身份视觉。
 - `corner-lines`：手稿角线，用于 AI 整理梦境和记录详情。
 - `archive-rail`：档案索引线，用于结果页、梦境日记和隐私页。
 - `identity-seal`：游客身份印章，用于“我的”页面。
 - `empty-mark`：空状态圆形标记，用于首页和梦境日记空状态。
-- `archive-cloud-mark` / `archive-cloud-line`：云朵与线条动效语义类，不承载信息。
-- `mini-cloud-breath` / `mini-line-drift`：WXSS 微动效类，用于首页圆环和“我的”身份印章。
+- `archive-cloud-mark` / `mini-cloud-outline-base` / `mini-cloud-outline-flow`：静态云朵基础轮廓和同路径动态粗线帧叠层，不承载信息。
+- `miniprogram/assets/brand/mini-cloud-outline-*.svg`：本地原创 SVG 图层资产。基础图层完整显示云朵轮廓；动态帧使用同一条云朵 path，只改变 `stroke-dashoffset`，由 WXSS 控制帧透明度轮播。
 
 这些点缀都应保持 `aria-hidden="true"`，不承载信息，不拦截点击，不复制 HEMISPHERIC 品牌、荣格历史画作或其他第三方作品。
 
 ## 云朵与线条动效
 
-小程序端使用 `@keyframes miniCloudBreath` 和 `@keyframes miniLineDrift` 提供非常轻微的呼吸和线条漂移效果。动效只使用 WXSS，不使用 JS animation loop、不依赖远程图片或字体。微信运行环境如果不支持某些动画属性，会自然降级为静态圆环或印章视觉，不影响记录、整理、保存、导出或身份功能。
+小程序端不在 WXML 中直接使用 raw `<svg>` 或 `<path>`，而是通过原生 `<image>` 叠放本地 SVG 图层。`@keyframes miniCloudOutlineFlow` 只轮播 `.mini-cloud-outline-flow` 帧的透明度；每一帧都使用同一条云朵 path，并预设不同 `stroke-dashoffset`，从而形成较粗棕褐色描边沿外轮廓移动的效果。云朵本身不漂浮、不缩放，静态 `.mini-cloud-outline-base` 始终完整可见。动效只使用 WXSS，不使用 JS animation loop、不依赖远程图片或字体。微信运行环境如果不支持 SVG 图像或该动画属性，会自然降级为静态云朵轮廓，不影响记录、整理、保存、导出或身份功能。
 
 ## 未来复用
 
@@ -58,11 +58,11 @@
 - `.page-hero`
 - `.archive-panel`
 - `.manuscript-panel`
-- `.visual-orbit`
 - `.archive-cloud-mark`
-- `.archive-cloud-line`
-- `.mini-cloud-breath`
-- `.mini-line-drift`
+- `.mini-cloud-outline-mark`
+- `.mini-cloud-outline-base`
+- `.mini-cloud-outline-flow`
+- `.mini-cloud-detail`
 - `.archive-rail`
 - `.corner-lines`
 - `.identity-seal`
@@ -84,7 +84,7 @@
 5. 删除和清空确认弹窗仍清楚可辨。
 6. 深度记录仍显示“正在开发中”，不能触发 API。
 7. 游客请求仍不发送 Authorization。
-8. 首页圆环和“我的”身份印章有安静、缓慢、非加载感的微动效；低性能或不支持动画时保持静态可读。
+8. 首页云朵和“我的”身份印章有沿外轮廓移动的粗线动效；云朵整体位置固定，低性能或不支持动画时保持静态可读。
 9. 真机触摸区域、滚动和安全区正常。
 
 当前自动化测试覆盖静态边界和服务逻辑；本仓库环境尚未完成真机验收。上线前需要在微信开发者工具和真机上补充视觉截图与交互验证。
