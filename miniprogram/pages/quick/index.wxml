@@ -1,10 +1,10 @@
 <view class="page">
   <view class="archive-panel quick-workbench">
     <view class="panel-content">
-      <view class="eyebrow">快速解析</view>
-      <view class="title">写下梦境碎片</view>
-      <view class="subtitle">可以只写几个画面、人物或醒来后的感受。</view>
-      <view class="microcopy">情绪有时比解释更早接近真相。</view>
+      <view class="eyebrow">AI 整理梦境</view>
+      <view class="title">写下梦境文字</view>
+      <view class="subtitle">写下梦境文字，系统会帮你整理摘要、情绪词、意象关键词和自我反思问题。</view>
+      <view class="microcopy">结果仅供记录和回顾，不代表固定说法。</view>
     </view>
     <view class="corner-lines" aria-hidden="true" data-visual="quick-workbench"></view>
   </view>
@@ -31,6 +31,6 @@
   </checkbox-group>
 
   <error-state message="{{errorMessage}}"></error-state>
-  <loading-state wx:if="{{submitting}}" text="正在整理梦境线索……"></loading-state>
-  <button class="button section" disabled="{{submitting}}" bindtap="submit">保存并解析</button>
+  <loading-state wx:if="{{submitting}}" text="正在整理梦境记录……"></loading-state>
+  <button class="button section" disabled="{{submitting}}" bindtap="submit">保存并整理</button>
 </view>

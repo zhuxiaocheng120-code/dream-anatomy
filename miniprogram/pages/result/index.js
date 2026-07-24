@@ -1,5 +1,6 @@
 const { createDreamStorage } = require("../../services/dreamStorage");
 const { hasResultCard, normalizeResultCard } = require("../../services/resultCard");
+const { sanitizeComplianceObject } = require("../../utils/complianceText");
 
 const PENDING_RESULT_KEY = "dream_anatomy_pending_result_v1";
 
@@ -18,11 +19,13 @@ Page({
   onLoad() {
     const pending = wx.getStorageSync(PENDING_RESULT_KEY) || {};
     const response = pending.response || {};
+    const analysis = response.analysis ? sanitizeComplianceObject(response.analysis) : null;
+    const resultCard = response.dreamResultCard ? sanitizeComplianceObject(response.dreamResultCard) : null;
     this.setData({
       dreamText: pending.dreamText || "",
-      analysis: response.analysis || null,
-      resultCard: hasResultCard(response.dreamResultCard) ? normalizeResultCard(response.dreamResultCard) : null,
-      errorMessage: response.analysis ? "" : "没有找到本次解析结果，请重新输入梦境。"
+      analysis,
+      resultCard: hasResultCard(response.dreamResultCard) ? normalizeResultCard(resultCard) : null,
+      errorMessage: response.analysis ? "" : "没有找到本次整理结果，请重新输入梦境。"
     });
   },
   saveToJournal() {

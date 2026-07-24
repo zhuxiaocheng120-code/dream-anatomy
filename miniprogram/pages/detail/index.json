@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "梦境详情",
+  "navigationBarTitleText": "记录详情",
   "usingComponents": {
     "confirmation-modal": "/components/confirmation-modal/index",
     "error-state": "/components/error-state/index",

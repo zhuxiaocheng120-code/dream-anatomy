@@ -18,6 +18,6 @@
 
   <view wx:for="{{records}}" wx:key="localRecordId" class="section card journal-record" data-id="{{item.localRecordId}}" bindtap="openRecord">
     <view>{{item.title}}</view>
-    <view class="small muted">{{item.displayDate}} · {{item.analysisType}}</view>
+    <view class="small muted">{{item.displayDate}} · {{item.displayAnalysisType}}</view>
   </view>
 </view>

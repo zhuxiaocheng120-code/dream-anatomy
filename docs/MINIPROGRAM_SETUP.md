@@ -1,6 +1,6 @@
 # 微信小程序本地设置
 
-本目录提供 **析梦 Dream Anatomy** 的原生微信小程序基础工程。当前版本支持游客核心闭环，并新增安全的微信身份桥接：快速解析、梦境画像、本机保存、本机梦境日记、详情、删除、导出、清除本机数据，以及“我的”页面里主动点击“使用微信身份继续”。
+本目录提供 **Dream Anatomy 梦境手札** 的原生微信小程序基础工程。当前版本定位为个人梦境记录、睡眠感受记录与 AI 辅助文字整理工具，支持游客核心闭环，并新增安全的微信身份桥接：AI 整理梦境、梦境线索卡、本机保存、本机梦境日记、详情、删除、导出、清除本机数据，以及“我的”页面里主动点击“使用微信身份继续”。
 
 小程序视觉语言已同步 Web 端的旧纸、私人档案、心理工作室和手稿记录风格。配色、字体层级、原创装饰资产和手动视觉验收清单见 [docs/MINIPROGRAM_VISUAL_LANGUAGE.md](MINIPROGRAM_VISUAL_LANGUAGE.md)。
 
@@ -38,7 +38,9 @@ API_BASE_URL = "https://dream-anatomy.onrender.com"
 - 体验版：用于少量测试用户在微信里体验。
 - 正式版：提交审核并发布后面向真实用户。
 
-当前仓库只提供基础工程、视觉样式和自动化静态/服务测试，尚未完成真机验收。发布前需要在微信开发者工具和真机上手动验证快速解析、保存、日记、详情、删除、导出、清除本机数据，以及首页、快速解析、结果页、日记页、详情页、隐私页和我的页面的视觉呈现。
+当前仓库只提供基础工程、视觉样式和自动化静态/服务测试，尚未完成真机验收。发布前需要在微信开发者工具和真机上手动验证 AI 整理梦境、保存、日记、详情、删除、导出、清除本机数据，以及首页、AI 整理结果页、日记页、详情页、隐私页和我的页面的视觉呈现。
+
+小程序备案与审核口径见 [docs/MINIPROGRAM_COMPLIANCE_COPY.md](MINIPROGRAM_COMPLIANCE_COPY.md)。其中明确说明本小程序是梦境记录、睡眠感受记录与 AI 辅助文字整理工具，不提供封建迷信、医疗、心理诊断或心理治疗服务。
 
 ## 安全边界
 
@@ -47,7 +49,7 @@ API_BASE_URL = "https://dream-anatomy.onrender.com"
 - 微信身份使用 Render 后端桥接；`WECHAT_MINIPROGRAM_APP_ID`、`WECHAT_MINIPROGRAM_APP_SECRET`、`WECHAT_IDENTITY_HASH_SECRET` 和 `WECHAT_SESSION_HASH_SECRET` 只在 Render 配置。
 - 小程序只在用户点击“使用微信身份继续”时调用 `wx.login`，不会在启动时反复弹出登录。
 - 不在小程序中调用 `code2Session`、微信支付、Supabase Auth 或云同步。
-- 快速解析请求不发送微信身份 Authorization header，当前仍按访客 AI 额度运行。
-- 深度引导入口保持可见，但显示“正在开发中”，不能触发 AI 请求。
+- AI 整理请求不发送微信身份 Authorization header，当前仍按访客 AI 额度运行。
+- 深度记录入口保持可见，但显示“正在开发中”，不能触发 AI 请求。
 
 微信身份桥接的部署步骤见 [docs/WECHAT_AUTH_SETUP.md](WECHAT_AUTH_SETUP.md)。

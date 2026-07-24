@@ -58,7 +58,7 @@ Page({
       });
       wx.navigateTo({ url: "/pages/result/index" });
     } catch (error) {
-      this.setData({ errorMessage: error.message || "这次解析没有顺利完成，请稍后再试。" });
+      this.setData({ errorMessage: error.message || "这次整理没有顺利完成，请稍后再试。" });
     } finally {
       this.setData({ submitting: false });
     }

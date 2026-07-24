@@ -1,17 +1,17 @@
 <view class="page">
   <view class="page-hero home-hero">
     <view class="page-hero-content">
-      <view class="eyebrow">析梦 Dream Anatomy</view>
+      <view class="eyebrow">Dream Anatomy 梦境手札</view>
       <view class="title">把醒来的碎片，轻轻收好。</view>
-      <view class="subtitle">这里是游客版小程序雏形。你可以快速解析梦境，并把结果保存在本机。</view>
-      <view class="microcopy">梦并不急着给出答案，它更像是在递来线索。</view>
+      <view class="subtitle">记录梦境文字、睡眠感受和醒来后的想法，AI 可帮助你整理摘要、情绪词和意象关键词。</view>
+      <view class="microcopy">不急着解释，先把它留下来。</view>
     </view>
     <view class="visual-orbit home-orbit" aria-hidden="true" data-visual="home-archive"></view>
   </view>
 
   <view class="section stack">
-    <button class="button" bindtap="goQuick">快速解析</button>
-    <button class="button disabled" disabled bindtap="showDeepComingSoon">深度引导 <text class="tag">正在开发中</text></button>
+    <button class="button" bindtap="goQuick">AI 整理梦境</button>
+    <button class="button disabled" disabled bindtap="showDeepComingSoon">深度记录 <text class="tag">正在开发中</text></button>
     <button class="button secondary" bindtap="goJournal">梦境日记</button>
   </view>
 
@@ -28,7 +28,7 @@
     </view>
     <view wx:for="{{recentRecords}}" wx:key="localRecordId" class="card record archive-card" data-id="{{item.localRecordId}}" bindtap="openRecord">
       <view>{{item.title}}</view>
-      <view class="small muted">{{item.displayDate}} · {{item.analysisType}}</view>
+      <view class="small muted">{{item.displayDate}} · {{item.displayAnalysisType}}</view>
     </view>
   </view>
 </view>
