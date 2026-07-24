@@ -1,12 +1,16 @@
 const { createDreamStorage } = require("../../services/dreamStorage");
 const { formatDisplayDate } = require("../../utils/dates");
+const {
+  createMiniProgramDisplayTitle,
+  formatMiniProgramAnalysisType
+} = require("../../utils/complianceText");
 
 function createDisplayRecord(record) {
-  const analysis = record.reportContent && record.reportContent.analysis ? record.reportContent.analysis : {};
   return {
     ...record,
     displayDate: formatDisplayDate(record.createdAt),
-    title: analysis.dreamSummary || record.dreamText || "未命名梦境"
+    displayAnalysisType: formatMiniProgramAnalysisType(record.analysisType),
+    title: createMiniProgramDisplayTitle(record)
   };
 }
 

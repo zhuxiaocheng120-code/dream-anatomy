@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "快速解析",
+  "navigationBarTitleText": "AI 整理梦境",
   "usingComponents": {
     "loading-state": "/components/loading-state/index",
     "error-state": "/components/error-state/index"

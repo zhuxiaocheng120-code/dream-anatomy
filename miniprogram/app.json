@@ -9,7 +9,7 @@
     "pages/profile/index"
   ],
   "window": {
-    "navigationBarTitleText": "析梦 Dream Anatomy",
+    "navigationBarTitleText": "Dream Anatomy 梦境手札",
     "navigationBarBackgroundColor": "#f7f2ea",
     "navigationBarTextStyle": "black",
     "backgroundColor": "#f7f2ea"

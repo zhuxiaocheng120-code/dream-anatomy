@@ -1,11 +1,11 @@
 <view class="page">
   <view class="page-hero result-hero">
     <view class="page-hero-content">
-      <view class="eyebrow">快速解析结果</view>
-      <view class="title">梦境画像</view>
-      <view class="subtitle">AI 会整理线索，但不会替你下结论。</view>
-      <view class="small muted">心理档案报告会区分摘要、线索、意象和自我思考。</view>
-      <view class="small muted">下方包含梦境原型、一句话洞察和分享卡片预览。</view>
+      <view class="eyebrow">AI 整理结果</view>
+      <view class="title">梦境线索卡</view>
+      <view class="subtitle">AI 会整理你输入的文字线索，但不会替你给出结论。</view>
+      <view class="small muted">下方内容包括摘要、情绪词、意象关键词和自我反思问题，仅供保存和回顾。</view>
+      <view class="small muted">下方包含记录类型提示、一句话回顾和记录卡片预览。</view>
     </view>
     <view class="archive-rail" aria-hidden="true" data-visual="result-report"></view>
   </view>
@@ -14,18 +14,18 @@
 
   <view wx:if="{{analysis}}" class="section manuscript-panel stack">
     <view>
-      <view class="eyebrow">梦境摘要</view>
+      <view class="eyebrow">记录摘要</view>
       <view>{{analysis.dreamSummary || analysis.summary}}</view>
     </view>
     <view>
-      <view class="eyebrow">核心解析</view>
+      <view class="eyebrow">文字线索整理</view>
       <view>{{analysis.coreInterpretation}}</view>
     </view>
     <view wx:if="{{analysis.safetyReminder}}" class="small muted">{{analysis.safetyReminder}}</view>
   </view>
 
   <result-card wx:if="{{resultCard}}" card="{{resultCard}}"></result-card>
-  <view wx:else class="section card small muted">梦境画像暂未生成。你仍然可以阅读本次文字解析。</view>
+  <view wx:else class="section card small muted">梦境线索卡暂未生成。你仍然可以阅读本次文字整理。</view>
 
   <view class="section stack">
     <button class="button" bindtap="saveToJournal">保存到本机梦境日记</button>

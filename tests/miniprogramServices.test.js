@@ -165,7 +165,7 @@ test("quick analysis maps stable errors and never falls back to local mock", asy
   const { requestQuickAnalysis } = require("../miniprogram/services/apiClient");
   const { mapApiError } = require("../miniprogram/services/errorMessages");
 
-  assert.match(mapApiError("DAILY_LIMIT_REACHED"), /免费解析次数/);
+  assert.match(mapApiError("DAILY_LIMIT_REACHED"), /免费整理次数/);
   assert.match(mapApiError("RATE_LIMITED"), /太频繁/);
   assert.match(mapApiError("UPSTREAM_TIMEOUT"), /及时回应/);
   assert.match(mapApiError("FEATURE_DISABLED"), /正在开发/);
@@ -179,7 +179,7 @@ test("quick analysis maps stable errors and never falls back to local mock", asy
 
   await assert.rejects(
     () => requestQuickAnalysis("梦见海", { wx }),
-    (error) => error.code === "DAILY_LIMIT_REACHED" && /免费解析次数/.test(error.message) && !/mock|示例/.test(error.message)
+    (error) => error.code === "DAILY_LIMIT_REACHED" && /免费整理次数/.test(error.message) && !/mock|示例/.test(error.message)
   );
 
   const failed = createWxHarness({ respond: () => ({ fail: { errMsg: "request:fail timeout" } }) });
@@ -289,6 +289,12 @@ test("mini program legal versions match Web and guest consent follows versions",
   assert.equal(miniLegal.getLegalDocument("terms").title, "用户协议");
   assert.equal(miniLegal.getLegalDocument("ai").title, "AI 使用说明");
   assert.equal(miniLegal.getLegalDocument("cross-border").title, "境外处理说明");
+
+  const aiDocument = JSON.stringify(miniLegal.getLegalDocument("ai"));
+  const privacyDocument = JSON.stringify(miniLegal.getLegalDocument("privacy"));
+  assert.match(aiDocument, /本功能不是解梦、算命、占卜、吉凶判断或未来预测服务/);
+  assert.match(aiDocument, /摘要整理、情绪词识别、意象关键词整理/);
+  assert.doesNotMatch(`${aiDocument}\n${privacyDocument}`, /AI 解梦|梦境解析|象征解释|潜意识分析/);
 });
 
 test("result card normalization avoids fake zero scores and unsafe text", () => {
@@ -336,4 +342,44 @@ test("result card normalization avoids fake zero scores and unsafe text", () => 
   assert.equal(card.dimensions[0].score, null);
   assert.equal(card.emotionalProfile.intensity, null);
   assert.equal(card.symbols.length, 1);
+});
+
+test("compliance text lowers high-risk AI display terms without mutating records", () => {
+  const {
+    formatMiniProgramAnalysisType,
+    sanitizeComplianceObject,
+    sanitizeComplianceText
+  } = require("../miniprogram/utils/complianceText");
+
+  assert.equal(sanitizeComplianceText("这个梦预示着命运改变"), "这个记录片段可能让你联想到生活体验改变");
+  assert.equal(formatMiniProgramAnalysisType("快速解析"), "AI 整理");
+  assert.equal(formatMiniProgramAnalysisType("深度引导"), "深度记录");
+
+  const raw = {
+    insight: "潜意识告诉你这意味着机会",
+    nested: { text: "梦境解析和梦境画像" },
+    list: ["象征着变化", "吉凶判断"]
+  };
+  const cleaned = sanitizeComplianceObject(raw);
+
+  assert.notStrictEqual(cleaned, raw);
+  assert.equal(raw.insight, "潜意识告诉你这意味着机会");
+  assert.doesNotMatch(JSON.stringify(cleaned), /潜意识告诉你|意味着|梦境解析|梦境画像|象征着|吉凶/);
+});
+
+test("mini program display titles sanitize saved AI summaries without mutating records", () => {
+  const { createMiniProgramDisplayTitle } = require("../miniprogram/utils/complianceText");
+  const record = {
+    dreamText: "我梦见一扇门",
+    reportContent: {
+      analysis: {
+        dreamSummary: "这个梦预示着命运改变，也有梦境画像线索。"
+      }
+    }
+  };
+
+  const title = createMiniProgramDisplayTitle(record);
+  assert.equal(record.reportContent.analysis.dreamSummary, "这个梦预示着命运改变，也有梦境画像线索。");
+  assert.doesNotMatch(title, /预示|命运|梦境画像/);
+  assert.match(title, /记录片段|生活体验|梦境线索卡/);
 });

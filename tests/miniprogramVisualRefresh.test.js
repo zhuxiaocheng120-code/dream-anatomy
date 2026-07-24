@@ -51,9 +51,9 @@ test("mini program visual language uses shared tokens and keeps page paths stabl
 
 test("each mini program page has restrained page-level visual identity", () => {
   const expected = {
-    home: ["data-visual=\"home-archive\"", "梦并不急着给出答案"],
-    quick: ["data-visual=\"quick-workbench\"", "情绪有时比解释更早接近真相"],
-    result: ["data-visual=\"result-report\"", "心理档案报告"],
+    home: ["data-visual=\"home-archive\"", "不急着解释，先把它留下来"],
+    quick: ["data-visual=\"quick-workbench\"", "结果仅供记录和回顾"],
+    result: ["data-visual=\"result-report\"", "记录卡片预览"],
     journal: ["data-visual=\"journal-archive\"", "私人梦境档案"],
     detail: ["data-visual=\"detail-manuscript\"", "手稿记录"],
     privacy: ["data-visual=\"privacy-ledger\"", "档案文书"],

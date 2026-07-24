@@ -1,10 +1,16 @@
 const { createDreamStorage } = require("../../services/dreamStorage");
 const { formatDisplayDate } = require("../../utils/dates");
 const { hasResultCard, normalizeResultCard } = require("../../services/resultCard");
+const {
+  formatMiniProgramAnalysisType,
+  sanitizeComplianceObject,
+  sanitizeComplianceText
+} = require("../../utils/complianceText");
 
 Page({
   data: {
     record: null,
+    displayRecord: {},
     displayDate: "",
     resultCard: null,
     confirmVisible: false,
@@ -16,11 +22,19 @@ Page({
       this.setData({ errorMessage: "没有找到这条本机梦境记录。" });
       return;
     }
+    const reportContent = record.reportContent || {};
+    const analysis = sanitizeComplianceObject(reportContent.analysis || {});
+    const rawCard = record.dreamResultCard || reportContent.dreamResultCard;
+    const card = rawCard ? sanitizeComplianceObject(rawCard) : null;
     this.setData({
       record,
+      displayRecord: {
+        displayAnalysisType: formatMiniProgramAnalysisType(record.analysisType),
+        analysisText: sanitizeComplianceText(analysis.coreInterpretation || analysis.dreamSummary || "暂未生成文字整理。")
+      },
       displayDate: formatDisplayDate(record.createdAt),
-      resultCard: hasResultCard(record.dreamResultCard || (record.reportContent && record.reportContent.dreamResultCard))
-        ? normalizeResultCard(record.dreamResultCard || (record.reportContent && record.reportContent.dreamResultCard))
+      resultCard: hasResultCard(rawCard)
+        ? normalizeResultCard(card)
         : null
     });
   },

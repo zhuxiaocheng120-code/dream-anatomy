@@ -1,5 +1,5 @@
 {
-  "navigationBarTitleText": "解析结果",
+  "navigationBarTitleText": "AI 整理结果",
   "usingComponents": {
     "result-card": "/components/result-card/index",
     "error-state": "/components/error-state/index"

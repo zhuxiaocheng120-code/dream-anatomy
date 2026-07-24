@@ -30,6 +30,7 @@ test("mini program app shell registers required native pages and uses no extra f
   assert.equal(exists("miniprogram/sitemap.json"), true);
 
   const appJson = JSON.parse(read("miniprogram/app.json"));
+  assert.equal(appJson.window.navigationBarTitleText, "Dream Anatomy 梦境手札");
   assert.deepEqual(appJson.pages, [
     "pages/home/index",
     "pages/quick/index",
@@ -51,28 +52,36 @@ test("mini program pages expose guest core loop and disabled deep guidance", () 
   }
 
   const home = read("miniprogram/pages/home/index.wxml");
-  assert.match(home, /析梦 Dream Anatomy/);
-  assert.match(home, /快速解析/);
-  assert.match(home, /深度引导/);
+  assert.match(home, /Dream Anatomy 梦境手札/);
+  assert.match(home, /AI 整理梦境/);
+  assert.doesNotMatch(home, /析梦|快速解析/);
+  assert.match(home, /深度记录/);
   assert.match(home, /正在开发中/);
   assert.match(home, /梦境日记/);
 
   const quick = read("miniprogram/pages/quick/index.wxml");
+  assert.match(quick, /AI 整理梦境/);
+  assert.match(quick, /保存并整理/);
   assert.match(quick, /我已阅读并同意/);
   assert.match(quick, /用户协议/);
   assert.match(quick, /隐私政策/);
   assert.match(quick, /AI 使用说明/);
+  assert.doesNotMatch(quick, /快速解析|保存并解析|正在解析|解析失败|梦境含义|预示/);
   assert.doesNotMatch(quick, /Authorization|Bearer|登录后/i);
 
   const result = read("miniprogram/pages/result/index.wxml");
-  assert.match(result, /梦境画像/);
-  assert.match(result, /梦境原型/);
-  assert.match(result, /一句话洞察/);
-  assert.match(result, /分享卡片预览/);
-  assert.match(result, /梦境画像暂未生成/);
+  assert.match(result, /AI 整理结果/);
+  assert.match(result, /梦境线索卡/);
+  assert.match(result, /文字线索整理/);
+  assert.match(result, /记录卡片预览/);
+  assert.doesNotMatch(result, /梦境画像|梦境原型|核心解析/);
 
   assert.match(read("miniprogram/pages/journal/index.wxml"), /本机梦境日记/);
-  assert.match(read("miniprogram/pages/detail/index.wxml"), /删除这条梦境/);
+  const detail = read("miniprogram/pages/detail/index.wxml");
+  assert.match(detail, /记录详情/);
+  assert.match(detail, /AI 辅助整理/);
+  assert.match(detail, /删除这条记录/);
+  assert.doesNotMatch(detail, /梦境详情|AI 分析|删除这条梦境/);
   assert.match(read("miniprogram/pages/privacy/index.wxml"), /隐私与数据/);
   const profile = read("miniprogram/pages/profile/index.wxml");
   assert.match(profile, /游客模式/);
@@ -81,6 +90,22 @@ test("mini program pages expose guest core loop and disabled deep guidance", () 
   assert.match(profile, /现阶段梦境仍只保存在本机/);
   assert.match(profile, /退出当前身份/);
   assert.doesNotMatch(profile, /openid|unionid|已跨设备同步|已绑定 Web 账户/i);
+});
+
+test("mini program user-facing source avoids high-risk filing copy", () => {
+  const scannedFiles = listFiles("miniprogram", (file) => (
+    /\.(wxml|json)$/.test(file)
+      || /miniprogram\/pages\/[^/]+\/index\.js$/.test(file)
+      || /miniprogram\/components\/[^/]+\/index\.js$/.test(file)
+      || /miniprogram\/services\/errorMessages\.js$/.test(file)
+      || /miniprogram\/services\/resultCard\.js$/.test(file)
+  ) && !file.endsWith("services/legalDocuments.js")
+    && !file.endsWith("utils/complianceText.js"));
+  const forbidden = /析梦|解梦|算命|占卜|吉凶|预示|预测未来|通灵|命运判断|固定含义|梦境解析|AI 解梦|核心解析|梦境画像|梦境原型|象征含义|潜意识告诉你|弗洛伊德|荣格/u;
+
+  for (const file of scannedFiles) {
+    assert.doesNotMatch(read(file), forbidden, `${file} contains high-risk visible copy`);
+  }
 });
 
 test("mini program reusable components exist and avoid rich-text rendering", () => {
@@ -159,6 +184,9 @@ test("mini program docs and private config boundaries are explicit", () => {
   assert.match(gitignore, /miniprogram\/config\/config\.js/);
 
   const setup = read("docs/MINIPROGRAM_SETUP.md");
+  assert.match(setup, /Dream Anatomy 梦境手札/);
+  assert.match(setup, /AI 辅助文字整理工具/);
+  assert.match(setup, /MINIPROGRAM_COMPLIANCE_COPY/);
   assert.match(setup, /微信开发者工具/);
   assert.match(setup, /AppID/);
   assert.match(setup, /request 合法域名/);
@@ -172,6 +200,8 @@ test("mini program docs and private config boundaries are explicit", () => {
   assert.match(setup, /尚未完成真机验收/);
 
   const architecture = read("docs/MINIPROGRAM_ARCHITECTURE.md");
+  assert.match(architecture, /梦境记录、睡眠感受记录与 AI 辅助文字整理工具/);
+  assert.match(architecture, /梦境线索卡/);
   assert.match(architecture, /游客版核心闭环/);
   assert.match(architecture, /不调用 DeepSeek/);
   assert.match(architecture, /微信身份桥接/);
@@ -179,7 +209,7 @@ test("mini program docs and private config boundaries are explicit", () => {
   assert.match(architecture, /不做云同步/);
   assert.match(architecture, /本机存储/);
   assert.match(architecture, /dream_anatomy_guest_records_v1/);
-  assert.match(architecture, /深度引导.*正在开发中/);
+  assert.match(architecture, /深度记录.*正在开发中/);
 
   const wechatSetup = read("docs/WECHAT_AUTH_SETUP.md");
   assert.match(wechatSetup, /20260720000000_create_wechat_auth\.sql/);
@@ -196,4 +226,15 @@ test("mini program docs and private config boundaries are explicit", () => {
   assert.match(wechatArchitecture, /不创建假的 Supabase Session/);
   assert.match(wechatArchitecture, /cloudSyncAvailable: false/);
   assert.match(wechatArchitecture, /退出当前 Session/);
+});
+
+test("mini program compliance copy document includes filing review note", () => {
+  assert.equal(exists("docs/MINIPROGRAM_COMPLIANCE_COPY.md"), true);
+  const docs = read("docs/MINIPROGRAM_COMPLIANCE_COPY.md");
+
+  assert.match(docs, /个人梦境记录、睡眠感受记录与 AI 辅助文字整理工具/);
+  assert.match(docs, /摘要整理、情绪词识别、意象关键词整理/);
+  assert.match(docs, /不提供解梦、算命、占卜、吉凶判断、未来预测、通灵/);
+  assert.match(docs, /不对梦境符号作固定含义解释/);
+  assert.match(docs, /不是医疗、心理诊断或心理治疗服务/);
 });
