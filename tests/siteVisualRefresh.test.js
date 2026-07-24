@@ -55,7 +55,8 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
 
   [
     "@keyframes archiveLogoBreath",
-    "@keyframes archiveLineDrift"
+    "@keyframes archiveLineDrift",
+    "@keyframes archiveCloudLineDrift"
   ].forEach((keyframe) => assert.match(css, new RegExp(keyframe)));
 
   [
@@ -68,10 +69,28 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
     assert.match(block, /archiveLineDrift/);
   });
 
+  [
+    ".archive-cloud-mark",
+    ".archive-cloud-line",
+    ".cloud-breath",
+    ".cloud-line-drift"
+  ].forEach((selector) => assert.match(css, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
+
+  [
+    /class="[^"]*\bbrand-mark\b[^"]*\barchive-cloud-mark\b[^"]*\bcloud-breath\b/,
+    /class="[^"]*\bhero-brand-seal\b[^"]*\barchive-cloud-mark\b[^"]*\bcloud-breath\b/,
+    /class="[^"]*\bdream-guide-seal\b[^"]*\barchive-cloud-mark\b[^"]*\bcloud-breath\b/
+  ].forEach((pattern) => assert.match(html, pattern));
+
+  assert.match(cssRuleBlock(css, ".cloud-breath"), /archiveLogoBreath\s+1[012]s/);
+  assert.match(cssRuleBlock(css, ".cloud-line-drift"), /archiveCloudLineDrift\s+1[012]s/);
+
   const reducedMotion = cssMediaBlock(css, "@media (prefers-reduced-motion: reduce)");
   assert.match(reducedMotion, /\.brand-mark/);
   assert.match(reducedMotion, /\.hero-brand-seal/);
   assert.match(reducedMotion, /\.dream-guide-seal/);
+  assert.match(reducedMotion, /\.archive-cloud-mark/);
+  assert.match(reducedMotion, /\.cloud-line-drift/);
 
   assert.match(html, /class="archive-microcopy"/);
   assert.match(html, /梦不是答案，而是线索。/);
@@ -257,11 +276,11 @@ test("Dream Guide brand assets are wired into Web UI without changing navigation
   assert.match(html, /<button class="brand text-button" type="button" data-view-target="home" aria-label="返回析梦 Dream Anatomy 首页">/);
 
   [
-    'class="brand-mark"',
-    'class="hero-brand-seal"',
-    'class="dream-guide-seal"',
-    'class="auth-brand-mark"'
-  ].forEach((classHook) => assert.match(html, new RegExp(classHook)));
+    "brand-mark",
+    "hero-brand-seal",
+    "dream-guide-seal",
+    "auth-brand-mark"
+  ].forEach((classHook) => assert.match(html, new RegExp(`class="[^"]*\\b${classHook}\\b`)));
 
   [
     'src="assets/brand/dream-guide-mark.svg"',
@@ -290,6 +309,8 @@ test("Dream Guide microanimations are restrained and respect reduced motion", ()
   assert.match(reducedMotion, /animation:\s*none/);
   assert.match(reducedMotion, /transition-duration:\s*0\.01ms/);
   assert.match(reducedMotion, /\.brand-mark/);
+  assert.match(reducedMotion, /\.archive-cloud-mark/);
+  assert.match(reducedMotion, /\.cloud-breath/);
   assert.match(reducedMotion, /\.result-card-progress span/);
 
   [

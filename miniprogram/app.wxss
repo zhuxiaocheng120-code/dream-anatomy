@@ -15,6 +15,37 @@ page {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
 }
 
+@keyframes miniCloudBreath {
+  0%,
+  100% {
+    opacity: 0.92;
+    transform: translate3d(0, 0, 0) scale(1);
+  }
+
+  50% {
+    opacity: 0.99;
+    transform: translate3d(0, -4rpx, 0) scale(1.012);
+  }
+}
+
+@keyframes miniLineDrift {
+  0%,
+  100% {
+    opacity: 0.58;
+    transform: translate3d(0, 0, 0);
+  }
+
+  46% {
+    opacity: 0.76;
+    transform: translate3d(2rpx, -2rpx, 0);
+  }
+
+  72% {
+    opacity: 0.66;
+    transform: translate3d(-1rpx, 1rpx, 0);
+  }
+}
+
 .page {
   min-height: 100vh;
   padding: 48rpx 36rpx 72rpx;
@@ -232,6 +263,24 @@ page {
   background: rgba(255, 253, 246, 0.9);
 }
 
+.archive-cloud-mark,
+.archive-cloud-line {
+  pointer-events: none;
+  transform-origin: center;
+}
+
+.mini-cloud-breath {
+  animation: miniCloudBreath 12s ease-in-out infinite;
+}
+
+.visual-orbit.mini-line-drift::before,
+.visual-orbit.mini-line-drift::after,
+.identity-seal.mini-line-drift::before,
+.identity-seal.mini-line-drift::after,
+.archive-cloud-line.mini-line-drift {
+  animation: miniLineDrift 11s ease-in-out infinite;
+}
+
 .corner-lines {
   position: relative;
   min-height: 88rpx;
@@ -288,6 +337,7 @@ page {
 
 .identity-seal {
   display: flex;
+  position: relative;
   align-items: center;
   justify-content: center;
   width: 144rpx;
@@ -298,6 +348,23 @@ page {
   font-size: 24rpx;
   font-weight: 700;
   pointer-events: none;
+}
+
+.identity-seal::before,
+.identity-seal::after {
+  position: absolute;
+  border: 2rpx solid rgba(138, 111, 82, 0.22);
+  border-radius: 50%;
+  content: "";
+}
+
+.identity-seal::before {
+  inset: 18rpx;
+}
+
+.identity-seal::after {
+  inset: 44rpx;
+  border-color: rgba(95, 101, 73, 0.18);
 }
 
 .empty {

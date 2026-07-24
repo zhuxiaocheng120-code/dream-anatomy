@@ -39,6 +39,12 @@ test("mini program visual language uses shared tokens and keeps page paths stabl
     "parchment",
     "warm charcoal",
     "muted olive",
+    "@keyframes miniCloudBreath",
+    "@keyframes miniLineDrift",
+    ".archive-cloud-mark",
+    ".archive-cloud-line",
+    ".mini-cloud-breath",
+    ".mini-line-drift",
     ".page-hero",
     ".visual-orbit",
     ".archive-panel",
@@ -51,13 +57,13 @@ test("mini program visual language uses shared tokens and keeps page paths stabl
 
 test("each mini program page has restrained page-level visual identity", () => {
   const expected = {
-    home: ["data-visual=\"home-archive\"", "不急着解释，先把它留下来"],
+    home: ["data-visual=\"home-archive\"", "mini-cloud-breath", "mini-line-drift", "不急着解释，先把它留下来"],
     quick: ["data-visual=\"quick-workbench\"", "结果仅供记录和回顾"],
     result: ["data-visual=\"result-report\"", "记录卡片预览"],
     journal: ["data-visual=\"journal-archive\"", "私人梦境档案"],
     detail: ["data-visual=\"detail-manuscript\"", "手稿记录"],
     privacy: ["data-visual=\"privacy-ledger\"", "档案文书"],
-    profile: ["data-visual=\"profile-seal\"", "本机游客档案"]
+    profile: ["data-visual=\"profile-seal\"", "mini-cloud-breath", "mini-line-drift", "本机游客档案"]
   };
 
   Object.entries(expected).forEach(([page, needles]) => {
@@ -70,11 +76,15 @@ test("each mini program page has restrained page-level visual identity", () => {
 test("mini program visual refresh keeps local asset and WeChat auth boundaries", () => {
   const files = listFiles("miniprogram", (file) => /\.(js|json|wxml|wxss)$/.test(file));
   const source = files.map((file) => `${file}\n${read(file)}`).join("\n");
+  const jsSource = listFiles("miniprogram", (file) => /\.js$/.test(file))
+    .map((file) => `${file}\n${read(file)}`)
+    .join("\n");
   const authAdapter = read("miniprogram/services/authAdapter.js");
   const quickApiClient = read("miniprogram/services/apiClient.js");
 
   assert.doesNotMatch(source, /https?:\/\/[^"']+\.(?:png|jpe?g|webp|gif|svg|ttf|otf|woff2?)/i);
   assert.doesNotMatch(source, /base64,[A-Za-z0-9+/=]{200,}/);
+  assert.doesNotMatch(jsSource, /requestAnimationFrame|setInterval/);
   assert.doesNotMatch(source, /taro|uni-app|react|vue/i);
   assert.doesNotMatch(source, /DEEPSEEK_API_KEY|SUPABASE_SERVICE_ROLE_KEY|ANALYTICS_HASH_SECRET|WECHAT_MINIPROGRAM_APP_SECRET|WECHAT_IDENTITY_HASH_SECRET|WECHAT_SESSION_HASH_SECRET|AppSecret/i);
   assert.doesNotMatch(source, /code2Session|openid|unionid|session_key/i);

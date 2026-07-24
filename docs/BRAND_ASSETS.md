@@ -18,10 +18,10 @@
 
 ## 动效与可访问性
 
-Web 端 Logo 和页面使用克制的 CSS 微动画，主要通过 `transform` 和 `opacity` 实现。系统设置 `prefers-reduced-motion: reduce` 时，会关闭循环浮动、眨眼、进入动画和进度条揭示动画，只保留必要的即时状态反馈。
+Web 端 Logo 和页面使用克制的 CSS 微动画，主要通过 `transform`、`opacity` 和低强度线条漂移实现。云朵标识使用 `.archive-cloud-mark`、`.cloud-breath` 和 `.cloud-line-drift` 表达缓慢呼吸和手稿线条感，周期保持在 8-12 秒附近，避免 loading 感或卡通跳动。系统设置 `prefers-reduced-motion: reduce` 时，会关闭循环浮动、眨眼、进入动画和进度条揭示动画，只保留必要的即时状态反馈。
 
 装饰性 Logo 图片使用空 `alt`，品牌按钮本身保留可访问名称和键盘 focus。
 
 ## 小程序后续复用
 
-未来如果微信小程序需要平台头像或启动图，可以从 `src/assets/brand/` 的 SVG 源文件导出 PNG。当前版本只保存源 SVG 和 Web 引用，不代表已经上传或配置微信公众平台后台图标。
+未来如果微信小程序需要平台头像或启动图，可以从 `src/assets/brand/` 的 SVG 源文件导出 PNG。当前小程序端通过 WXML/WXSS 的 `archive-cloud-mark`、`mini-cloud-breath` 和 `mini-line-drift` 复用同一套云朵线条语义，不依赖远程图片或字体，也不代表已经上传或配置微信公众平台后台图标。
