@@ -53,9 +53,9 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
     "--manuscript-shadow:"
   ].forEach((token) => assert.match(css, new RegExp(token)));
 
-  assert.match(css, /@keyframes cloudOutlineFlow/);
-  assert.match(css, /cloudOutlineFlow[\s\S]*stroke-dashoffset/);
-  assert.doesNotMatch(css.match(/@keyframes cloudOutlineFlow[\s\S]*?\n\}/)[0], /transform:/);
+  assert.doesNotMatch(css, /@keyframes cloudOutlineFlow/);
+  assert.doesNotMatch(css, /stroke-dashoffset/);
+  assert.doesNotMatch(css, /stroke-dasharray/);
 
   [
     ".brand-mark",
@@ -70,7 +70,7 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
   [
     ".archive-cloud-mark",
     ".archive-cloud-outline",
-    ".archive-cloud-outline-flow"
+    ".archive-cloud-outline-wave"
   ].forEach((selector) => assert.match(css, new RegExp(selector.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
 
   [
@@ -80,29 +80,27 @@ test("classical archive refresh exposes shared tokens and restrained logo motion
   ].forEach((pattern) => assert.match(html, pattern));
 
   const outlineRule = cssRuleBlock(css, ".archive-cloud-outline");
-  const flowRule = cssRuleBlock(css, ".archive-cloud-outline-flow");
+  const waveRule = cssRuleBlock(css, ".archive-cloud-outline-wave");
   assert.match(outlineRule, /stroke:/);
   assert.doesNotMatch(outlineRule, /animation\s*:/);
-  assert.match(flowRule, /stroke-dasharray:/);
-  assert.match(flowRule, /stroke-dashoffset:/);
-  assert.match(flowRule, /animation:\s*cloudOutlineFlow\s+[456](?:\.\d+)?s\s+linear\s+infinite/);
-  assert.doesNotMatch(flowRule, /transform\s*:/);
-  assert.match(flowRule, /filter:\s*drop-shadow/);
+  assert.match(waveRule, /animation:\s*cloudOutlineWave\s+[3456](?:\.\d+)?s\s+ease-in-out\s+infinite/);
+  assert.doesNotMatch(waveRule, /stroke-dash/);
+  assert.doesNotMatch(waveRule, /transform\s*:/);
 
   const baseStrokeWidth = Number(outlineRule.match(/stroke-width:\s*([0-9.]+)/)?.[1]);
-  const flowStrokeWidth = Number(flowRule.match(/stroke-width:\s*([0-9.]+)/)?.[1]);
-  const flowOpacity = Number(flowRule.match(/opacity:\s*([0-9.]+)/)?.[1]);
-  assert.ok(flowStrokeWidth >= baseStrokeWidth * 1.8, "animated cloud outline must be visibly thicker than the base outline");
-  assert.ok(flowStrokeWidth <= baseStrokeWidth * 2.5, "animated cloud outline must stay refined instead of overpowering the mark");
-  assert.ok(flowOpacity >= 0.65 && flowOpacity <= 0.9, "animated cloud outline must be visible without becoming neon");
+  const waveStrokeWidth = Number(waveRule.match(/stroke-width:\s*([0-9.]+)/)?.[1]);
+  const waveOpacity = Number(css.match(/@keyframes cloudOutlineWave[\s\S]*opacity:\s*([0-9.]+)/)?.[1]);
+  assert.ok(waveStrokeWidth >= baseStrokeWidth, "animated cloud outline wave must be at least as visible as the base outline");
+  assert.ok(waveStrokeWidth <= baseStrokeWidth * 1.6, "animated cloud outline wave must stay refined instead of overpowering the mark");
+  assert.ok(waveOpacity >= 0.55 && waveOpacity <= 0.85, "animated cloud outline wave must be visible without becoming neon");
 
   const reducedMotion = cssMediaBlock(css, "@media (prefers-reduced-motion: reduce)");
   assert.match(reducedMotion, /\.brand-mark/);
   assert.match(reducedMotion, /\.hero-brand-seal/);
   assert.match(reducedMotion, /\.dream-guide-seal/);
   assert.match(reducedMotion, /\.archive-cloud-mark/);
-  assert.match(reducedMotion, /\.archive-cloud-outline-flow/);
-  assert.match(reducedMotion, /\.archive-cloud-outline-flow[\s\S]*display:\s*none/);
+  assert.match(reducedMotion, /\.archive-cloud-outline-wave/);
+  assert.match(reducedMotion, /\.archive-cloud-outline-wave[\s\S]*display:\s*none/);
 
   assert.match(html, /class="archive-microcopy"/);
   assert.match(html, /梦不是答案，而是线索。/);
@@ -293,10 +291,13 @@ test("Dream Guide brand assets are wired into Web UI without changing navigation
     assert.match(logoMatch[0], /aria-hidden="true"/);
     assert.match(logoMatch[0], /focusable="false"/);
     assert.match(logoMatch[0], /class="[^"]*\barchive-cloud-outline\b/);
-    assert.match(logoMatch[0], /class="[^"]*\barchive-cloud-outline-flow\b/);
-    const outlinePaths = [...logoMatch[0].matchAll(/<path class="archive-cloud-outline(?:-flow)?" d="([^"]+)"/g)];
-    assert.equal(outlinePaths.length, 2, `${classHook} must include one static outline and one animated outline overlay`);
-    assert.equal(outlinePaths[0][1], outlinePaths[1][1], `${classHook} outline overlay must reuse the same cloud path`);
+    assert.match(logoMatch[0], /class="[^"]*\barchive-cloud-outline-wave\b[^"]*\barchive-cloud-outline-wave-a\b/);
+    assert.match(logoMatch[0], /class="[^"]*\barchive-cloud-outline-wave\b[^"]*\barchive-cloud-outline-wave-b\b/);
+    assert.doesNotMatch(logoMatch[0], /<animate\b/);
+    assert.doesNotMatch(logoMatch[0], /archive-cloud-outline-flow|stroke-dashoffset|stroke-dasharray/);
+    const outlinePaths = [...logoMatch[0].matchAll(/<path class="[^"]*\barchive-cloud-outline(?:-wave)?\b[^"]*" d="([^"]+)"/g)];
+    assert.equal(outlinePaths.length, 3, `${classHook} must include one static outline and two wavy outline overlays`);
+    assert.equal(new Set(outlinePaths.map((match) => match[1])).size, 3, `${classHook} wavy outlines must use distinct cloud path states`);
   });
 
   assert.doesNotMatch(html, /<img\b[^>]*class="[^"]*\b(?:brand-mark|hero-brand-seal|dream-guide-seal|auth-brand-mark)\b/);
@@ -310,10 +311,10 @@ test("Dream Guide microanimations are restrained and respect reduced motion", ()
   [
     "@keyframes dreamSoftEnter",
     "@keyframes dreamDimensionReveal",
-    "@keyframes cloudOutlineFlow"
+    "@keyframes cloudOutlineWave"
   ].forEach((keyframe) => assert.match(css, new RegExp(keyframe.replace(/[.*+?^${}()|[\]\\]/g, "\\$&"))));
 
-  assert.doesNotMatch(css, /@keyframes dreamGuideFloat|@keyframes dreamGuideBlink|filter:\s*brightness/);
+  assert.doesNotMatch(css, /@keyframes dreamGuideFloat|@keyframes dreamGuideBlink|filter:\s*brightness|stroke-dashoffset|stroke-dasharray/);
 
   assert.match(css, /dreamSoftEnter[\s\S]*opacity:/);
   assert.match(css, /dreamDimensionReveal[\s\S]*transform:/);
@@ -323,7 +324,7 @@ test("Dream Guide microanimations are restrained and respect reduced motion", ()
   assert.match(reducedMotion, /transition-duration:\s*0\.01ms/);
   assert.match(reducedMotion, /\.brand-mark/);
   assert.match(reducedMotion, /\.archive-cloud-mark/);
-  assert.match(reducedMotion, /\.archive-cloud-outline-flow/);
+  assert.match(reducedMotion, /\.archive-cloud-outline-wave/);
   assert.match(reducedMotion, /\.result-card-progress span/);
 
   [

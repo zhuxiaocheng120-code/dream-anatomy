@@ -39,11 +39,11 @@ test("mini program visual language uses shared tokens and keeps page paths stabl
     "parchment",
     "warm charcoal",
     "muted olive",
-    "@keyframes miniCloudOutlineFlow",
+    "@keyframes miniCloudOutlineWave",
     ".archive-cloud-mark",
     ".mini-cloud-outline-mark",
     ".mini-cloud-outline-base",
-    ".mini-cloud-outline-flow",
+    ".mini-cloud-outline-wave",
     ".page-hero",
     ".visual-orbit",
     ".archive-panel",
@@ -56,13 +56,13 @@ test("mini program visual language uses shared tokens and keeps page paths stabl
 
 test("each mini program page has restrained page-level visual identity", () => {
   const expected = {
-    home: ["data-visual=\"home-archive\"", "mini-cloud-outline-mark", "mini-cloud-outline-flow", "不急着解释，先把它留下来"],
+    home: ["data-visual=\"home-archive\"", "mini-cloud-outline-mark", "mini-cloud-outline-wave", "不急着解释，先把它留下来"],
     quick: ["data-visual=\"quick-workbench\"", "结果仅供记录和回顾"],
     result: ["data-visual=\"result-report\"", "记录卡片预览"],
     journal: ["data-visual=\"journal-archive\"", "私人梦境档案"],
     detail: ["data-visual=\"detail-manuscript\"", "手稿记录"],
     privacy: ["data-visual=\"privacy-ledger\"", "档案文书"],
-    profile: ["data-visual=\"profile-seal\"", "mini-cloud-outline-mark", "mini-cloud-outline-flow", "本机游客档案"]
+    profile: ["data-visual=\"profile-seal\"", "mini-cloud-outline-mark", "mini-cloud-outline-wave", "本机游客档案"]
   };
 
   Object.entries(expected).forEach(([page, needles]) => {
@@ -72,20 +72,20 @@ test("each mini program page has restrained page-level visual identity", () => {
   });
 });
 
-test("mini program cloud mark uses static outline plus visible moving stroke", () => {
+test("mini program cloud mark uses static outline plus wavy line states", () => {
   const appWxss = read("miniprogram/app.wxss");
   const home = read("miniprogram/pages/home/index.wxml");
   const profile = read("miniprogram/pages/profile/index.wxml");
 
-  assert.match(appWxss, /@keyframes miniCloudOutlineFlow[\s\S]*opacity/);
-  assert.doesNotMatch(appWxss.match(/@keyframes miniCloudOutlineFlow[\s\S]*?\n\}/)[0], /transform:/);
+  assert.match(appWxss, /@keyframes miniCloudOutlineWave[\s\S]*opacity/);
+  assert.doesNotMatch(appWxss.match(/@keyframes miniCloudOutlineWave[\s\S]*?\n\}/)[0], /translateY|scale|rotate/);
 
   const baseRule = appWxss.match(/\.mini-cloud-outline-base\s*\{([^}]*)\}/)?.[1] || "";
-  const flowRule = appWxss.match(/\.mini-cloud-outline-flow\s*\{([^}]*)\}/)?.[1] || "";
+  const waveRule = appWxss.match(/\.mini-cloud-outline-wave\s*\{([^}]*)\}/)?.[1] || "";
   assert.match(baseRule, /opacity:\s*1/);
-  assert.match(flowRule, /animation:\s*miniCloudOutlineFlow\s+[4567](?:\.\d+)?s\s+steps\(1,\s*end\)\s+infinite/);
-  assert.match(flowRule, /filter:\s*drop-shadow/);
-  assert.doesNotMatch(flowRule, /transform\s*:/);
+  assert.match(waveRule, /animation:\s*miniCloudOutlineWave\s+[3456](?:\.\d+)?s\s+ease-in-out\s+infinite/);
+  assert.match(waveRule, /opacity:\s*0/);
+  assert.doesNotMatch(waveRule, /transform\s*:/);
 
   [home, profile].forEach((source) => {
     assert.doesNotMatch(source, /<svg\b|<path\b/);
@@ -93,25 +93,32 @@ test("mini program cloud mark uses static outline plus visible moving stroke", (
     assert.match(source, /<image\b[^>]*class="[^"]*\bmini-cloud-outline-layer\b[^"]*\bmini-cloud-outline-base\b/);
     assert.match(source, /src="\/assets\/brand\/mini-cloud-outline-base\.svg"/);
     assert.match(source, /class="[^"]*\bmini-cloud-outline-base\b/);
-    assert.match(source, /class="[^"]*\bmini-cloud-outline-flow\b/);
-    assert.match(source, /src="\/assets\/brand\/mini-cloud-outline-flow-0\.svg"/);
-    assert.match(source, /src="\/assets\/brand\/mini-cloud-outline-flow-5\.svg"/);
+    assert.match(source, /class="[^"]*\bmini-cloud-outline-wave\b/);
+    assert.match(source, /src="\/assets\/brand\/mini-cloud-outline-wave-a\.svg"/);
+    assert.match(source, /src="\/assets\/brand\/mini-cloud-outline-wave-b\.svg"/);
     assert.match(source, /aria-hidden="true"/);
-    assert.doesNotMatch(source, /mini-cloud-breath|mini-line-drift/);
+    assert.doesNotMatch(source, /mini-cloud-breath|mini-line-drift|mini-cloud-outline-flow/);
   });
 
   const baseAsset = read("miniprogram/assets/brand/mini-cloud-outline-base.svg");
   assert.match(baseAsset, /stroke="#5f6549"/);
   assert.match(baseAsset, /stroke-width="2"/);
+  assert.doesNotMatch(baseAsset, /stroke-dash/);
 
-  const frameOffsets = [0, -30, -60, -90, -120, -150];
-  frameOffsets.forEach((offset, index) => {
-    const frame = read(`miniprogram/assets/brand/mini-cloud-outline-flow-${index}.svg`);
-    assert.match(frame, /stroke="#8a6f52"/);
-    assert.match(frame, /stroke-width="4"/);
-    assert.match(frame, /stroke-dasharray="44 46 30 62"/);
-    assert.match(frame, new RegExp(`stroke-dashoffset="${offset}"`));
+  ["a", "b"].forEach((suffix) => {
+    const frame = read(`miniprogram/assets/brand/mini-cloud-outline-wave-${suffix}.svg`);
+    assert.match(frame, /stroke="#765329"/);
+    const baseWidth = Number(baseAsset.match(/stroke-width="([0-9.]+)"/)?.[1]);
+    const waveWidth = Number(frame.match(/stroke-width="([0-9.]+)"/)?.[1]);
+    assert.ok(waveWidth > baseWidth, "mini wave line should be visibly stronger than the static outline");
+    assert.ok(waveWidth <= baseWidth * 1.6, "mini wave line should stay restrained");
+    assert.doesNotMatch(frame, /stroke-dash/);
     assert.doesNotMatch(frame, /<script|onload=|onclick=|(?:href|src)=["']https?:|url\(["']?https?:|base64|<style/i);
+    assert.notEqual(
+      frame.match(/d="([^"]+)"/)?.[1],
+      baseAsset.match(/d="([^"]+)"/)?.[1],
+      "wave asset must use a slightly different cloud outline path instead of the same path with dash offsets"
+    );
   });
 });
 

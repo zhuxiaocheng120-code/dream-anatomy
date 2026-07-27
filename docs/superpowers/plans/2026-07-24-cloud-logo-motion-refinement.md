@@ -9,7 +9,7 @@
 ## Task 2: Web Cloud Logo Motion Refinement
 
 - Add explicit reusable Web motion classes in `src/style.css`.
-- Refine logo keyframes to use smaller `translateY`, very light `scale`, and opacity drift.
+- Refine logo keyframes so the logo remains fixed while nearby cloud outline layers alternate opacity to create a wavy hand-drawn line effect.
 - Keep existing selectors and UI hooks intact.
 - Add the new classes to Web logo placements only if needed for explicit class coverage.
 - Extend the reduced-motion block to disable the new motion classes.

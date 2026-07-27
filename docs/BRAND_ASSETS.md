@@ -18,12 +18,12 @@
 
 ## 动效与可访问性
 
-Web 端页面中的可见 Logo 使用同源 inline SVG 渲染，以便云朵外轮廓能在真实 DOM 中形成静态底线和动态描边叠层。`src/assets/brand/` 中的 SVG 文件继续作为 favicon、源资产和导出基础保留，不再作为首页可见 Logo 的唯一渲染方式。
+Web 端页面中的可见 Logo 使用同源 inline SVG 渲染，以便云朵外轮廓能在真实 DOM 中进行细微的手绘线条形态变化。`src/assets/brand/` 中的 SVG 文件继续作为 favicon、源资产和导出基础保留，不再作为首页可见 Logo 的唯一渲染方式。
 
-Web 端 Logo 的云朵位置和形状保持固定；动效只作用在 `.archive-cloud-outline-flow` 这条同路径描边叠层上，通过 `stroke-dasharray` 和 `stroke-dashoffset` 让一到两段较粗、较明显的棕金色描边沿外轮廓持续流动。静态 `.archive-cloud-outline` 始终完整可见，周期约 4-7 秒，避免 loading 感、整体漂浮或卡通跳动。系统设置 `prefers-reduced-motion: reduce` 时，会隐藏动态粗线、关闭进入动画和进度条揭示动画，只保留静态云朵轮廓和必要的即时状态反馈。
+Web 端 Logo 的云朵位置和整体大小保持固定；动效只作用在 `.archive-cloud-outline-wave` 轮廓线叠层上，通过两条相近但不同的云朵 path 交替透明度，让线条本身像手稿水波一样轻微变化。静态 `.archive-cloud-outline` 始终完整可见，周期约 3.5-6 秒，避免外圈跑马灯、loading 感、整体漂浮或卡通跳动。系统设置 `prefers-reduced-motion: reduce` 时，会隐藏动态波动叠层、关闭进入动画和进度条揭示动画，只保留静态云朵轮廓和必要的即时状态反馈。
 
 装饰性 inline Logo 使用 `aria-hidden="true"` 和 `focusable="false"`，品牌按钮本身保留可访问名称和键盘 focus。
 
 ## 小程序后续复用
 
-未来如果微信小程序需要平台头像或启动图，可以从 `src/assets/brand/` 的 SVG 源文件导出 PNG。当前小程序端通过原生 `<image>` 叠放 `miniprogram/assets/brand/mini-cloud-outline-*.svg` 本地图层，并用 WXML/WXSS 的 `archive-cloud-mark`、`mini-cloud-outline-base` 和 `mini-cloud-outline-flow` 复用同一套静态云朵轮廓与同路径流动粗线语义；不依赖远程图片或字体，也不代表已经上传或配置微信公众平台后台图标。
+未来如果微信小程序需要平台头像或启动图，可以从 `src/assets/brand/` 的 SVG 源文件导出 PNG。当前小程序端通过原生 `<image>` 叠放 `miniprogram/assets/brand/mini-cloud-outline-*.svg` 本地图层，并用 WXML/WXSS 的 `archive-cloud-mark`、`mini-cloud-outline-base` 和 `mini-cloud-outline-wave` 复用同一套静态云朵轮廓与多层手绘波动线语义；不依赖远程图片或字体，也不代表已经上传或配置微信公众平台后台图标。

@@ -50,13 +50,25 @@ body {
   background-size: auto, auto, 34px 34px, 34px 34px, 180px 180px, auto;
 }
 
-@keyframes cloudOutlineFlow {
-  from {
-    stroke-dashoffset: 0;
+@keyframes cloudOutlineWave {
+  0%,
+  100% {
+    opacity: 0.85;
   }
 
-  to {
-    stroke-dashoffset: -184;
+  50% {
+    opacity: 0.55;
+  }
+}
+
+@keyframes cloudOutlineWaveReverse {
+  0%,
+  100% {
+    opacity: 0.55;
+  }
+
+  50% {
+    opacity: 0.85;
   }
 }
 
@@ -197,19 +209,20 @@ button {
   stroke: none;
 }
 
-.archive-cloud-outline-flow {
+.archive-cloud-outline-wave {
   pointer-events: none;
   fill: none;
-  opacity: 0.78;
-  stroke: #8d6330;
+  opacity: 0;
+  stroke: #765329;
   stroke-linecap: round;
   stroke-linejoin: round;
-  stroke-width: 4.2;
-  stroke-dasharray: 44 46 30 62;
-  stroke-dashoffset: 0;
+  stroke-width: 3.35;
   vector-effect: non-scaling-stroke;
-  filter: drop-shadow(0 1px 2px rgba(74, 49, 26, 0.16));
-  animation: cloudOutlineFlow 5.6s linear infinite;
+  animation: cloudOutlineWave 4.8s ease-in-out infinite;
+}
+
+.archive-cloud-outline-wave-b {
+  animation-name: cloudOutlineWaveReverse;
 }
 
 .archive-cloud-detail {
@@ -1406,7 +1419,7 @@ input {
     animation: none !important;
   }
 
-  .archive-cloud-outline-flow {
+  .archive-cloud-outline-wave {
     display: none !important;
     animation: none !important;
   }
