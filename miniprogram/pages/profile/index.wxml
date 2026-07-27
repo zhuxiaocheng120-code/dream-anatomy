@@ -10,12 +10,8 @@
     <view class="identity-seal identity-seal-cloud" aria-hidden="true" data-visual="profile-seal">
       <view class="mini-cloud-outline-mark archive-cloud-mark profile-cloud-mark">
         <image class="mini-cloud-outline-layer mini-cloud-outline-base" src="/assets/brand/mini-cloud-outline-base.svg" mode="aspectFit"></image>
-        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-0" src="/assets/brand/mini-cloud-outline-flow-0.svg" mode="aspectFit"></image>
-        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-1" src="/assets/brand/mini-cloud-outline-flow-1.svg" mode="aspectFit"></image>
-        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-2" src="/assets/brand/mini-cloud-outline-flow-2.svg" mode="aspectFit"></image>
-        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-3" src="/assets/brand/mini-cloud-outline-flow-3.svg" mode="aspectFit"></image>
-        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-4" src="/assets/brand/mini-cloud-outline-flow-4.svg" mode="aspectFit"></image>
-        <image class="mini-cloud-outline-layer mini-cloud-outline-flow mini-cloud-outline-flow-5" src="/assets/brand/mini-cloud-outline-flow-5.svg" mode="aspectFit"></image>
+        <image class="mini-cloud-outline-layer mini-cloud-outline-wave mini-cloud-outline-wave-a" src="/assets/brand/mini-cloud-outline-wave-a.svg" mode="aspectFit"></image>
+        <image class="mini-cloud-outline-layer mini-cloud-outline-wave mini-cloud-outline-wave-b" src="/assets/brand/mini-cloud-outline-wave-b.svg" mode="aspectFit"></image>
       </view>
       <view class="identity-seal-label">{{authState.authenticated ? '微信身份档案' : '本机游客档案'}}</view>
     </view>

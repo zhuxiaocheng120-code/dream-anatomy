@@ -46,7 +46,7 @@ The header brand button must remain keyboard-focusable and must keep its current
 
 Motion is CSS-only and low-stimulation:
 
-- Logo float: 2-4px vertical movement, 7-9s cycle, ease-in-out.
+- Logo cloud-line wave: the logo stays fixed while the cloud outline uses a static base line plus nearby hand-drawn wave outlines that alternate opacity over a 3.5-6s cycle.
 - Guide blink: short, infrequent SVG/CSS state using no JavaScript timers.
 - Page entry: subtle opacity and translateY for hero, panels, quick result, Dream Result Card, journal/detail containers, and auth modal.
 - Result Card dimension bars: one-time width reveal by CSS transition/animation, without changing the numeric score or treating 0 as missing.
@@ -54,7 +54,7 @@ Motion is CSS-only and low-stimulation:
 
 Reduced motion behavior:
 
-- `prefers-reduced-motion: reduce` disables continuous float, blink, bar reveal, and page-entry motion.
+- `prefers-reduced-motion: reduce` disables continuous cloud-line wave, blink, bar reveal, and page-entry motion.
 - Necessary focus and instant state feedback remain visible.
 
 Decorative elements must not intercept clicks.

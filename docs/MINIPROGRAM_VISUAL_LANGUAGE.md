@@ -42,14 +42,14 @@
 - `archive-rail`：档案索引线，用于结果页、梦境日记和隐私页。
 - `identity-seal`：游客身份印章，用于“我的”页面。
 - `empty-mark`：空状态圆形标记，用于首页和梦境日记空状态。
-- `archive-cloud-mark` / `mini-cloud-outline-base` / `mini-cloud-outline-flow`：静态云朵基础轮廓和同路径动态粗线帧叠层，不承载信息。
-- `miniprogram/assets/brand/mini-cloud-outline-*.svg`：本地原创 SVG 图层资产。基础图层完整显示云朵轮廓；动态帧使用同一条云朵 path，只改变 `stroke-dashoffset`，由 WXSS 控制帧透明度轮播。
+- `archive-cloud-mark` / `mini-cloud-outline-base` / `mini-cloud-outline-wave`：静态云朵基础轮廓和多层手绘波动轮廓叠层，不承载信息。
+- `miniprogram/assets/brand/mini-cloud-outline-*.svg`：本地原创 SVG 图层资产。基础图层完整显示云朵轮廓；波动图层使用与基础云朵接近但略有差异的 path，由 WXSS 控制透明度交替，模拟线条本身轻微变形。
 
 这些点缀都应保持 `aria-hidden="true"`，不承载信息，不拦截点击，不复制 HEMISPHERIC 品牌、荣格历史画作或其他第三方作品。
 
 ## 云朵与线条动效
 
-小程序端不在 WXML 中直接使用 raw `<svg>` 或 `<path>`，而是通过原生 `<image>` 叠放本地 SVG 图层。`@keyframes miniCloudOutlineFlow` 只轮播 `.mini-cloud-outline-flow` 帧的透明度；每一帧都使用同一条云朵 path，并预设不同 `stroke-dashoffset`，从而形成较粗棕褐色描边沿外轮廓移动的效果。云朵本身不漂浮、不缩放，静态 `.mini-cloud-outline-base` 始终完整可见。动效只使用 WXSS，不使用 JS animation loop、不依赖远程图片或字体。微信运行环境如果不支持 SVG 图像或该动画属性，会自然降级为静态云朵轮廓，不影响记录、整理、保存、导出或身份功能。
+小程序端不在 WXML 中直接使用 raw `<svg>` 或 `<path>`，而是通过原生 `<image>` 叠放本地 SVG 图层。`@keyframes miniCloudOutlineWave` 只交替 `.mini-cloud-outline-wave` 图层的透明度；每一层都是略微不同的手绘云朵轮廓，形成线条本身轻微波动的效果。云朵本身不漂浮、不缩放，静态 `.mini-cloud-outline-base` 始终完整可见。动效只使用 WXSS，不使用 JS animation loop、不依赖远程图片或字体。微信运行环境如果不支持 SVG 图像或该动画属性，会自然降级为静态云朵轮廓，不影响记录、整理、保存、导出或身份功能。
 
 ## 未来复用
 
@@ -61,7 +61,7 @@
 - `.archive-cloud-mark`
 - `.mini-cloud-outline-mark`
 - `.mini-cloud-outline-base`
-- `.mini-cloud-outline-flow`
+- `.mini-cloud-outline-wave`
 - `.mini-cloud-detail`
 - `.archive-rail`
 - `.corner-lines`

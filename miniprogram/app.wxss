@@ -15,15 +15,25 @@ page {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
 }
 
-@keyframes miniCloudOutlineFlow {
+@keyframes miniCloudOutlineWave {
   0%,
-  15.5% {
-    opacity: 0.78;
+  100% {
+    opacity: 0.72;
   }
 
-  16%,
+  50% {
+    opacity: 0.16;
+  }
+}
+
+@keyframes miniCloudOutlineWaveReverse {
+  0%,
   100% {
-    opacity: 0;
+    opacity: 0.16;
+  }
+
+  50% {
+    opacity: 0.72;
   }
 }
 
@@ -270,34 +280,17 @@ page {
   opacity: 1;
 }
 
-.mini-cloud-outline-flow {
+.mini-cloud-outline-wave {
   opacity: 0;
-  filter: drop-shadow(0 2rpx 3rpx rgba(74, 49, 26, 0.14));
-  animation: miniCloudOutlineFlow 6.4s steps(1, end) infinite;
+  animation: miniCloudOutlineWave 5.4s ease-in-out infinite;
 }
 
-.mini-cloud-outline-flow-1 {
-  animation-delay: -5.33s;
-}
-
-.mini-cloud-outline-flow-2 {
-  animation-delay: -4.27s;
-}
-
-.mini-cloud-outline-flow-3 {
-  animation-delay: -3.2s;
-}
-
-.mini-cloud-outline-flow-4 {
-  animation-delay: -2.13s;
-}
-
-.mini-cloud-outline-flow-5 {
-  animation-delay: -1.07s;
+.mini-cloud-outline-wave-b {
+  animation-name: miniCloudOutlineWaveReverse;
 }
 
 @media (prefers-reduced-motion: reduce) {
-  .mini-cloud-outline-flow {
+  .mini-cloud-outline-wave {
     display: none;
     animation: none;
   }
