@@ -44,6 +44,40 @@ test("mini program cloud sync migration keeps dream_records unified through app_
   assert.match(migration, /revoke all on table public\.app_users from authenticated/);
 });
 
+test("account binding migration uses hashed one-time tokens and transactional app_users merge", () => {
+  const migration = readProjectFile("supabase/migrations/20260728001000_create_account_binding.sql");
+
+  assert.match(migration, /create table if not exists public\.account_binding_tokens/i);
+  assert.match(migration, /create table if not exists public\.account_binding_attempts/i);
+  assert.match(migration, /target_app_user_id uuid not null references public\.app_users\(id\) on delete cascade/i);
+  assert.match(migration, /token_hash text not null unique/i);
+  assert.match(migration, /failed_attempts integer not null default 0/i);
+  assert.match(migration, /alter table public\.account_binding_tokens enable row level security/i);
+  assert.match(migration, /alter table public\.account_binding_tokens force row level security/i);
+  assert.match(migration, /alter table public\.account_binding_attempts enable row level security/i);
+  assert.match(migration, /alter table public\.account_binding_attempts force row level security/i);
+  assert.match(migration, /revoke all on table public\.account_binding_tokens from anon/i);
+  assert.match(migration, /revoke all on table public\.account_binding_tokens from authenticated/i);
+  assert.match(migration, /revoke all on table public\.account_binding_attempts from anon/i);
+  assert.match(migration, /revoke all on table public\.account_binding_attempts from authenticated/i);
+  assert.match(migration, /create or replace function public\.confirm_wechat_account_binding/s);
+  assert.match(migration, /locked_until = case/s);
+  assert.match(migration, /when failed_attempts \+ 1 >= 5 then p_now \+ interval '10 minutes'/s);
+  assert.match(migration, /'errorCode', 'binding_token_locked'/);
+  assert.match(migration, /delete from public\.account_binding_attempts\s+where wechat_account_id = p_wechat_account_id/s);
+  assert.match(migration, /update public\.dream_records\s+set user_id = target_user_id/s);
+  assert.match(migration, /updated_at = greatest/s);
+  assert.match(migration, /synced_at = nullif\(\s*greatest/s);
+  assert.match(migration, /_wechat_conflict_/);
+  assert.match(migration, /deleted_at/);
+  assert.match(migration, /update public\.wechat_accounts\s+set linked_supabase_user_id = target_supabase_user_id/s);
+  assert.match(migration, /delete from public\.app_users\s+where id = source_user_id/s);
+  assert.match(migration, /revoke all on function public\.confirm_wechat_account_binding\(text, uuid, timestamptz\) from public/i);
+  assert.match(migration, /grant execute on function public\.confirm_wechat_account_binding\(text, uuid, timestamptz\) to service_role/i);
+  assert.doesNotMatch(migration, /miniprogram_dream_records|wechat_dream_records|mini_program_dream_records/i);
+  assert.doesNotMatch(migration, /\bemail\b|\bopenid\b|\bunionid\b|session_key/i);
+});
+
 test("browser runtime environment exposes only public Supabase settings", () => {
   const runtimeWriter = readProjectFile("scripts/writeRuntimeEnv.js");
   const gitignore = readProjectFile(".gitignore");
@@ -110,6 +144,7 @@ test("service role and analytics secrets stay out of browser runtime config", ()
   assert.match(envExample, /^SUPABASE_SERVICE_ROLE_KEY=$/m);
   assert.match(envExample, /^ADMIN_USER_IDS=$/m);
   assert.match(envExample, /^ANALYTICS_HASH_SECRET=$/m);
+  assert.match(envExample, /^ACCOUNT_BINDING_TOKEN_SECRET=$/m);
   assert.match(envExample, /^AI_INPUT_COST_PER_1M_TOKENS=$/m);
   assert.match(envExample, /^AI_OUTPUT_COST_PER_1M_TOKENS=$/m);
 });

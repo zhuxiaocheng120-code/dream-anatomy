@@ -92,6 +92,8 @@ test("mini program pages expose guest core loop and disabled deep guidance", () 
   assert.match(profile, /微信身份已建立/);
   assert.match(profile, /数据管理/);
   assert.match(profile, /同步到云端/);
+  assert.match(profile, /绑定邮箱账户/);
+  assert.match(profile, /绑定后，网页端与小程序端的梦境记录将合并并共享。/);
   assert.match(profile, /更换设备后恢复/);
   assert.match(profile, /退出当前身份/);
   assert.doesNotMatch(profile, /openid|unionid|已跨设备同步|已绑定 Web 账户/i);
@@ -176,6 +178,8 @@ test("mini program cloud sync server routes are registered without changing AI r
   assert.match(server, /app\.get\("\/api\/miniprogram\/dreams"/);
   assert.match(server, /app\.put\("\/api\/miniprogram\/dreams\/:id"/);
   assert.match(server, /app\.delete\("\/api\/miniprogram\/dreams\/:id"/);
+  assert.match(server, /app\.post\("\/api\/miniprogram\/account-binding\/confirm"/);
+  assert.match(server, /app\.get\("\/api\/miniprogram\/account-binding\/status"/);
   assert.match(server, /app\.post\("\/api\/v1\/dream-analysis", handleDreamAnalysisRequest\)/);
   assert.doesNotMatch(read("miniprogram/services/apiClient.js"), /Authorization\s*:/i);
 });
@@ -196,6 +200,7 @@ test("mini program docs and private config boundaries are explicit", () => {
   assert.equal(exists("docs/MINIPROGRAM_ARCHITECTURE.md"), true);
   assert.equal(exists("docs/WECHAT_AUTH_SETUP.md"), true);
   assert.equal(exists("docs/WECHAT_AUTH_ARCHITECTURE.md"), true);
+  assert.equal(exists("docs/ACCOUNT_BINDING_SETUP.md"), true);
   assert.equal(exists("miniprogram/project.config.example.json"), true);
 
   const gitignore = read(".gitignore");
@@ -254,6 +259,13 @@ test("mini program docs and private config boundaries are explicit", () => {
   assert.match(cloudSyncSetup, /20260728000000_add_miniprogram_cloud_sync\.sql/);
   assert.match(cloudSyncSetup, /不创建小程序专用梦境表/);
   assert.match(cloudSyncSetup, /POST \/api\/miniprogram\/dreams\/sync/);
+
+  const accountBindingSetup = read("docs/ACCOUNT_BINDING_SETUP.md");
+  assert.match(accountBindingSetup, /20260728001000_create_account_binding\.sql/);
+  assert.match(accountBindingSetup, /ACCOUNT_BINDING_TOKEN_SECRET/);
+  assert.match(accountBindingSetup, /Web 邮箱登录用户生成一次性绑定码/);
+  assert.match(accountBindingSetup, /微信小程序已登录用户输入绑定码并确认合并/);
+  assert.match(accountBindingSetup, /不保存明文/);
   assert.match(cloudSyncSetup, /Authorization: Bearer <wechat-session-token>/);
   assert.match(cloudSyncSetup, /不信任客户端传入的 `user_id`/);
 });

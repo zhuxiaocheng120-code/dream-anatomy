@@ -277,6 +277,70 @@ test("renders privacy center entry and legal documents with Chinese text", () =>
   assert.doesNotMatch(documentText, /正式发布前仍需完成专业法律审阅/);
 });
 
+test("privacy data renders WeChat account binding card without internal identifiers", () => {
+  const { controller, elements } = createHarness();
+
+  controller.render();
+
+  const viewText = collectText(elements.view).join("\n");
+  assert.match(viewText, /微信账户/);
+  assert.match(viewText, /生成微信绑定码/);
+  assert.doesNotMatch(viewText, /auth\.users|openid|unionid|uuid|app_users/i);
+});
+
+test("authenticated web user can load WeChat binding status and generate binding code with bearer token", async () => {
+  const calls = [];
+  const auth = {
+    getClient: () => ({
+      auth: {
+        getSession: async () => ({
+          data: {
+            session: {
+              access_token: "supabase-access-token"
+            }
+          }
+        })
+      }
+    })
+  };
+  const { controller, elements } = createHarness({
+    auth,
+    fetchJson: async (url, options = {}) => {
+      calls.push({ url, options });
+      if (url === "/api/account-binding/status") return { status: "unbound" };
+      if (url === "/api/account-binding/wechat/token") {
+        return { status: "created", bindingCode: "ABCD2345EF", expiresAt: "2026-07-28T12:10:00.000Z" };
+      }
+      throw new Error(`unexpected url ${url}`);
+    }
+  });
+
+  await controller.handleSession({
+    authEvent: "SIGNED_IN",
+    user: { id: "auth-user-1" },
+    client: createLegalConsentClient()
+  });
+  await controller.loadWechatBindingStatus();
+  const token = await controller.generateWechatBindingToken();
+
+  assert.equal(token.bindingCode, "ABCD2345EF");
+  assert.equal(calls[0].url, "/api/account-binding/status");
+  assert.equal(calls[0].options.headers.Authorization, "Bearer supabase-access-token");
+  assert.equal(calls[1].url, "/api/account-binding/wechat/token");
+  assert.equal(calls[1].options.method, "POST");
+  assert.equal(calls[1].options.headers.Authorization, "Bearer supabase-access-token");
+  assert.match(elements.status.textContent, /绑定码：ABCD2345EF/);
+});
+
+test("guest web user cannot generate a WeChat binding token", async () => {
+  const { controller } = createHarness();
+
+  await assert.rejects(
+    () => controller.generateWechatBindingToken(),
+    /请先登录/
+  );
+});
+
 test("product analytics consent defaults off and saves only authenticated preferences", async () => {
   const calls = [];
   const productAnalytics = {
