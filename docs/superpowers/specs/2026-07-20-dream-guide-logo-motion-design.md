@@ -1,14 +1,16 @@
-# Dream Guide Logo And Subtle Motion Design
+# Dream Guide Logo Static Brand Design
+
+> Superseded note: this historical design originally included animated brand behavior. The active 2026-07-28 decision is to keep all Dream Anatomy cloud Logo marks completely static.
 
 ## Context
 
-Dream Anatomy already has a parchment / quiet archive visual language. This PR adds a small layer of brand recognition and restrained motion without changing product structure, API behavior, database schema, authentication, AI prompts, or WeChat Mini Program code.
+Dream Anatomy already has a parchment / quiet archive visual language. This historical PR added a small layer of brand recognition without changing product structure, API behavior, database schema, authentication, AI prompts, or WeChat Mini Program code.
 
 PR #37 already introduced a cloud-shaped sleep-quality slider thumb. This PR keeps that slider's native range input, drag behavior, keyboard behavior, value range, 5-point snapping, null initial state, saving structure, Dream Detail editing, and tests intact. It only aligns the thumb's visual language with the new logo.
 
 ## Recommended Approach
 
-Use **inline SVG brand assets plus CSS-only microanimations**.
+Use **inline SVG brand assets with static rendering**.
 
 Compared with building an icon component in JavaScript, SVG files keep the mark reusable for favicon, header, auth, empty/loading states, and future Mini Program export. Compared with purely CSS-drawn logos, SVG makes the small 24/32/48px mark clearer and easier to maintain.
 
@@ -42,19 +44,13 @@ Use the logo sparingly:
 
 The header brand button must remain keyboard-focusable and must keep its current "return home" behavior for guest and logged-in states.
 
-## Motion Design
+## Static Logo Boundary
 
-Motion is CSS-only and low-stimulation:
+The previous animated brand direction is no longer active. Current static boundary:
 
-- Logo cloud-line wave: the logo stays fixed while the cloud outline uses a static base line plus nearby hand-drawn wave outlines that alternate opacity over a 3.5-6s cycle.
-- Guide blink: short, infrequent SVG/CSS state using no JavaScript timers.
-- Page entry: subtle opacity and translateY for hero, panels, quick result, Dream Result Card, journal/detail containers, and auth modal.
-- Result Card dimension bars: one-time width reveal by CSS transition/animation, without changing the numeric score or treating 0 as missing.
-- Hover/focus: small scale or lift, focus rings remain visible.
-
-Reduced motion behavior:
-
-- `prefers-reduced-motion: reduce` disables continuous cloud-line wave, blink, bar reveal, and page-entry motion.
+- Cloud outline stays fixed and static.
+- No cloud line wave, blink, animated overlay path, opacity cycle, floating, scaling, breathing, rotation, or path morphing is used for Logo marks.
+- Non-logo page entry or result-card UI motion, if present elsewhere, is separate from Logo behavior.
 - Necessary focus and instant state feedback remain visible.
 
 Decorative elements must not intercept clicks.
@@ -77,7 +73,7 @@ Add a short brand documentation page:
 
 - Asset list.
 - Originality and non-affiliation statement.
-- Reduced-motion behavior.
+- Static Logo boundary.
 - Future Mini Program PNG export note.
 - Trademark/legal review reminder before formal brand use.
 
@@ -87,6 +83,7 @@ Static and behavior tests must cover:
 
 - SVG assets exist, are local, and contain no scripts, event handlers, external resources, or embedded raster/base64.
 - Header, favicon, hero, Dream Home, and auth modal reference the brand assets.
+- Visible Logo instances contain one static cloud outline and no animated overlay paths.
 - Header brand behavior hooks remain unchanged.
 - Reduced-motion CSS disables continuous animation.
 - Logo and decorative animation classes do not intercept clicks.

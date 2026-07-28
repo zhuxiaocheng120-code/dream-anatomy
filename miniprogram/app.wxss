@@ -15,28 +15,6 @@ page {
   font-family: -apple-system, BlinkMacSystemFont, "PingFang SC", "Microsoft YaHei", "Helvetica Neue", sans-serif;
 }
 
-@keyframes miniCloudOutlineWave {
-  0%,
-  100% {
-    opacity: 0.72;
-  }
-
-  50% {
-    opacity: 0.16;
-  }
-}
-
-@keyframes miniCloudOutlineWaveReverse {
-  0%,
-  100% {
-    opacity: 0.16;
-  }
-
-  50% {
-    opacity: 0.72;
-  }
-}
-
 .page {
   min-height: 100vh;
   padding: 48rpx 36rpx 72rpx;
@@ -278,22 +256,6 @@ page {
 
 .mini-cloud-outline-base {
   opacity: 1;
-}
-
-.mini-cloud-outline-wave {
-  opacity: 0;
-  animation: miniCloudOutlineWave 5.4s ease-in-out infinite;
-}
-
-.mini-cloud-outline-wave-b {
-  animation-name: miniCloudOutlineWaveReverse;
-}
-
-@media (prefers-reduced-motion: reduce) {
-  .mini-cloud-outline-wave {
-    display: none;
-    animation: none;
-  }
 }
 
 .corner-lines {

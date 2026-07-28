@@ -2,7 +2,7 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Refresh Dream Anatomy Web UI with a refined classical archive visual language and subtle logo microanimations without changing core product behavior.
+**Goal:** Refresh Dream Anatomy Web UI with a refined classical archive visual language without changing core product behavior. Earlier animated Logo requirements in this historical plan are superseded by the 2026-07-28 static Logo decision.
 
 **Architecture:** Keep the existing plain HTML/CSS/JS SPA. Use `src/style.css` as the shared visual system and touch `src/index.html` only for small classes/microcopy needed by the visual layer. Static tests in `tests/siteVisualRefresh.test.js` protect the visual contract and existing behavior hooks.
 
@@ -15,7 +15,7 @@
 - Use only local assets, inline SVG, or CSS decoration; do not add remote images, remote fonts, or animation libraries.
 - Visual language: old paper, refined, archival, calm, premium, Jungian.
 - Avoid tarot, fortune telling, diagnosis, therapy, future prediction, zodiac, hospital, or cartoon styling.
-- Logo motion must be CSS-only, subtle, continuous by default, and disabled by `prefers-reduced-motion: reduce`.
+- Logo must remain static: no continuous cloud line morphing, stroke flow, opacity cycle, floating, scaling, breathing, or rotation.
 - User-visible new copy must be short, Chinese-first, non-diagnostic, non-therapeutic, and non-predictive.
 
 ---
@@ -27,7 +27,7 @@
 
 **Interfaces:**
 - Consumes: existing static helpers `readSource`, `cssRuleBlock`, `cssMediaBlock`.
-- Produces: failing tests for new CSS tokens, page-level archive classes, logo motion coverage, and hook preservation.
+- Produces: failing tests for new CSS tokens, page-level archive classes, static Logo coverage, and hook preservation.
 
 - [ ] **Step 1: Write the failing test**
 
@@ -40,11 +40,10 @@ assert.match(css, /--warm-ivory:/);
 assert.match(css, /--parchment-fiber:/);
 assert.match(css, /--dark-walnut:/);
 assert.match(css, /--bronze-gold:/);
-assert.match(css, /@keyframes archiveLogoBreath/);
-assert.match(css, /@keyframes archiveLineDrift/);
-assert.match(cssRuleBlock(css, ".brand-mark"), /archiveLogoBreath/);
-assert.match(cssRuleBlock(css, ".hero-brand-seal"), /archiveLogoBreath/);
-assert.match(cssRuleBlock(css, ".dream-guide-seal"), /archiveLogoBreath/);
+assert.doesNotMatch(css, /Logo-specific keyframes/);
+assert.doesNotMatch(cssRuleBlock(css, ".brand-mark"), /animation\s*:/);
+assert.doesNotMatch(cssRuleBlock(css, ".hero-brand-seal"), /animation\s*:/);
+assert.doesNotMatch(cssRuleBlock(css, ".dream-guide-seal"), /animation\s*:/);
 assert.match(html, /梦不是答案，而是线索。/);
 assert.match(html, /class="archive-microcopy"/);
 ```
@@ -68,7 +67,7 @@ Leave implementation for Task 2.
 
 **Interfaces:**
 - Consumes: CSS selectors already used by `src/index.html`.
-- Produces: shared tokens, paper texture, refined typography, card treatments, section ornaments, and logo motion classes.
+- Produces: shared tokens, paper texture, refined typography, card treatments, section ornaments, and static Logo classes.
 
 - [ ] **Step 1: Implement shared tokens and body texture**
 
@@ -83,16 +82,9 @@ Update `:root` to include:
 
 Keep existing variables as aliases where needed so current selectors continue to work.
 
-- [ ] **Step 2: Implement logo motion**
+- [ ] **Step 2: Preserve static Logo boundary**
 
-Add:
-
-```css
-@keyframes archiveLogoBreath { ... }
-@keyframes archiveLineDrift { ... }
-```
-
-Apply `archiveLogoBreath` to `.brand-mark`, `.hero-brand-seal`, and `.dream-guide-seal`. Keep amplitude small and durations 9 seconds or longer.
+Do not add Logo-specific keyframes, overlay paths, or transform/opacity cycles. Ensure `.brand-mark`, `.hero-brand-seal`, and `.dream-guide-seal` have no `animation` or `transform` rules for Logo behavior.
 
 - [ ] **Step 3: Refine shared components**
 
@@ -100,7 +92,7 @@ Update card-like selectors (`.dream-card`, `.entry-card`, `.dream-form`, `.work-
 
 - [ ] **Step 4: Preserve reduced motion**
 
-Ensure the existing `@media (prefers-reduced-motion: reduce)` block includes the animated logo selectors and disables the new keyframes.
+Ensure the existing `@media (prefers-reduced-motion: reduce)` block continues to handle non-logo decorative motion where needed. It does not need Logo-specific rules because the Logo is static.
 
 - [ ] **Step 5: Run focused test**
 
@@ -208,4 +200,3 @@ gh pr create --base main --head codex/classical-archive-visual-refresh --title "
 ```
 
 Expected: PR URL is returned.
-

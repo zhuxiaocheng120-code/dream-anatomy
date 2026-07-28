@@ -11,8 +11,8 @@ Use方案 A: shared visual system plus restrained page-level accents.
 - Shared tokens carry the new palette: warm ivory, parchment, muted olive, dark walnut, and bronze-gold accents.
 - Existing page structure and `data-*` hooks remain intact.
 - Page-level ornaments stay small and original: manuscript dividers, archive-card marks, light paper texture, and quiet quote panels.
-- Logo animation is CSS-only, slow, and restrained. It affects both the public home logo and authenticated Dream Home logo.
-- `prefers-reduced-motion: reduce` disables continuous logo motion and other decorative animation.
+- Logo animation requirements from this historical plan are superseded by the 2026-07-28 static Logo decision. Public home, header, auth, and Dream Home logos must remain static.
+- `prefers-reduced-motion: reduce` still applies to non-logo decorative animation where present.
 
 ## Visual Language
 
@@ -22,23 +22,22 @@ The main background uses layered parchment tones with a very subtle paper fiber 
 
 ## Page Coverage
 
-- Public home: stronger archive hero, animated logo lockup, refined entry cards, and one restrained self-exploration line.
-- Dream Home: keep the existing complete expression, enrich archive-card surfaces, and animate the Dream Guide mark with the same motion language.
+- Public home: stronger archive hero, static logo lockup, refined entry cards, and one restrained self-exploration line.
+- Dream Home: keep the existing complete expression, enrich archive-card surfaces, and keep the Dream Guide mark static.
 - Quick Analysis: preserve the workbench/input flow, but make it read more like a manuscript record card.
 - Guided/Deep Guidance: keep disabled state clear, with a calm path/ledger motif and no interaction changes.
 - Dream Journal: make list cards feel like private index cards and keep search/filter usability unchanged.
 - Dream Detail/Report: make the detail surface feel like a psychological manuscript/report while preserving long-text readability.
 - Privacy & Data/Auth/shared states: use the same palette, borders, and typography without letting decoration distract from legal or dangerous actions.
 
-## Logo Motion
+## Static Logo Boundary
 
-Both logo placements must continuously move very slightly:
+The earlier animated Logo direction in this archived specification is no longer active. Current implementation policy:
 
-- `.brand-mark` in the global/public header.
-- `.hero-brand-seal` on the public home.
-- `.dream-guide-seal` in authenticated Dream Home.
-
-The motion is a combined float/breathing/shimmer effect implemented in CSS. It must be slow, low-amplitude, and not tied to layout or JavaScript. Reduced motion disables it.
+- `.brand-mark` in the global/public header stays static.
+- `.hero-brand-seal` on the public home stays static.
+- `.dream-guide-seal` in authenticated Dream Home stays static.
+- No cloud line morphing, stroke flow, opacity cycle, floating, scaling, breathing, or rotation is used for the Logo.
 
 ## Copy Rules
 
@@ -66,10 +65,9 @@ Add static visual-safety tests that verify:
 
 - The new classical archive tokens exist.
 - Main page types include archive treatment classes/hooks.
-- Public and authenticated logos have the new microanimation class coverage.
-- Reduced motion disables the logo motion.
+- Public and authenticated logos have one static cloud outline and no animated overlay path.
+- Reduced motion does not need Logo-specific rules because the Logo has no continuous motion.
 - No external visual assets are introduced.
 - Existing `data-*` product hooks remain present.
 
 Manual desktop verification should check public home, Dream Home, quick analysis, Dream Journal, Dream Detail, Privacy & Data, auth modal, loading/empty states, and reduced-motion behavior.
-

@@ -1,10 +1,12 @@
-# Dream Guide Logo And Subtle Motion Implementation Plan
+# Dream Guide Logo Static Brand Implementation Plan
+
+> Superseded note: this historical plan originally included animated brand behavior. The active 2026-07-28 decision is to remove all cloud Logo animation and keep Logo marks static.
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
-**Goal:** Add original Dream Guide logo assets, connect them to the Web UI, align the sleep-quality cloud thumb, and add restrained CSS microanimations.
+**Goal:** Add original Dream Guide logo assets, connect them to the Web UI, and align the sleep-quality cloud thumb. Continuous cloud/logo animation is no longer part of the active design.
 
-**Architecture:** Keep this as a presentation-only Web PR. Brand assets live under `src/assets/brand/`, page references stay in `src/index.html`, all motion and slider changes stay in `src/style.css`, and static tests protect asset safety and behavior hooks.
+**Architecture:** Keep this as a presentation-only Web PR. Brand assets live under `src/assets/brand/`, page references stay in `src/index.html`, visual and slider changes stay in `src/style.css`, and static tests protect asset safety and behavior hooks.
 
 **Tech Stack:** Plain HTML, CSS, SVG, Node test runner.
 
@@ -14,7 +16,7 @@
 - Do not change sleep-quality range logic, 5-point snapping, null initial state, saved field names, Dream Detail editing, or data structure.
 - Do not introduce GSAP, Lottie, React, Vue, route frameworks, font files, remote images, or large Base64 assets.
 - All logo assets must be original local SVGs with no scripts, event handlers, external resources, or third-party marks.
-- Motion must use CSS transform / opacity where possible and support `prefers-reduced-motion: reduce`.
+- Logo marks must remain static: no cloud line wave, blink, animated overlay path, opacity cycle, floating, scaling, breathing, rotation, or path morphing.
 - Header brand button behavior and data hooks must remain unchanged.
 
 ---
@@ -103,39 +105,32 @@ Run: `npm test -- tests/siteVisualRefresh.test.js`
 
 Expected: PASS.
 
-### Task 3: Motion Tests And CSS Microanimations
+### Task 3: Static Logo Tests And CSS Boundary
 
 **Files:**
 - Modify: `src/style.css`
 - Modify: `tests/siteVisualRefresh.test.js`
 
 **Interfaces:**
-- Produces keyframes:
-  - `dreamGuideFloat`
-  - `dreamGuideBlink`
-  - `dreamSoftEnter`
-  - `dreamDimensionReveal`
+- Protects visible Logo selectors:
+  - `.brand-mark`
+  - `.hero-brand-seal`
+  - `.dream-guide-seal`
+  - `.auth-brand-mark`
 
-- [ ] **Step 1: Write failing motion test**
+- [ ] **Step 1: Write failing static Logo test**
 
-Add assertions that CSS includes the required keyframes, uses `transform` and `opacity`, includes `@media (prefers-reduced-motion: reduce)`, and sets continuous animations to `none` in reduced motion.
+Add assertions that visible Logo SVGs contain exactly one static cloud outline and no animated overlay paths, no Logo-specific keyframes, no dash/path morph animation, and no Logo transform/opacity cycle.
 
 - [ ] **Step 2: Run test to verify it fails**
 
 Run: `npm test -- tests/siteVisualRefresh.test.js`
 
-Expected: FAIL because animation rules are missing.
+Expected: FAIL if any cloud/logo animation remains.
 
-- [ ] **Step 3: Add CSS-only microanimations**
+- [ ] **Step 3: Preserve static CSS**
 
-Add restrained animation classes:
-
-- Logo float on brand marks.
-- Blink using classed SVG/image container state where feasible without JS.
-- Page entry on hero, work panels, result panels, Dream Journal, Dream Detail, privacy panels, and auth modal.
-- Result Card progress reveal via `.result-card-progress span`.
-- Hover/focus lift for cards without breaking hidden states.
-- Reduced motion disables continuous and entry animations.
+Keep Logo classes pointer-safe and static. Do not add Logo animation rules or reduced-motion rules that only serve Logo animation.
 
 - [ ] **Step 4: Run test to verify it passes**
 
@@ -187,7 +182,7 @@ Expected: PASS.
 - Modify: `docs/PROJECT_STATUS.md`
 
 **Interfaces:**
-- Documents source SVGs, originality, reduced-motion behavior, and future Mini Program PNG export note.
+- Documents source SVGs, originality, static Logo boundary, and future Mini Program PNG export note.
 
 - [ ] **Step 1: Write failing documentation test**
 
@@ -195,7 +190,7 @@ Add assertions to `tests/siteVisualRefresh.test.js` that `docs/BRAND_ASSETS.md` 
 
 - `Dream Anatomy Beta 的原创品牌标识 v1`
 - `正式商标使用前仍应完成相似标识检索和必要法律审查`
-- `prefers-reduced-motion`
+- `静态品牌标识`
 - `小程序`
 
 - [ ] **Step 2: Run test to verify it fails**
@@ -226,7 +221,7 @@ Expected: all pass. If sandbox blocks server listen with `EPERM`, rerun full `np
 
 - [ ] **Step 5: Final reviewer and PR**
 
-Request code review focused on scope, accessibility, motion safety, asset safety, and no business logic changes. Fix Critical or Important findings, rerun verification, commit, push, and create PR titled `Add Dream Guide Logo and Subtle Animations`.
+Request code review focused on scope, accessibility, static Logo safety, asset safety, and no business logic changes. Fix Critical or Important findings, rerun verification, commit, push, and create PR.
 
 ## Self-Review
 
