@@ -1,31 +1,33 @@
 # Cloud Logo Motion Refinement Implementation Plan
 
-## Task 1: TDD Coverage For Refined Motion
+> Superseded by the 2026-07-28 static Logo decision. The active implementation should remove cloud/logo animation rather than refine it.
 
-- Update Web visual tests to require explicit cloud motion classes, slow 8-12s breath timing, line-drift coverage, and reduced-motion shutdown.
-- Update Mini Program visual tests to require shared WXSS classes/keyframes, home/profile WXML adoption, no JS animation loops, and no remote image/font assets.
+## Task 1: TDD Coverage For Static Logo
+
+- Update Web visual tests to require no cloud/logo keyframes, no animated overlay paths, no dash/path morph animation, and static Logo SVGs.
+- Update Mini Program visual tests to require a single static local cloud SVG, no cloud/logo WXSS keyframes, no JS animation loops, and no remote image/font assets.
 - Run the focused visual tests and confirm they fail before implementation.
 
-## Task 2: Web Cloud Logo Motion Refinement
+## Task 2: Web Static Cloud Logo
 
-- Add explicit reusable Web motion classes in `src/style.css`.
-- Refine logo keyframes so the logo remains fixed while nearby cloud outline layers alternate opacity to create a wavy hand-drawn line effect.
+- Remove reusable Web motion classes in `src/style.css`.
+- Remove animated overlay paths from visible inline SVG logos.
 - Keep existing selectors and UI hooks intact.
-- Add the new classes to Web logo placements only if needed for explicit class coverage.
-- Extend the reduced-motion block to disable the new motion classes.
+- Keep the static `.archive-cloud-outline` path.
+- Remove Logo-specific reduced-motion rules that only served animation.
 
-## Task 3: Mini Program Shared Motion
+## Task 3: Mini Program Static Cloud Mark
 
-- Add shared cloud/orbit motion keyframes and classes in `miniprogram/app.wxss`.
-- Apply motion classes to the home `visual-orbit`.
-- Apply motion classes to the profile `identity-seal`.
+- Remove shared cloud/orbit motion keyframes and classes in `miniprogram/app.wxss`.
+- Keep one static local cloud SVG layer on home.
+- Keep one static local cloud SVG layer on the profile identity seal.
 - Avoid all JS animation loops, remote assets, fonts, and copy changes.
 
 ## Task 4: Documentation
 
-- Update `docs/MINIPROGRAM_VISUAL_LANGUAGE.md` with motion classes, fallback behavior, and manual verification guidance.
-- Update `docs/BRAND_ASSETS.md` with refined cloud/logo motion notes.
-- Update `docs/PROJECT_STATUS.md` to record Web and Mini Program cloud microanimations.
+- Update `docs/MINIPROGRAM_VISUAL_LANGUAGE.md` with static Logo guidance and manual verification boundaries.
+- Update `docs/BRAND_ASSETS.md` with static cloud/logo notes.
+- Update `docs/PROJECT_STATUS.md` to record Web and Mini Program static Logo status.
 
 ## Task 5: Verification And PR
 

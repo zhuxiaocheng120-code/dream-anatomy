@@ -2,17 +2,16 @@
 
 ## Goal
 
-Refine Dream Anatomy's existing cloud logo and line ornament motion across Web and the WeChat Mini Program. The result should feel like quiet archival manuscript linework: slow, slight, continuous, and premium. This PR is presentation-only.
+This historical motion refinement design is superseded by the 2026-07-28 static Logo decision. Dream Anatomy's cloud Logo is now a static brand mark across Web and the WeChat Mini Program.
 
 ## Scope
 
-- Web public home brand mark and hero lockup.
-- Web authenticated Dream Home brand mark.
-- Web auth brand mark where the same asset appears.
-- Mini Program home `visual-orbit`.
-- Mini Program profile identity seal.
-- Any Mini Program view that reuses the shared orbit/cloud motion classes.
-- Documentation for the refined motion language.
+- Web public home brand mark and hero lockup remain static.
+- Web authenticated Dream Home brand mark remains static.
+- Web auth brand mark remains static.
+- Mini Program home cloud mark remains static.
+- Mini Program profile identity seal remains static.
+- Documentation records the static Logo boundary.
 
 ## Out Of Scope
 
@@ -21,40 +20,21 @@ Refine Dream Anatomy's existing cloud logo and line ornament motion across Web a
 - Adding JS animation loops or animation libraries.
 - Remote images, remote fonts, downloaded assets, or copyrighted source material.
 
-## Visual Direction
+## Static Visual Direction
 
-The motion is not a loading indicator and not a playful bounce. It should read as:
+The brand mark should read as quiet archival manuscript linework without continuous animation:
 
-- manuscript line breathing;
-- a very slight floating paper-seal effect;
-- subtle opacity/line drift;
 - European archival psychology studio rather than mystical or fortune-telling.
-
-Web cycles should remain slow, roughly 8-12 seconds for the primary cloud breath. Mini Program motion should be even more restrained and implemented through WXSS keyframes only.
 
 ## Web Behavior
 
-Web will keep the current local SVG logo assets and CSS-only animation approach. New reusable motion classes will make the intent explicit:
-
-- `.archive-cloud-mark`
-- `.archive-cloud-line`
-- `.cloud-breath`
-- `.cloud-line-drift`
-
-Existing logo selectors (`.brand-mark`, `.hero-brand-seal`, `.dream-guide-seal`, `.auth-brand-mark`) remain supported so current markup hooks and tests keep working. `prefers-reduced-motion: reduce` disables continuous logo/cloud animation.
+Web keeps the current local SVG logo assets and inline cloud mark. The previous animated overlay path direction is not used.
 
 ## Mini Program Behavior
 
-Mini Program shared WXSS will define:
+Mini Program uses only the static local SVG cloud mark. The previous shared cloud animation class/keyframe direction is not used.
 
-- `.archive-cloud-mark`
-- `.archive-cloud-line`
-- `.mini-cloud-breath`
-- `.mini-line-drift`
-- `@keyframes miniCloudBreath`
-- `@keyframes miniLineDrift`
-
-The home orbit and profile seal will opt into these classes. They remain decorative (`aria-hidden="true"`), local, and pointer-safe. If a target WeChat runtime cannot animate a given keyframe property, the visual falls back to the existing static orbit/seal.
+The home mark and profile seal remain decorative (`aria-hidden="true"`), local, pointer-safe, and static.
 
 ## Compliance Boundary
 
@@ -62,11 +42,10 @@ This PR must not add user-facing Mini Program copy that restores high-risk terms
 
 ## Acceptance Criteria
 
-- Web logo motion classes and keyframes exist.
-- Web reduced-motion disables the cloud/logo motion.
-- Mini Program home includes cloud/line motion classes.
-- Mini Program profile identity seal uses the same shared motion language.
-- Mini Program WXSS contains keyframes and no JS animation loop is introduced.
+- Web Logo has no animation classes, animated overlay paths, or Logo-specific keyframes.
+- Mini Program home includes only the static cloud mark layer.
+- Mini Program profile identity seal uses the same static cloud mark.
+- Mini Program WXSS contains no cloud Logo keyframes and no JS animation loop is introduced.
 - Mini Program keeps no remote image/font dependency and no high-risk compliance copy regression.
 - API, prompt, database, auth, and sync files are not behaviorally changed.
 - `npm test`, JavaScript syntax checks, `git diff --check`, and final reviewer pass.

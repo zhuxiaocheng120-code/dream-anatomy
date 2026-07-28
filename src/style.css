@@ -50,28 +50,6 @@ body {
   background-size: auto, auto, 34px 34px, 34px 34px, 180px 180px, auto;
 }
 
-@keyframes cloudOutlineWave {
-  0%,
-  100% {
-    opacity: 0.85;
-  }
-
-  50% {
-    opacity: 0.55;
-  }
-}
-
-@keyframes cloudOutlineWaveReverse {
-  0%,
-  100% {
-    opacity: 0.55;
-  }
-
-  50% {
-    opacity: 0.85;
-  }
-}
-
 @keyframes dreamSoftEnter {
   from {
     opacity: 0;
@@ -190,7 +168,6 @@ button {
 
 .archive-cloud-mark {
   pointer-events: none;
-  transform-origin: center;
 }
 
 .archive-cloud-outline {
@@ -207,22 +184,6 @@ button {
 .archive-cloud-fill {
   fill: #fff8eb;
   stroke: none;
-}
-
-.archive-cloud-outline-wave {
-  pointer-events: none;
-  fill: none;
-  opacity: 0;
-  stroke: #765329;
-  stroke-linecap: round;
-  stroke-linejoin: round;
-  stroke-width: 3.35;
-  vector-effect: non-scaling-stroke;
-  animation: cloudOutlineWave 4.8s ease-in-out infinite;
-}
-
-.archive-cloud-outline-wave-b {
-  animation-name: cloudOutlineWaveReverse;
 }
 
 .archive-cloud-detail {
@@ -1398,11 +1359,6 @@ input {
     animation-iteration-count: 1 !important;
   }
 
-  .brand-mark,
-  .dream-guide-seal,
-  .hero-brand-seal,
-  .archive-cloud-mark,
-  .auth-brand-mark,
   .hero-content,
   .dream-card,
   .dream-home-welcome,
@@ -1419,10 +1375,6 @@ input {
     animation: none !important;
   }
 
-  .archive-cloud-outline-wave {
-    display: none !important;
-    animation: none !important;
-  }
 }
 
 .sleep-quality-control-footer {
