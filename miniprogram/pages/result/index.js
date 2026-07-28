@@ -1,4 +1,5 @@
 const { createDreamStorage } = require("../../services/dreamStorage");
+const cloudSync = require("../../services/cloudSync");
 const { hasResultCard, normalizeResultCard } = require("../../services/resultCard");
 const { sanitizeComplianceObject } = require("../../utils/complianceText");
 
@@ -28,7 +29,7 @@ Page({
       errorMessage: response.analysis ? "" : "没有找到本次整理结果，请重新输入梦境。"
     });
   },
-  saveToJournal() {
+  async saveToJournal() {
     if (this.data.saved) {
       this.setData({ errorMessage: "这条梦境已经保存在本机梦境日记。" });
       return;
@@ -47,6 +48,14 @@ Page({
       return;
     }
     this.setData({ saved: true, errorMessage: "已保存到本机梦境日记。" });
+    if (cloudSync.isCloudSyncEnabled(wx)) {
+      try {
+        await cloudSync.syncNow({ wx });
+        this.setData({ errorMessage: "已保存到本机梦境日记，并同步到云端。" });
+      } catch (error) {
+        this.setData({ errorMessage: "已保存到本机梦境日记，云端同步暂时失败。" });
+      }
+    }
   },
   goJournal() {
     wx.navigateTo({ url: "/pages/journal/index" });

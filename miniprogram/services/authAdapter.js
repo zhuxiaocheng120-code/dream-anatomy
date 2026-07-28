@@ -1,7 +1,10 @@
 const { getConfig } = require("../config/config.example");
+const { createDreamStorage } = require("./dreamStorage");
 const { mapApiError } = require("./errorMessages");
 
 const WECHAT_SESSION_TOKEN_KEY = "dream_anatomy_wechat_session_token_v1";
+const CLOUD_SYNC_ENABLED_KEY = "dream_anatomy_cloud_sync_enabled_v1";
+const CLOUD_SYNC_PROMPT_KEY = "dream_anatomy_cloud_sync_prompt_v1";
 
 const guestState = {
   mode: "guest",
@@ -38,6 +41,20 @@ function removeToken(wxRef) {
   }
 }
 
+function clearCloudSyncState(wxRef) {
+  if (wxRef && typeof wxRef.removeStorageSync === "function") {
+    wxRef.removeStorageSync(CLOUD_SYNC_ENABLED_KEY);
+    wxRef.removeStorageSync(CLOUD_SYNC_PROMPT_KEY);
+  }
+  try {
+    if (wxRef) {
+      createDreamStorage(wxRef).clearCloudMetadata();
+    }
+  } catch (error) {
+    // Local auth fallback should not fail because storage cleanup is unavailable.
+  }
+}
+
 function normalizeAuthState(payload = {}) {
   const account = payload.account || {};
   if (account.mode !== "wechat" || account.authenticated !== true) {
@@ -48,7 +65,7 @@ function normalizeAuthState(payload = {}) {
   return {
     mode: "wechat",
     authenticated: true,
-    cloudSyncAvailable: false
+    cloudSyncAvailable: account.cloudSyncAvailable === true
   };
 }
 
@@ -116,6 +133,7 @@ function requestLoginCode(wxRef) {
 
 function setGuest(wxRef) {
   removeToken(wxRef);
+  clearCloudSyncState(wxRef);
   currentState = { ...guestState };
   currentExpiresAt = "";
   return getAuthState();
@@ -196,7 +214,7 @@ function clearLocalSession(options = {}) {
 }
 
 function isCloudSyncAvailable() {
-  return false;
+  return currentState.cloudSyncAvailable === true;
 }
 
 module.exports = {

@@ -24,6 +24,26 @@ test("dream_records migrations enforce per-user RLS policies", () => {
   assert.match(syncMigration, /create unique index if not exists dream_records_user_local_record_id_idx\s+on public\.dream_records \(user_id, local_record_id\)/s);
 });
 
+test("mini program cloud sync migration keeps dream_records unified through app_users", () => {
+  const migration = readProjectFile("supabase/migrations/20260728000000_add_miniprogram_cloud_sync.sql");
+
+  assert.match(migration, /create table if not exists public\.app_users/);
+  assert.doesNotMatch(migration, /miniprogram_dream_records|wechat_dream_records|mini_program_dream_records/i);
+  assert.match(migration, /supabase_user_id uuid unique references auth\.users\(id\) on delete cascade/);
+  assert.match(migration, /wechat_account_id uuid unique references public\.wechat_accounts\(id\) on delete cascade/);
+  assert.match(migration, /insert into public\.app_users \(id, supabase_user_id\)\s+select id, id from auth\.users/s);
+  assert.match(migration, /create trigger ensure_app_user_after_auth_user_created/s);
+  assert.match(migration, /drop constraint if exists dream_records_user_id_fkey/i);
+  assert.match(migration, /foreign key \(user_id\) references public\.app_users\(id\) on delete cascade/i);
+  assert.match(migration, /add column if not exists deleted_at timestamptz/);
+  assert.match(migration, /add column if not exists synced_at timestamptz/);
+  assert.match(migration, /create unique index if not exists dream_records_user_local_record_id_idx\s+on public\.dream_records \(user_id, local_record_id\)/s);
+  assert.match(migration, /alter table public\.app_users enable row level security/);
+  assert.match(migration, /alter table public\.app_users force row level security/);
+  assert.match(migration, /revoke all on table public\.app_users from anon/);
+  assert.match(migration, /revoke all on table public\.app_users from authenticated/);
+});
+
 test("browser runtime environment exposes only public Supabase settings", () => {
   const runtimeWriter = readProjectFile("scripts/writeRuntimeEnv.js");
   const gitignore = readProjectFile(".gitignore");

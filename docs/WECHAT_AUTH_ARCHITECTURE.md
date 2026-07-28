@@ -2,7 +2,7 @@
 
 ## 为什么使用独立身份桥接
 
-Dream Anatomy 的 Web 账户使用 Supabase Auth 邮箱登录。微信小程序本轮只需要建立一个安全的小程序身份，不需要也不应该创建假的 Supabase Session、合成邮箱用户或自定义 Supabase JWT。
+Dream Anatomy 的 Web 账户使用 Supabase Auth 邮箱登录。微信小程序使用独立的微信身份桥接，不需要也不应该创建假的 Supabase Session、合成邮箱用户或自定义 Supabase JWT。
 
 本轮不创建假的 Supabase Session，也不把微信身份包装成 Web 邮箱账户。
 
@@ -16,7 +16,7 @@ wx.login()
 → 不透明 Session Token
 ```
 
-小程序微信账户与 Web Supabase 邮箱账户在当前版本保持独立。
+小程序微信账户与 Web Supabase 邮箱账户在当前版本保持独立，但两者的梦境记录都面向统一的内部 `app_users` / `dream_records` 模型设计，方便后续账户绑定。
 
 ## 登录数据流
 
@@ -39,7 +39,7 @@ wx.login()
 - `GET /api/v1/wechat-auth/session` 用于检查当前 Session。
 - `POST /api/v1/wechat-auth/logout` 只撤销当前 Session。
 - 小程序“退出当前身份”等同于退出当前 Session，不影响其他设备的 Session。
-- `cloudSyncAvailable: false` 会一直返回，直到后续独立 PR 实现云同步。
+- `cloudSyncAvailable: true` 表示当前微信身份可以调用小程序云同步接口；这不代表已绑定 Web 邮箱账户。
 
 ## 数据库结构
 
@@ -63,6 +63,13 @@ wx.login()
 - revoked_at
 
 两张表启用并强制 RLS，撤销 `anon` 和 `authenticated` 直接权限。小程序不能直接读取或写入这两张表。
+
+`public.app_users` 是当前的小型兼容层：
+
+- Web 邮箱用户使用 `app_users.id = auth.users.id`，保留既有 `dream_records` RLS 策略。
+- 微信小程序用户通过 `wechat_accounts.id` 查找或创建对应的 `app_users.id`。
+- `dream_records.user_id` 指向 `app_users.id`，因此 Web 与小程序未来绑定时不需要重建梦境表。
+- 当前版本不实现 Web 邮箱账户与微信身份绑定。
 
 ## 隐私边界
 
@@ -92,10 +99,10 @@ API 不返回：
 
 - 快速解析继续使用现有 AI 接口。
 - 微信 Session Token 不会被当作 Supabase access token。
-- 小程序梦境继续保存在本机。
+- 小程序梦境先保存在本机，用户主动开启后通过 Render 服务端同步到统一 `dream_records`。
 - 深度引导继续显示“正在开发中”。
 - Web Auth、Dream Home、Dream Journal、Dream Detail、AI analytics 和产品 analytics 不受本轮影响。
 
 ## 后续扩展
 
-后续可以基于 `wechat_accounts.id` 设计小程序云同步，也可以通过 `linked_supabase_user_id` 设计 Web 账户绑定。但这些都必须作为独立 PR，并继续避免把微信身份伪装成 Supabase Session。
+后续 Web 邮箱账户绑定可以通过 `app_users` 合并策略和 `wechat_accounts.linked_supabase_user_id` 继续设计。绑定时需要明确梦境去重、删除 tombstone 和跨端缓存迁移规则，并继续避免把微信身份伪装成 Supabase Session。

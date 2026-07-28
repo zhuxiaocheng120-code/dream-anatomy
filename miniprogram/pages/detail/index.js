@@ -1,4 +1,5 @@
 const { createDreamStorage } = require("../../services/dreamStorage");
+const cloudSync = require("../../services/cloudSync");
 const { formatDisplayDate } = require("../../utils/dates");
 const { hasResultCard, normalizeResultCard } = require("../../services/resultCard");
 const {
@@ -16,6 +17,11 @@ Page({
     confirmVisible: false,
     errorMessage: ""
   },
+  formatSyncStatus(syncStatus) {
+    if (syncStatus === "synced") return "已同步";
+    if (syncStatus === "sync_failed") return "同步失败";
+    return "待同步";
+  },
   onLoad(options) {
     const record = createDreamStorage(wx).getRecord(options.id);
     if (!record) {
@@ -30,7 +36,8 @@ Page({
       record,
       displayRecord: {
         displayAnalysisType: formatMiniProgramAnalysisType(record.analysisType),
-        analysisText: sanitizeComplianceText(analysis.coreInterpretation || analysis.dreamSummary || "暂未生成文字整理。")
+        analysisText: sanitizeComplianceText(analysis.coreInterpretation || analysis.dreamSummary || "暂未生成文字整理。"),
+        syncStatusLabel: this.formatSyncStatus(record.syncStatus)
       },
       displayDate: formatDisplayDate(record.createdAt),
       resultCard: hasResultCard(rawCard)
@@ -44,12 +51,24 @@ Page({
   hideDeleteConfirm() {
     this.setData({ confirmVisible: false });
   },
-  deleteRecord() {
+  async deleteRecord() {
     const id = this.data.record && this.data.record.localRecordId;
-    const deleted = createDreamStorage(wx).deleteRecord(id);
+    const cloudRecordId = this.data.record && this.data.record.cloudRecordId;
+    const storage = createDreamStorage(wx);
+    const deleted = storage.deleteRecord(id);
     if (!deleted.ok) {
       this.setData({ confirmVisible: false, errorMessage: "删除没有完成，请稍后再试。" });
       return;
+    }
+    if (cloudSync.isCloudSyncEnabled(wx) && cloudRecordId) {
+      try {
+        const result = await cloudSync.deleteCloudRecord(cloudRecordId, { wx });
+        if (result && result.record) {
+          storage.markSynced(id, result.record);
+        }
+      } catch (error) {
+        // The local tombstone remains and will retry on the next manual sync.
+      }
     }
     wx.navigateTo({ url: "/pages/journal/index" });
   }

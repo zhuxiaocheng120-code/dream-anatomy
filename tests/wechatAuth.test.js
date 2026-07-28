@@ -206,7 +206,7 @@ test("session verification rejects expired, revoked, and disabled account sessio
   const verified = await store.verifySession(activeToken);
   assert.equal(verified.account.mode, "wechat");
   assert.equal(verified.account.authenticated, true);
-  assert.equal(verified.account.cloudSyncAvailable, false);
+  assert.equal(verified.account.cloudSyncAvailable, true);
   assert.equal(verified.wechatAccountId, "account-1");
   assert.equal(client.state.updates.some((item) => item.tableName === "sessions" && item.values.last_seen_at), true);
 
@@ -268,7 +268,7 @@ test("wechat auth login finds or creates accounts without exposing raw identity"
 
   assert.equal(first.account.mode, "wechat");
   assert.equal(first.account.authenticated, true);
-  assert.equal(first.account.cloudSyncAvailable, false);
+  assert.equal(first.account.cloudSyncAvailable, true);
   assert.equal(Object.hasOwn(first, "openid"), false);
   assert.equal(Object.hasOwn(first, "unionid"), false);
   assert.equal(Object.hasOwn(first, "session_key"), false);
@@ -324,7 +324,7 @@ test("wechat auth getSession and logout use only bearer session token", async ()
     body: { accountId: "forged-account" }
   });
   assert.equal(session.account.mode, "wechat");
-  assert.equal(session.account.cloudSyncAvailable, false);
+  assert.equal(session.account.cloudSyncAvailable, true);
   assert.equal(Object.hasOwn(session.account, "id"), false);
 
   assert.deepEqual(await service.logout({
