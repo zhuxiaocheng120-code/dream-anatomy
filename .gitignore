@@ -18,6 +18,7 @@ build/
 out/
 src/runtime-env.js
 src/vendor/supabase.js
+supabase/.temp/
 
 # WeChat Mini Program local/private config
 miniprogram/project.config.json

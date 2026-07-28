@@ -10,8 +10,15 @@ function createDisplayRecord(record) {
     ...record,
     displayDate: formatDisplayDate(record.createdAt),
     displayAnalysisType: formatMiniProgramAnalysisType(record.analysisType),
+    syncStatusLabel: formatSyncStatus(record.syncStatus),
     title: createMiniProgramDisplayTitle(record)
   };
+}
+
+function formatSyncStatus(syncStatus) {
+  if (syncStatus === "synced") return "已同步";
+  if (syncStatus === "sync_failed") return "同步失败";
+  return "待同步";
 }
 
 Page({

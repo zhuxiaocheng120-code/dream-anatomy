@@ -4,6 +4,7 @@
       <view class="eyebrow">记录详情</view>
       <view class="title">{{displayRecord.displayAnalysisType || '本机记录'}}</view>
       <view class="subtitle">手稿记录 · {{displayDate}}</view>
+      <view class="small muted">同步状态：{{displayRecord.syncStatusLabel}}</view>
     </view>
     <view class="corner-lines" aria-hidden="true" data-visual="detail-manuscript"></view>
   </view>

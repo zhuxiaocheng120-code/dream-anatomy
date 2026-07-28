@@ -30,7 +30,7 @@ function createSafeAccount() {
   return {
     mode: "wechat",
     authenticated: true,
-    cloudSyncAvailable: false
+    cloudSyncAvailable: true
   };
 }
 

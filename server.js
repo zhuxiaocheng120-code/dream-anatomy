@@ -22,6 +22,7 @@ const {
   normalizeProductEventBatch,
   recordProductEventsSafely
 } = require("./server/productAnalytics");
+const { createMiniProgramDreamSyncService } = require("./server/miniprogramDreamSync");
 const { createWechatAuthService } = require("./server/wechatAuth");
 
 const app = express();
@@ -43,7 +44,14 @@ const knownDreamAnchorTerms = [
 ];
 
 app.set("trust proxy", "loopback");
-app.use(express.json({ limit: "32kb" }));
+const defaultJsonParser = express.json({ limit: "32kb" });
+const miniProgramDreamJsonParser = express.json({ limit: "8mb" });
+app.use((request, response, next) => {
+  if (request.path.startsWith("/api/miniprogram/dreams")) {
+    return miniProgramDreamJsonParser(request, response, next);
+  }
+  return defaultJsonParser(request, response, next);
+});
 app.get("/runtime-env.js", (request, response) => {
   response.set("Cache-Control", "no-store");
   response.sendFile(path.join(__dirname, "src", "runtime-env.js"));
@@ -173,6 +181,21 @@ function getWechatAuthService() {
   }
 
   return app.locals.defaultWechatAuthService;
+}
+
+function getMiniProgramDreamSyncService() {
+  if (app.locals.miniProgramDreamSyncService) {
+    return app.locals.miniProgramDreamSyncService;
+  }
+
+  if (!app.locals.defaultMiniProgramDreamSyncService) {
+    app.locals.defaultMiniProgramDreamSyncService = createMiniProgramDreamSyncService({
+      env: process.env,
+      getAdminClient: () => app.locals.wechatAdminClient || createAdminSupabaseClient()
+    });
+  }
+
+  return app.locals.defaultMiniProgramDreamSyncService;
 }
 
 function isDeepGuidanceEnabled() {
@@ -2109,11 +2132,71 @@ async function handleWechatLogoutRequest(request, response) {
   }
 }
 
+async function handleMiniProgramDreamSyncRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getMiniProgramDreamSyncService().syncDreams(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "梦境同步暂时没有完成，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleMiniProgramDreamListRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getMiniProgramDreamSyncService().listDreams(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "梦境同步暂时没有完成，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleMiniProgramDreamUpdateRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getMiniProgramDreamSyncService().updateDream(request, request.params && request.params.id);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "梦境同步暂时没有完成，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleMiniProgramDreamDeleteRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getMiniProgramDreamSyncService().deleteDream(request, request.params && request.params.id);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "梦境同步暂时没有完成，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
 app.post("/api/v1/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/v1/wechat-auth/login", handleWechatLoginRequest);
 app.get("/api/v1/wechat-auth/session", handleWechatSessionRequest);
 app.post("/api/v1/wechat-auth/logout", handleWechatLogoutRequest);
+app.post("/api/miniprogram/dreams/sync", handleMiniProgramDreamSyncRequest);
+app.get("/api/miniprogram/dreams", handleMiniProgramDreamListRequest);
+app.put("/api/miniprogram/dreams/:id", handleMiniProgramDreamUpdateRequest);
+app.delete("/api/miniprogram/dreams/:id", handleMiniProgramDreamDeleteRequest);
 app.post("/api/v1/product-events", handleProductEventsRequest);
 app.delete("/api/v1/product-analytics", handleProductAnalyticsDeletionRequest);
 app.get("/api/v1/admin/analytics/summary", handleAdminSummaryRequest);

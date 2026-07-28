@@ -76,10 +76,13 @@ test("mini program pages expose guest core loop and disabled deep guidance", () 
   assert.match(result, /记录卡片预览/);
   assert.doesNotMatch(result, /梦境画像|梦境原型|核心解析/);
 
-  assert.match(read("miniprogram/pages/journal/index.wxml"), /本机梦境日记/);
+  const journal = read("miniprogram/pages/journal/index.wxml");
+  assert.match(journal, /本机梦境日记/);
+  assert.match(journal, /syncStatusLabel/);
   const detail = read("miniprogram/pages/detail/index.wxml");
   assert.match(detail, /记录详情/);
   assert.match(detail, /AI 辅助整理/);
+  assert.match(detail, /同步状态/);
   assert.match(detail, /删除这条记录/);
   assert.doesNotMatch(detail, /梦境详情|AI 分析|删除这条梦境/);
   assert.match(read("miniprogram/pages/privacy/index.wxml"), /隐私与数据/);
@@ -87,7 +90,9 @@ test("mini program pages expose guest core loop and disabled deep guidance", () 
   assert.match(profile, /游客模式/);
   assert.match(profile, /使用微信身份继续/);
   assert.match(profile, /微信身份已建立/);
-  assert.match(profile, /现阶段梦境仍只保存在本机/);
+  assert.match(profile, /数据管理/);
+  assert.match(profile, /同步到云端/);
+  assert.match(profile, /更换设备后恢复/);
   assert.match(profile, /退出当前身份/);
   assert.doesNotMatch(profile, /openid|unionid|已跨设备同步|已绑定 Web 账户/i);
 });
@@ -135,9 +140,11 @@ test("mini program source does not include forbidden secrets or disallowed platf
   assert.doesNotMatch(source, /\.\.\/\.\.\/src\//);
 
   const authAdapter = read("miniprogram/services/authAdapter.js");
+  const profileController = read("miniprogram/pages/profile/index.js");
   assert.match(authAdapter, /wxRef\.login|wx\.login/);
   assert.match(authAdapter, /Authorization/);
   assert.doesNotMatch(read("miniprogram/services/apiClient.js"), /Authorization\s*:/i);
+  assert.match(profileController, /cloudSync\.setCloudSyncEnabled\(wx, false\)/);
 });
 
 test("wechat auth migration keeps identity tables server-only", () => {
@@ -159,6 +166,18 @@ test("wechat auth migration keeps identity tables server-only", () => {
   assert.match(sql, /revoke all on table public\.wechat_accounts from authenticated/i);
   assert.match(sql, /revoke all on table public\.wechat_sessions from anon/i);
   assert.match(sql, /revoke all on table public\.wechat_sessions from authenticated/i);
+});
+
+test("mini program cloud sync server routes are registered without changing AI route", () => {
+  const server = read("server.js");
+
+  assert.match(server, /createMiniProgramDreamSyncService/);
+  assert.match(server, /app\.post\("\/api\/miniprogram\/dreams\/sync"/);
+  assert.match(server, /app\.get\("\/api\/miniprogram\/dreams"/);
+  assert.match(server, /app\.put\("\/api\/miniprogram\/dreams\/:id"/);
+  assert.match(server, /app\.delete\("\/api\/miniprogram\/dreams\/:id"/);
+  assert.match(server, /app\.post\("\/api\/v1\/dream-analysis", handleDreamAnalysisRequest\)/);
+  assert.doesNotMatch(read("miniprogram/services/apiClient.js"), /Authorization\s*:/i);
 });
 
 test("wechat auth server-only env vars are documented without public exposure", () => {
@@ -202,11 +221,13 @@ test("mini program docs and private config boundaries are explicit", () => {
   const architecture = read("docs/MINIPROGRAM_ARCHITECTURE.md");
   assert.match(architecture, /梦境记录、睡眠感受记录与 AI 辅助文字整理工具/);
   assert.match(architecture, /梦境线索卡/);
-  assert.match(architecture, /游客版核心闭环/);
+  assert.match(architecture, /本机优先核心闭环/);
   assert.match(architecture, /不调用 DeepSeek/);
   assert.match(architecture, /微信身份桥接/);
   assert.match(architecture, /不伪造 Supabase Session/);
-  assert.match(architecture, /不做云同步/);
+  assert.match(architecture, /小程序云同步/);
+  assert.match(architecture, /统一的 `public\.dream_records` 表/);
+  assert.match(architecture, /不信任客户端传入的 `user_id`/);
   assert.match(architecture, /本机存储/);
   assert.match(architecture, /dream_anatomy_guest_records_v1/);
   assert.match(architecture, /深度记录.*正在开发中/);
@@ -218,14 +239,23 @@ test("mini program docs and private config boundaries are explicit", () => {
   assert.match(wechatSetup, /WECHAT_SESSION_HASH_SECRET/);
   assert.match(wechatSetup, /Render Dashboard/);
   assert.match(wechatSetup, /微信开发者工具/);
-  assert.match(wechatSetup, /当前没有云同步/);
+  assert.match(wechatSetup, /小程序云同步通过 Render 服务端接口完成/);
+  assert.match(wechatSetup, /MINIPROGRAM_CLOUD_SYNC_SETUP/);
 
   const wechatArchitecture = read("docs/WECHAT_AUTH_ARCHITECTURE.md");
   assert.match(wechatArchitecture, /不透明 Session Token/);
   assert.match(wechatArchitecture, /不返回 openid、unionid 或 session_key/);
   assert.match(wechatArchitecture, /不创建假的 Supabase Session/);
-  assert.match(wechatArchitecture, /cloudSyncAvailable: false/);
+  assert.match(wechatArchitecture, /cloudSyncAvailable: true/);
+  assert.match(wechatArchitecture, /app_users/);
   assert.match(wechatArchitecture, /退出当前 Session/);
+
+  const cloudSyncSetup = read("docs/MINIPROGRAM_CLOUD_SYNC_SETUP.md");
+  assert.match(cloudSyncSetup, /20260728000000_add_miniprogram_cloud_sync\.sql/);
+  assert.match(cloudSyncSetup, /不创建小程序专用梦境表/);
+  assert.match(cloudSyncSetup, /POST \/api\/miniprogram\/dreams\/sync/);
+  assert.match(cloudSyncSetup, /Authorization: Bearer <wechat-session-token>/);
+  assert.match(cloudSyncSetup, /不信任客户端传入的 `user_id`/);
 });
 
 test("mini program compliance copy document includes filing review note", () => {

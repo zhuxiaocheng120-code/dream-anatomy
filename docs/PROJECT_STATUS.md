@@ -20,7 +20,7 @@
 - AI 后端现在提供版本化接口 `POST /api/v1/dream-analysis`，旧 `POST /api/dream-analysis` 暂时保留为兼容别名。接口会识别 Supabase Bearer token，把缺少 token 的请求当作访客，并使用内存计数器提供 Beta 免费额度、短时限流、单用户并发限制和 DeepSeek 超时保护。
 - AI 后端现在会在不影响用户解析流程的前提下，尝试把隐私保护的 AI 使用统计写入 Supabase `ai_usage_events`，用于运营分析和服务改进。
 - 产品分析默认关闭；用户可在“隐私与数据”中主动开启或随时关闭。启用后只记录允许列表内的去标识化行为事件，不记录梦境正文、个人身份信息或原始设备/会话标识。
-- 原生微信小程序基础工程已加入 `miniprogram/`，对外定位为 **Dream Anatomy 梦境手札**：梦境记录、睡眠感受记录与 AI 辅助文字整理工具。当前支持 AI 整理梦境、梦境线索卡、本机保存、本机梦境日记、详情、删除、导出、清除本机数据，以及通过 Render 建立安全的微信身份 Session；当前仍不接 Supabase 登录、云同步、支付、会员或小程序产品行为分析事件。小程序视觉语言已同步 Web 端的旧纸、私人档案、心理工作室和手稿记录方向，首页云朵和“我的”身份印章使用单一静态本地 SVG 标识。
+- 原生微信小程序基础工程已加入 `miniprogram/`，对外定位为 **Dream Anatomy 梦境手札**：梦境记录、睡眠感受记录与 AI 辅助文字整理工具。当前支持 AI 整理梦境、梦境线索卡、本机保存、本机梦境日记、详情、删除、导出、清除本机数据，通过 Render 建立安全的微信身份 Session，以及用户主动开启的小程序本地优先云端梦境同步；当前仍不接 Supabase 登录、Web/微信账户绑定、支付、会员或小程序产品分析事件。小程序视觉语言已同步 Web 端的旧纸、私人档案、心理工作室和手稿记录方向，首页云朵和“我的”身份印章使用单一静态本地 SVG 标识。
 - Web Beta 已加入原创 Dream Guide 品牌标识，包括云朵梦境向导 Icon、横向 Lockup、单色 SVG 和 favicon 引用；当前首页和 Dream Home 可见 Logo 使用 inline SVG，云朵保持完全静态，不包含任何连续动画、描边流动、线条变形、漂浮、缩放或透明度交替。详细边界见 `docs/BRAND_ASSETS.md`。
 - 页面新增“隐私与数据”中心，用于展示适用于当前公开测试版的隐私政策、用户协议、AI 使用说明与风险提示，处理用户同意、境外处理单独同意、导出可阅读 HTML 梦境档案、导出原始 JSON 备份、删除单条梦境、清空全部梦境、清除游客本机数据和注销账户。
 - 梦境日记区域会显示已保存记录的日期、梦境摘要、主要情绪、主要意象、睡眠质量和分析类型。
@@ -188,11 +188,11 @@ AI 使用统计将在实现产品运营分析和服务改进目的所必要的�
 
 ## 微信小程序的当前边界
 
-小程序当前是 Web Beta 后续移动端体验的原生基础工程，已实现游客核心闭环和安全微信身份桥接。小程序对外定位为 Dream Anatomy 梦境手札：梦境记录、睡眠感受记录与 AI 辅助文字整理工具。AI 整理梦境通过 `wx.request` 调用现有 Render 后端 `POST /api/v1/dream-analysis`，请求体仍包含 `analysisType: "quick"` 和 `clientPlatform: "wechat_mini_program"`，不发送微信身份认证头，也不直接调用 DeepSeek。
+小程序当前是 Web Beta 后续移动端体验的原生基础工程，已实现本机优先核心闭环、安全微信身份桥接和用户主动开启的小程序梦境云同步。小程序对外定位为 Dream Anatomy 梦境手札：梦境记录、睡眠感受记录与 AI 辅助文字整理工具。AI 整理梦境通过 `wx.request` 调用现有 Render 后端 `POST /api/v1/dream-analysis`，请求体仍包含 `analysisType: "quick"` 和 `clientPlatform: "wechat_mini_program"`，不发送微信身份认证头，也不直接调用 DeepSeek。
 
-游客梦境只保存在当前微信本机，存储 key 为 `dream_anatomy_guest_records_v1`，最多 100 条。超过上限时会提示先导出或删除旧记录，不会静默删除。法律文件版本复用 Web 端 `src/legalDocuments.js`，游客首次解析前需要主动勾选同意。
+梦境首先保存在当前微信本机，存储 key 为 `dream_anatomy_guest_records_v1`，最多 100 条。超过上限时会提示先导出或删除旧记录，不会静默删除。建立微信身份后，用户可以在首次提示或“我的 / 数据管理”中选择同步到云端；云端失败不会删除本机记录。法律文件版本复用 Web 端 `src/legalDocuments.js`，游客首次解析前需要主动勾选同意。
 
-当前已接入 Render 后端微信身份桥接：用户可在“我的”页面主动点击“使用微信身份继续”，服务端通过微信 code 验证后返回 Dream Anatomy 不透明 Session Token。当前不做 code2Session 小程序直连、不保存原始 openid / unionid / session_key、不接 Supabase 登录、云同步、支付、会员、小程序产品分析事件或深度记录。深度记录入口保留展示，并标记为“正在开发中”。小程序设置和验收步骤见 `docs/MINIPROGRAM_SETUP.md`，架构边界见 `docs/MINIPROGRAM_ARCHITECTURE.md`，备案与审核口径见 `docs/MINIPROGRAM_COMPLIANCE_COPY.md`，微信身份部署见 `docs/WECHAT_AUTH_SETUP.md`。真机验收尚未完成。
+当前已接入 Render 后端微信身份桥接：用户可在“我的”页面主动点击“使用微信身份继续”，服务端通过微信 code 验证后返回 Dream Anatomy 不透明 Session Token。小程序云同步复用该 Token 调用 Render 的 `/api/miniprogram/dreams/*` 接口；服务端解析内部 `app_users.id` 后写入统一 `dream_records`，不信任客户端传入的 `user_id`。当前不做 code2Session 小程序直连、不保存原始 openid / unionid / session_key、不接 Supabase 登录、Web/微信账户绑定、支付、会员、小程序产品分析事件或深度记录。深度记录入口保留展示，并标记为“正在开发中”。小程序设置和验收步骤见 `docs/MINIPROGRAM_SETUP.md`，架构边界见 `docs/MINIPROGRAM_ARCHITECTURE.md`，备案与审核口径见 `docs/MINIPROGRAM_COMPLIANCE_COPY.md`，微信身份部署见 `docs/WECHAT_AUTH_SETUP.md`，云同步部署见 `docs/MINIPROGRAM_CLOUD_SYNC_SETUP.md`。真机验收尚未完成。
 
 小程序视觉说明见 `docs/MINIPROGRAM_VISUAL_LANGUAGE.md`。当前视觉点缀全部通过本地 WXML/WXSS 绘制，不依赖远程图片、字体文件或版权不明素材；云朵品牌标识使用单一静态本地 SVG，不包含 WXSS keyframes 或 JS 动画循环。发布前仍需要在微信开发者工具和真机上完成截图与交互验收。
 

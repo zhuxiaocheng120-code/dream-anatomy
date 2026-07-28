@@ -349,6 +349,9 @@ async function withServer(run, options = {}) {
   if (options.wechatAdminClient) {
     app.locals.wechatAdminClient = options.wechatAdminClient;
   }
+  if (options.miniProgramDreamSyncService) {
+    app.locals.miniProgramDreamSyncService = options.miniProgramDreamSyncService;
+  }
 
   const server = app.listen(0, "127.0.0.1");
   await new Promise((resolve) => server.once("listening", resolve));
@@ -371,7 +374,9 @@ async function withServer(run, options = {}) {
     delete app.locals.accountDeletionService;
     delete app.locals.wechatAuthService;
     delete app.locals.wechatAdminClient;
+    delete app.locals.miniProgramDreamSyncService;
     delete app.locals.defaultWechatAuthService;
+    delete app.locals.defaultMiniProgramDreamSyncService;
   }
 }
 
@@ -546,7 +551,7 @@ test("wechat auth routes return no-store safe success payloads", { concurrency: 
     assert.deepEqual(loginPayload.account, {
       mode: "wechat",
       authenticated: true,
-      cloudSyncAvailable: false
+      cloudSyncAvailable: true
     });
     assert.doesNotMatch(JSON.stringify(loginPayload), /openid|unionid|session_key|account-1|service_role/i);
 
@@ -559,7 +564,7 @@ test("wechat auth routes return no-store safe success payloads", { concurrency: 
     assert.deepEqual(sessionPayload.account, {
       mode: "wechat",
       authenticated: true,
-      cloudSyncAvailable: false
+      cloudSyncAvailable: true
     });
     assert.doesNotMatch(JSON.stringify(sessionPayload), /account-1|openid|unionid|session_key/i);
 
@@ -578,14 +583,14 @@ test("wechat auth routes return no-store safe success payloads", { concurrency: 
         return {
           sessionToken: "opaque-session-token",
           expiresAt: "2026-07-27T00:00:00.000Z",
-          account: { mode: "wechat", authenticated: true, cloudSyncAvailable: false }
+          account: { mode: "wechat", authenticated: true, cloudSyncAvailable: true }
         };
       },
       getSession: async (request) => {
         calls.push({ name: "session", authorization: request.headers.authorization });
         return {
           expiresAt: "2026-07-27T00:00:00.000Z",
-          account: { mode: "wechat", authenticated: true, cloudSyncAvailable: false },
+          account: { mode: "wechat", authenticated: true, cloudSyncAvailable: true },
           wechatAccountId: "account-1"
         };
       },
@@ -631,6 +636,46 @@ test("wechat auth routes format stable errors without leaking secrets", { concur
         throw error;
       },
       logout: async () => ({ ok: true })
+    }
+  });
+});
+
+test("mini program dream sync route accepts documented batch payloads above the AI parser limit", { concurrency: false }, async () => {
+  const calls = [];
+  const largeRecords = Array.from({ length: 8 }, (_, index) => ({
+    localRecordId: `local-${index}`,
+    dreamText: "梦".repeat(4500),
+    createdAt: "2026-07-28T00:00:00.000Z",
+    updatedAt: "2026-07-28T00:00:00.000Z",
+    reportContent: {
+      analysis: {
+        dreamSummary: "摘要",
+        coreInterpretation: "整理内容"
+      }
+    }
+  }));
+
+  await withServer(async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/api/miniprogram/dreams/sync`, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: "Bearer opaque-session-token"
+      },
+      body: JSON.stringify({ records: largeRecords })
+    });
+    const payload = await response.json();
+
+    assert.equal(response.status, 200);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.deepEqual(payload, { ok: true, records: [], restoredRecords: [], conflicts: [], deletedRecords: [] });
+    assert.equal(calls[0].body.records.length, 8);
+  }, {
+    miniProgramDreamSyncService: {
+      syncDreams: async (request) => {
+        calls.push({ body: request.body, authorization: request.headers.authorization });
+        return { ok: true, records: [], restoredRecords: [], conflicts: [], deletedRecords: [] };
+      }
     }
   });
 });

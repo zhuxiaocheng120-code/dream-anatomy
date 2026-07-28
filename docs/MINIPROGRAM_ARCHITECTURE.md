@@ -2,21 +2,22 @@
 
 ## 当前范围
 
-小程序位于 `miniprogram/`，使用微信原生 JavaScript、WXML 和 WXSS，不使用 Taro、uni-app、React、Vue 或新的路由框架。当前产品展示名为 Dream Anatomy 梦境手札，定位为梦境记录、睡眠感受记录与 AI 辅助文字整理工具。当前已经在游客核心闭环上新增微信身份桥接，但不做云同步。
+小程序位于 `miniprogram/`，使用微信原生 JavaScript、WXML 和 WXSS，不使用 Taro、uni-app、React、Vue 或新的路由框架。当前产品展示名为 Dream Anatomy 梦境手札，定位为梦境记录、睡眠感受记录与 AI 辅助文字整理工具。当前已经在游客核心闭环上新增微信身份桥接，并在用户主动确认后支持本地优先的云端梦境同步。
 
-游客版核心闭环：
+本机优先核心闭环：
 
 1. 首页进入 AI 整理梦境。
 2. 用户输入梦境并显式同意法律文件。
 3. 小程序通过 `wx.request` 调用现有 Render 后端 `POST /api/v1/dream-analysis`。
 4. 当前结果页显示 AI 整理结果和梦境线索卡。
-5. 用户保存到本机存储。
+5. 用户先保存到本机存储。
 6. 用户在本机梦境日记查看列表、详情、删除、导出或清除本机数据。
+7. 用户建立微信身份并主动选择同步后，小程序把本机记录同步到统一的 `dream_records` 云端模型。
 
 ## 数据流
 
 ```text
-微信小程序游客用户
+微信小程序用户
 → wx.request
 → https://dream-anatomy.onrender.com/api/v1/dream-analysis
 → 现有 Node.js 后端
@@ -37,17 +38,35 @@ wx.login()
 → 小程序保存不透明 Session Token
 ```
 
-它不伪造 Supabase Session，不创建合成邮箱用户，不把微信 Session Token 当作 Supabase access token，也不做云同步。当前返回的身份状态始终包含 `cloudSyncAvailable: false`。
+它不伪造 Supabase Session，不创建合成邮箱用户，也不把微信 Session Token 当作 Supabase access token。当前返回的身份状态包含 `cloudSyncAvailable: true`，表示小程序可以在用户主动开启后调用 Render 的小程序梦境同步接口。
+
+## 小程序云同步
+
+小程序云同步保持 local-first：
+
+1. 新记录总是先写入 `dream_anatomy_guest_records_v1`。
+2. 本机保存成功后，如果用户已建立微信身份且已开启同步，再调用 Render 服务端。
+3. 云端失败不会删除或覆盖本机记录；记录会保留为待同步或同步失败状态。
+4. 换设备登录同一微信身份后，可以从云端恢复记录到本机。
+
+同步接口：
+
+- `POST /api/miniprogram/dreams/sync`
+- `GET /api/miniprogram/dreams`
+- `PUT /api/miniprogram/dreams/:id`
+- `DELETE /api/miniprogram/dreams/:id`
+
+所有接口都验证微信 Session Token。服务端根据 `wechat_sessions → wechat_accounts → app_users` 解析内部 `user_id`，不信任客户端传入的 `user_id`。云端仍使用统一的 `public.dream_records` 表，而不是小程序专属梦境表；`public.app_users` 是当前兼容层，允许 Web 邮箱账户和微信身份未来绑定到同一个内部用户模型。当前版本不实现 Web 邮箱账户与微信身份绑定。
 
 ## 本机存储
 
-游客梦境只保存在当前微信本机，存储 key 为：
+梦境首先保存在当前微信本机，存储 key 为：
 
 ```text
 dream_anatomy_guest_records_v1
 ```
 
-每条记录包含 `localRecordId`、创建和更新时间、梦境原文、睡眠质量、分析类型、AI 辅助整理正文、梦境线索卡和 `storageVersion`。本轮上限为 100 条，超过后提示用户先导出或删除旧记录，不会静默删除。
+每条记录包含 `localRecordId`、创建和更新时间、梦境原文、睡眠质量、分析类型、AI 辅助整理正文、梦境线索卡、`syncStatus`、`cloudRecordId`、`lastSyncedAt`、`deletedAt` 和 `storageVersion`。本轮上限为 100 条，超过后提示用户先导出或删除旧记录，不会静默删除。
 
 ## 法律文件与同意
 
@@ -55,11 +74,10 @@ dream_anatomy_guest_records_v1
 
 ## 功能边界
 
-- 不做云同步。
 - 不调用 `code2Session`。
 - 不保存 openid、unionid、session_key 或自定义 JWT。
-- 不接入 Supabase 登录或云同步。
-- 不接入微信支付、会员或数据库。
+- 不接入 Supabase 登录。
+- 不接入微信支付、会员，也不让小程序直连数据库。
 - 不写入产品行为分析事件。
 - 深度记录保持“正在开发中”，不能触发 AI 请求或创建深度记录。
 
@@ -83,15 +101,16 @@ dream_anatomy_guest_records_v1
 
 - `miniprogram/pages/home/`：首页、AI 整理入口、本机最近梦境、深度记录禁用展示。
 - `miniprogram/pages/quick/`：梦境输入、法律同意、AI 请求。
-- `miniprogram/pages/result/`：AI 整理结果、梦境线索卡、保存到本机日记。
-- `miniprogram/pages/journal/`：本机梦境日记列表。
-- `miniprogram/pages/detail/`：本机记录详情和删除。
+- `miniprogram/pages/result/`：AI 整理结果、梦境线索卡、保存到本机日记，并在同步开启时尝试上传云端。
+- `miniprogram/pages/journal/`：本机梦境日记列表和同步状态展示。
+- `miniprogram/pages/detail/`：本机记录详情、同步状态和删除。
 - `miniprogram/pages/privacy/`：法律文件、导出、清除本机数据。
 - `miniprogram/pages/profile/`：游客状态说明。
 - `miniprogram/services/apiClient.js`：请求 Render 后端。
 - `miniprogram/services/dreamStorage.js`：本机梦境记录 CRUD。
+- `miniprogram/services/cloudSync.js`：微信身份下的本地优先云同步、跨设备恢复和冲突合并。
 - `miniprogram/services/resultCard.js`：梦境线索卡规范化。
 
 ## 后续扩展预留
 
-如果未来要接入微信登录，应新增独立后端登录流程，不能把 AppSecret 放入小程序。云同步、支付、会员、小程序产品分析和深度记录恢复都应作为独立 PR 处理。
+后续 Web 邮箱账户与微信身份绑定应复用 `app_users` 兼容层，不需要重建梦境表。绑定 PR 需要定义当一个微信身份和一个 Web 邮箱账户合并时，如何迁移 `dream_records.user_id`、去重 `local_record_id` 并保留删除 tombstone。支付、会员、小程序产品分析和深度记录恢复都应作为独立 PR 处理。
