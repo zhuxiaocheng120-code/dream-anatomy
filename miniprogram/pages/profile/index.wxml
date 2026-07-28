@@ -32,6 +32,24 @@
     >同步到云端</button>
   </view>
   <view class="section card profile-action-card">
+    <view class="eyebrow">绑定邮箱账户</view>
+    <view class="small muted">绑定后，网页端与小程序端的梦境记录将合并并共享。</view>
+    <view class="small muted">当前状态：{{bindingStatus === 'bound' ? '已绑定' : '未绑定'}}</view>
+    <input
+      class="input"
+      value="{{bindingCode}}"
+      placeholder="输入网页端生成的绑定码"
+      disabled="{{isBusy || !authState.authenticated}}"
+      bindinput="handleBindingCodeInput"
+    />
+    <button
+      class="button secondary-button"
+      loading="{{isBusy}}"
+      disabled="{{isBusy || !authState.authenticated}}"
+      bindtap="handleConfirmBinding"
+    >确认绑定</button>
+  </view>
+  <view class="section card profile-action-card">
     <button
       wx:if="{{!authState.authenticated}}"
       class="button"

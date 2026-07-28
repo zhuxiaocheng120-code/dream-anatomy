@@ -190,6 +190,8 @@
     let crossBorderConsentCheckbox = null;
     let legalStateLine = null;
     let legalAcceptedAtLine = null;
+    let wechatBindingStatusLine = null;
+    let wechatBindingCodeLine = null;
 
     function setStatus(message) {
       if (elements.status) {
@@ -395,6 +397,35 @@
       analyticsToggle = toggle;
     }
 
+    function renderWechatBindingControls(parent) {
+      const card = createElement(documentRef, "article", "privacy-action-card wechat-binding-card");
+      const heading = createElement(documentRef, "h3", "", "微信账户");
+      const copy = createElement(documentRef, "p", "", "生成短时有效的微信绑定码后，可以在小程序“我的”页面完成绑定。绑定后网页端与小程序端的梦境记录将合并并共享。");
+      wechatBindingStatusLine = createElement(documentRef, "p", "legal-consent-state");
+      wechatBindingCodeLine = createElement(documentRef, "p", "legal-accepted-at");
+      setWechatBindingStatus("");
+
+      const statusButton = createElement(documentRef, "button", "secondary-button", "查看绑定状态");
+      statusButton.type = "button";
+      statusButton.addEventListener("click", () => {
+        loadWechatBindingStatus().catch((error) => {
+          setStatus(error && error.message ? error.message : "绑定状态暂时无法读取。");
+        });
+      });
+
+      const button = createElement(documentRef, "button", "secondary-button", "生成微信绑定码");
+      button.type = "button";
+      button.addEventListener("click", () => {
+        generateWechatBindingToken().catch((error) => {
+          setStatus(error && error.message ? error.message : "绑定码暂时无法生成。");
+        });
+      });
+
+      card.append(heading, copy, wechatBindingStatusLine, wechatBindingCodeLine, statusButton, button);
+      parent.append(card);
+      return card;
+    }
+
     function updateGuestCleanupVisibility() {
       if (guestCleanupCard) {
         guestCleanupCard.hidden = Boolean(currentUser);
@@ -424,6 +455,7 @@
       const guestButton = renderAction(actions, "清除本机梦境数据", "游客可以清除当前浏览器中的本机梦境数据。", "清除本机梦境数据", "clear-guest", true);
       const accountButton = renderAction(actions, "注销账户", "注销会删除当前账户的云端梦境、法律同意记录和可关联的 authenticated AI 使用统计。", "注销账户", "delete-account", true);
       renderAnalyticsControls(actions);
+      renderWechatBindingControls(actions);
 
       acceptButton.addEventListener("click", () => {
         acceptCurrentLegalVersions().catch((error) => {
@@ -742,6 +774,83 @@ ${items || "<article class=\"dream-entry\"><h3>暂无梦境记录</h3><p>这次�
       return auth;
     }
 
+    async function getAuthAccessToken() {
+      const client = await getAuthClient();
+      const sessionResult = client && client.auth && typeof client.auth.getSession === "function"
+        ? await client.auth.getSession()
+        : { data: { session: null } };
+      const token = sessionResult && sessionResult.data && sessionResult.data.session
+        ? sessionResult.data.session.access_token
+        : "";
+
+      if (!token) {
+        throw new Error("请先登录后再绑定微信账户。");
+      }
+
+      return token;
+    }
+
+    function setWechatBindingStatus(status) {
+      if (!wechatBindingStatusLine) return;
+      if (status === "bound") {
+        wechatBindingStatusLine.textContent = "当前状态：已绑定";
+        return;
+      }
+      if (status === "unbound") {
+        wechatBindingStatusLine.textContent = "当前状态：未绑定";
+        return;
+      }
+      wechatBindingStatusLine.textContent = currentUser ? "当前状态：待查看" : "当前状态：请先登录";
+    }
+
+    function formatExpiry(value) {
+      if (!value) return "";
+      const date = new Date(value);
+      if (Number.isNaN(date.getTime())) return "";
+      return getAcceptedAtDisplay(date.toISOString());
+    }
+
+    async function loadWechatBindingStatus() {
+      if (!currentUser) {
+        setWechatBindingStatus("");
+        throw new Error("请先登录后再查看微信账户绑定状态。");
+      }
+
+      const token = await getAuthAccessToken();
+      const result = await fetchJson("/api/account-binding/status", {
+        method: "GET",
+        headers: {
+          Authorization: `Bearer ${token}`
+        }
+      });
+      setWechatBindingStatus(result.status);
+      return result;
+    }
+
+    async function generateWechatBindingToken() {
+      if (!currentUser) {
+        throw new Error("请先登录后再绑定微信账户。");
+      }
+
+      const token = await getAuthAccessToken();
+      const result = await fetchJson("/api/account-binding/wechat/token", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`
+        },
+        body: JSON.stringify({})
+      });
+      const expiry = formatExpiry(result.expiresAt);
+      const line = `绑定码：${result.bindingCode || ""}${expiry ? `，有效期至 ${expiry}` : ""}`;
+      if (wechatBindingCodeLine) {
+        wechatBindingCodeLine.textContent = line;
+      }
+      setWechatBindingStatus("unbound");
+      setStatus(line);
+      return result;
+    }
+
     async function deleteAccount() {
       const confirmation = await confirmAction({
         title: "注销账户",
@@ -837,6 +946,10 @@ ${items || "<article class=\"dream-entry\"><h3>暂无梦境记录</h3><p>这次�
       if (!nextUser || (currentUser && currentUser.id !== nextUser.id)) {
         currentConsent = null;
         lastConsentCheckUserId = "";
+        if (wechatBindingCodeLine) {
+          wechatBindingCodeLine.textContent = "";
+        }
+        setWechatBindingStatus("");
         if (elements.documentShell) {
           elements.documentShell.replaceChildren();
         }
@@ -877,7 +990,9 @@ ${items || "<article class=\"dream-entry\"><h3>暂无梦境记录</h3><p>这次�
       ensureGuestAiConsent,
       exportData,
       exportReadableArchive,
+      generateWechatBindingToken,
       handleSession,
+      loadWechatBindingStatus,
       openLegalDocument,
       render,
       validateRegistrationConsent

@@ -150,6 +150,71 @@ test("mini program auth clears invalid local session and keeps guest features av
   assert.deepEqual(auth.getAuthState(), { mode: "guest", authenticated: false, cloudSyncAvailable: false });
 });
 
+test("mini program account binding requires WeChat identity and confirms with bearer token only", async () => {
+  const auth = require("../miniprogram/services/authAdapter");
+  const accountBinding = require("../miniprogram/services/accountBinding");
+  auth.clearLocalSession({ wx: createWxHarness().wx });
+
+  const guestHarness = createWxHarness();
+  await assert.rejects(
+    () => accountBinding.confirmBinding("ABCD2345EF", { wx: guestHarness.wx }),
+    (error) => error.code === "AUTH_INVALID" && /微信身份/.test(error.message)
+  );
+
+  const { wx, requests } = createWxHarness({
+    storage: {
+      [auth.WECHAT_SESSION_TOKEN_KEY]: "wechat-session-token"
+    },
+    respond: (payload) => {
+      if (payload.url.endsWith("/api/miniprogram/account-binding/confirm")) {
+        return { statusCode: 200, data: { status: "bound", message: "已完成账户绑定，梦境记录已合并。" } };
+      }
+      if (payload.url.endsWith("/api/miniprogram/account-binding/status")) {
+        return { statusCode: 200, data: { status: "bound" } };
+      }
+      return { statusCode: 500, data: { error: { code: "UPSTREAM_UNAVAILABLE" } } };
+    }
+  });
+
+  const result = await accountBinding.confirmBinding("ABCD-2345-EF", { wx });
+  const status = await accountBinding.getBindingStatus({ wx });
+
+  assert.equal(result.status, "bound");
+  assert.equal(status.status, "bound");
+  assert.equal(requests[0].url, "https://dream-anatomy.onrender.com/api/miniprogram/account-binding/confirm");
+  assert.equal(requests[0].method, "POST");
+  assert.equal(requests[0].header.Authorization, "Bearer wechat-session-token");
+  assert.deepEqual(requests[0].data, {
+    bindingCode: "ABCD2345EF",
+    confirmMerge: true
+  });
+  assert.equal(Object.hasOwn(requests[0].data, "userId"), false);
+  assert.equal(Object.hasOwn(requests[0].data, "openid"), false);
+  assert.equal(requests[1].url, "https://dream-anatomy.onrender.com/api/miniprogram/account-binding/status");
+  assert.equal(requests[1].header.Authorization, "Bearer wechat-session-token");
+});
+
+test("mini program account binding maps safe errors without exposing identifiers", async () => {
+  const auth = require("../miniprogram/services/authAdapter");
+  const accountBinding = require("../miniprogram/services/accountBinding");
+  const { wx } = createWxHarness({
+    storage: {
+      [auth.WECHAT_SESSION_TOKEN_KEY]: "wechat-session-token"
+    },
+    respond: () => ({
+      statusCode: 400,
+      data: { error: { code: "ACCOUNT_BINDING_INVALID", message: "绑定码无效或已过期，请重新生成。" } }
+    })
+  });
+
+  await assert.rejects(
+    () => accountBinding.confirmBinding("BAD-CODE", { wx }),
+    (error) => error.code === "ACCOUNT_BINDING_INVALID" &&
+      /绑定码/.test(error.message) &&
+      !/openid|unionid|auth-user|wechat-account|session-token/i.test(error.message)
+  );
+});
+
 test("quick analysis request uses Render backend structure and no Authorization header", async () => {
   const { requestQuickAnalysis } = require("../miniprogram/services/apiClient");
   const { wx, requests } = createWxHarness({

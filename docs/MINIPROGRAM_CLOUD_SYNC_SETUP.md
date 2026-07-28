@@ -16,7 +16,7 @@ supabase/migrations/20260728000000_add_miniprogram_cloud_sync.sql
 4. 云端失败不会删除本机记录；记录会保留为待同步或同步失败。
 5. 新设备登录同一微信身份后，可以从云端恢复记录到本机。
 
-当前版本不实现 Web 邮箱账户与微信身份绑定，不提高 AI 免费额度，不修改 AI Prompt，不接支付或会员。
+当前云同步本身不提高 AI 免费额度，不修改 AI Prompt，不接支付或会员。Web 邮箱账户与微信身份绑定已作为独立服务存在，部署步骤见 `docs/ACCOUNT_BINDING_SETUP.md`。
 
 ## 统一数据模型
 
@@ -28,7 +28,7 @@ supabase/migrations/20260728000000_add_miniprogram_cloud_sync.sql
 - 小程序同步接口只信任服务端解析出的内部 `user_id`，不信任客户端传入的 `user_id`。
 - `dream_records(user_id, local_record_id)` 继续用于幂等去重。
 
-这为后续 Web 邮箱账户和微信身份绑定预留空间：绑定 PR 可以合并两个 `app_users`，迁移 `dream_records.user_id`，并继续使用 `local_record_id` 和软删除字段处理重复记录。
+Web 邮箱账户和微信身份绑定会复用这一统一模型：绑定时合并两个 `app_users`，迁移 `dream_records.user_id`，并继续使用 `local_record_id` 和软删除字段处理重复记录。
 
 ## Supabase SQL Editor
 
@@ -117,7 +117,7 @@ Authorization: Bearer <wechat-session-token>
 
 ## 当前限制
 
-- 未实现 Web 邮箱账户与微信身份绑定。
+- 云同步不负责自动绑定；绑定需要用户在 Web 生成绑定码并在小程序确认。
 - 未实现微信账户注销和云端身份整体删除。
 - 未接微信支付、会员、小程序产品分析或云端搜索。
 - 未开放深度记录。

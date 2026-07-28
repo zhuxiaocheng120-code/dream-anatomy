@@ -5,6 +5,7 @@ const crypto = require("node:crypto");
 const path = require("path");
 const DreamArchetypes = require("./src/dreamArchetypes");
 const DreamResultCard = require("./src/dreamResultCard");
+const { createAccountBindingService } = require("./server/accountBinding");
 const { createAccountDeletionService } = require("./server/accountDeletion");
 const { createAdminAuth } = require("./server/adminAuth");
 const { getAnalyticsSummary, getRecentAnalyticsEvents } = require("./server/adminAnalytics");
@@ -166,6 +167,22 @@ function getAccountDeletionService() {
     env: getAnalyticsEnv(),
     getAdminClient: () => createAdminSupabaseClient()
   });
+}
+
+function getAccountBindingService() {
+  if (app.locals.accountBindingService) {
+    return app.locals.accountBindingService;
+  }
+
+  if (!app.locals.defaultAccountBindingService) {
+    app.locals.defaultAccountBindingService = createAccountBindingService({
+      aiAuthResolver: getAiAuthResolver(),
+      env: process.env,
+      getAdminClient: () => app.locals.wechatAdminClient || createAdminSupabaseClient()
+    });
+  }
+
+  return app.locals.defaultAccountBindingService;
 }
 
 function getWechatAuthService() {
@@ -2132,6 +2149,62 @@ async function handleWechatLogoutRequest(request, response) {
   }
 }
 
+async function handleCreateWechatBindingTokenRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getAccountBindingService().createWebToken(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "账户绑定暂时没有完成，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleWebAccountBindingStatusRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getAccountBindingService().getWebStatus(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "账户绑定暂时没有完成，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleMiniProgramAccountBindingConfirmRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getAccountBindingService().confirmMiniProgramBinding(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "账户绑定暂时没有完成，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
+async function handleMiniProgramAccountBindingStatusRequest(request, response) {
+  response.set("Cache-Control", "no-store");
+
+  try {
+    const result = await getAccountBindingService().getMiniProgramStatus(request);
+    response.json(result);
+  } catch (error) {
+    const apiError = error && error.code
+      ? error
+      : createApiError("INTERNAL_ERROR", "账户绑定暂时没有完成，请稍后再试。", 500);
+    sendApiError(response, apiError);
+  }
+}
+
 async function handleMiniProgramDreamSyncRequest(request, response) {
   response.set("Cache-Control", "no-store");
 
@@ -2193,6 +2266,10 @@ app.post("/api/dream-analysis", handleDreamAnalysisRequest);
 app.post("/api/v1/wechat-auth/login", handleWechatLoginRequest);
 app.get("/api/v1/wechat-auth/session", handleWechatSessionRequest);
 app.post("/api/v1/wechat-auth/logout", handleWechatLogoutRequest);
+app.post("/api/account-binding/wechat/token", handleCreateWechatBindingTokenRequest);
+app.get("/api/account-binding/status", handleWebAccountBindingStatusRequest);
+app.post("/api/miniprogram/account-binding/confirm", handleMiniProgramAccountBindingConfirmRequest);
+app.get("/api/miniprogram/account-binding/status", handleMiniProgramAccountBindingStatusRequest);
 app.post("/api/miniprogram/dreams/sync", handleMiniProgramDreamSyncRequest);
 app.get("/api/miniprogram/dreams", handleMiniProgramDreamListRequest);
 app.put("/api/miniprogram/dreams/:id", handleMiniProgramDreamUpdateRequest);

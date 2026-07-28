@@ -19,7 +19,7 @@
 - AI 后端提供版本化接口 `POST /api/v1/dream-analysis`，旧的 `POST /api/dream-analysis` 暂时保留为兼容别名。接口会识别 Supabase Bearer token、应用 Beta 免费额度、短时限流、单用户并发限制和 DeepSeek 超时保护。
 - 服务器会把 AI 使用统计以隐私保护形式写入 Supabase `ai_usage_events`，用于运营分析和服务改进；管理员可在只读运营后台查看聚合数据。
 - 隐私与数据中心提供适用于当前公开测试版的隐私政策、用户协议、AI 使用说明与风险提示、境外处理单独同意、可阅读 HTML 梦境档案导出、原始 JSON 备份导出、单条删除、清空全部梦境、游客本机数据清理和账户注销入口。
-- 原生微信小程序基础工程位于 `miniprogram/`，对外定位为 **Dream Anatomy 梦境手札**：梦境记录、睡眠感受记录与 AI 辅助文字整理工具。当前支持 AI 整理梦境、梦境线索卡、本机保存、本机梦境日记、详情、删除、导出、清除本机数据、安全微信身份桥接，以及用户主动开启的小程序云端梦境同步；当前不接 Supabase 登录、Web/微信账户绑定、支付、会员或小程序产品行为分析事件。小程序视觉已同步 Web 的旧纸、私人档案、心理工作室和手稿记录语言。
+- 原生微信小程序基础工程位于 `miniprogram/`，对外定位为 **Dream Anatomy 梦境手札**：梦境记录、睡眠感受记录与 AI 辅助文字整理工具。当前支持 AI 整理梦境、梦境线索卡、本机保存、本机梦境日记、详情、删除、导出、清除本机数据、安全微信身份桥接、用户主动开启的小程序云端梦境同步，以及 Web 邮箱账户和微信身份的一次性绑定码合并；当前不接 Supabase 小程序登录、支付、会员或小程序产品行为分析事件。小程序视觉已同步 Web 的旧纸、私人档案、心理工作室和手稿记录语言。
 - 快速解析 V2 会要求结果包含梦境摘要、核心主题、核心解析、梦境证据与解释、情绪画像、主要意象、自我思考、今日小行动和温和提醒，并在服务端做基础质量检查。
 - 快速解析完成后会在当前结果页直接展示梦境画像，并把分析正文和梦境画像一起保存到梦境日记；连接不可用或 AI 输出质量不完整时会显示明确错误、保留输入，不会展示本地示例或保存半成品。
 - 深度引导源码、后端接口和既有测试仍保留；历史深度引导记录仍可以从 Dream Journal / Dream Detail 查看。
@@ -118,6 +118,7 @@
 - Set `SUPABASE_URL` and `SUPABASE_ANON_KEY` locally to enable the account UI. These are browser-safe Supabase project values, not service role secrets.
 - Optional AI protection settings are available in `.env.example`: `AI_GUEST_DAILY_LIMIT`, `AI_USER_DAILY_LIMIT`, `AI_GUEST_REQUESTS_PER_MINUTE`, `AI_USER_REQUESTS_PER_MINUTE`, `AI_MAX_CONCURRENT_PER_PRINCIPAL`, staged DeepSeek timeout settings, and `DEEP_GUIDANCE_ENABLED`.
 - Optional admin analytics settings are available in `.env.example`: `SUPABASE_SERVICE_ROLE_KEY`, `ADMIN_USER_IDS`, `ANALYTICS_HASH_SECRET`, `AI_INPUT_COST_PER_1M_TOKENS`, and `AI_OUTPUT_COST_PER_1M_TOKENS`. These are server-only values and must not be exposed in browser runtime config.
+- Optional Web/WeChat account binding settings are available in `.env.example`: `ACCOUNT_BINDING_TOKEN_SECRET`, `ACCOUNT_BINDING_GENERATE_PER_MINUTE`, and `ACCOUNT_BINDING_CONFIRM_PER_MINUTE`. These are server-only values used for hashing one-time binding codes and limiting token creation/confirmation attempts.
 - Public legal/contact settings: `PUBLIC_OPERATOR_NAME=朱校成` and `PUBLIC_SUPPORT_EMAIL=zhuxiaocheng120@gmail.com`. Optional public AI display fields are `PUBLIC_AI_MODEL_NAME`, `PUBLIC_AI_MODEL_FILING_NUMBER`, and `PUBLIC_AI_APP_REGISTRATION_NUMBER`; leave filing/registration values empty unless real values are confirmed. These are safe public display fields, not secrets.
 - Start the app with `npm start`.
 - Open `http://localhost:3000` in your browser.
@@ -133,13 +134,14 @@ Current boundaries:
 
 - Native WeChat Mini Program only, under `miniprogram/`.
 - Calls the existing Render backend `POST /api/v1/dream-analysis`; it does not call DeepSeek directly.
-- Users can optionally tap “使用微信身份继续” to establish a Dream Anatomy Mini Program session through Render, then choose “同步到云端” to enable local-first dream sync for Mini Program records. This does not bind the Mini Program identity to a Web email account yet.
+- Users can optionally tap “使用微信身份继续” to establish a Dream Anatomy Mini Program session through Render, then choose “同步到云端” to enable local-first dream sync for Mini Program records.
+- Web logged-in users can generate a 10-minute one-time WeChat binding code in “隐私与数据”; Mini Program users enter that code in “我的” to merge the WeChat identity into the Web email account and share the same `dream_records` history.
 - Quick analysis requests still do not send the WeChat auth token and continue to use the current guest AI quota path.
 - Dreams are stored locally under `dream_anatomy_guest_records_v1`, capped at 100 records.
 - Deep guidance is visible but marked “正在开发中”.
 - `miniprogram/project.config.json` and `miniprogram/config/config.js` are ignored local/private files.
 - The current Mini Program visual refresh uses local WXML/WXSS decorations only; it does not rely on remote images or font files.
-- Apply `supabase/migrations/20260720000000_create_wechat_auth.sql` and configure `WECHAT_MINIPROGRAM_APP_ID`, `WECHAT_MINIPROGRAM_APP_SECRET`, `WECHAT_IDENTITY_HASH_SECRET`, and `WECHAT_SESSION_HASH_SECRET` on Render to enable the identity bridge.
+- Apply `supabase/migrations/20260720000000_create_wechat_auth.sql`, `supabase/migrations/20260728000000_add_miniprogram_cloud_sync.sql`, and `supabase/migrations/20260728001000_create_account_binding.sql`; configure `WECHAT_MINIPROGRAM_APP_ID`, `WECHAT_MINIPROGRAM_APP_SECRET`, `WECHAT_IDENTITY_HASH_SECRET`, `WECHAT_SESSION_HASH_SECRET`, `SUPABASE_SERVICE_ROLE_KEY`, and `ACCOUNT_BINDING_TOKEN_SECRET` on Render to enable identity bridge, cloud sync, and account binding.
 - Real-device validation has not been completed yet; use WeChat Developer Tools and a test AppID before release.
 
 ## Brand Assets

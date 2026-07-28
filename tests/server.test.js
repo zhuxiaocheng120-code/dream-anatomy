@@ -343,6 +343,9 @@ async function withServer(run, options = {}) {
   if (options.accountDeletionService) {
     app.locals.accountDeletionService = options.accountDeletionService;
   }
+  if (options.accountBindingService) {
+    app.locals.accountBindingService = options.accountBindingService;
+  }
   if (options.wechatAuthService) {
     app.locals.wechatAuthService = options.wechatAuthService;
   }
@@ -372,9 +375,11 @@ async function withServer(run, options = {}) {
     delete app.locals.analyticsLogger;
     delete app.locals.awaitAnalyticsWrites;
     delete app.locals.accountDeletionService;
+    delete app.locals.accountBindingService;
     delete app.locals.wechatAuthService;
     delete app.locals.wechatAdminClient;
     delete app.locals.miniProgramDreamSyncService;
+    delete app.locals.defaultAccountBindingService;
     delete app.locals.defaultWechatAuthService;
     delete app.locals.defaultMiniProgramDreamSyncService;
   }
@@ -418,6 +423,36 @@ async function getWechatSession(baseUrl, options = {}) {
 async function postWechatLogout(baseUrl, options = {}) {
   return fetch(`${baseUrl}/api/v1/wechat-auth/logout`, {
     method: "POST",
+    headers: { ...(options.headers || {}) }
+  });
+}
+
+async function postWebBindingToken(baseUrl, options = {}) {
+  return fetch(`${baseUrl}/api/account-binding/wechat/token`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    body: JSON.stringify(options.body || {})
+  });
+}
+
+async function getWebBindingStatus(baseUrl, options = {}) {
+  return fetch(`${baseUrl}/api/account-binding/status`, {
+    method: "GET",
+    headers: { ...(options.headers || {}) }
+  });
+}
+
+async function postMiniProgramBindingConfirm(baseUrl, body, options = {}) {
+  return fetch(`${baseUrl}/api/miniprogram/account-binding/confirm`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", ...(options.headers || {}) },
+    body: JSON.stringify(body || {})
+  });
+}
+
+async function getMiniProgramBindingStatus(baseUrl, options = {}) {
+  return fetch(`${baseUrl}/api/miniprogram/account-binding/status`, {
+    method: "GET",
     headers: { ...(options.headers || {}) }
   });
 }
@@ -598,6 +633,100 @@ test("wechat auth routes return no-store safe success payloads", { concurrency: 
         calls.push({ name: "logout", authorization: request.headers.authorization });
         return { ok: true };
       }
+    }
+  });
+});
+
+test("account binding routes return no-store safe payloads", { concurrency: false }, async () => {
+  const calls = [];
+  await withServer(async (baseUrl) => {
+    const tokenResponse = await postWebBindingToken(baseUrl, {
+      headers: { Authorization: "Bearer supabase-token" }
+    });
+    const tokenPayload = await tokenResponse.json();
+    assert.equal(tokenResponse.status, 200);
+    assert.equal(tokenResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(tokenPayload, {
+      status: "created",
+      bindingCode: "ABCD2345EF",
+      expiresAt: "2026-07-28T12:10:00.000Z"
+    });
+
+    const webStatusResponse = await getWebBindingStatus(baseUrl, {
+      headers: { Authorization: "Bearer supabase-token" }
+    });
+    assert.equal(webStatusResponse.status, 200);
+    assert.equal(webStatusResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await webStatusResponse.json(), { status: "unbound" });
+
+    const miniConfirmResponse = await postMiniProgramBindingConfirm(baseUrl, {
+      bindingCode: "ABCD2345EF",
+      confirmMerge: true
+    }, {
+      headers: { Authorization: "Bearer wechat-session-token" }
+    });
+    const miniConfirmPayload = await miniConfirmResponse.json();
+    assert.equal(miniConfirmResponse.status, 200);
+    assert.equal(miniConfirmResponse.headers.get("cache-control"), "no-store");
+    assert.equal(miniConfirmPayload.status, "bound");
+    assert.doesNotMatch(JSON.stringify(miniConfirmPayload), /auth-user|wechat-account|openid|unionid|service_role/i);
+
+    const miniStatusResponse = await getMiniProgramBindingStatus(baseUrl, {
+      headers: { Authorization: "Bearer wechat-session-token" }
+    });
+    assert.equal(miniStatusResponse.status, 200);
+    assert.equal(miniStatusResponse.headers.get("cache-control"), "no-store");
+    assert.deepEqual(await miniStatusResponse.json(), { status: "bound" });
+    assert.deepEqual(calls.map((call) => call.name), ["create", "web-status", "confirm", "mini-status"]);
+  }, {
+    accountBindingService: {
+      createWebToken: async (request) => {
+        calls.push({ name: "create", authorization: request.headers.authorization });
+        return { status: "created", bindingCode: "ABCD2345EF", expiresAt: "2026-07-28T12:10:00.000Z" };
+      },
+      getWebStatus: async (request) => {
+        calls.push({ name: "web-status", authorization: request.headers.authorization });
+        return { status: "unbound" };
+      },
+      confirmMiniProgramBinding: async (request) => {
+        calls.push({ name: "confirm", authorization: request.headers.authorization, body: request.body });
+        return { status: "bound", message: "已完成账户绑定，梦境记录已合并。" };
+      },
+      getMiniProgramStatus: async (request) => {
+        calls.push({ name: "mini-status", authorization: request.headers.authorization });
+        return { status: "bound" };
+      }
+    }
+  });
+});
+
+test("account binding route errors use stable safe shape", { concurrency: false }, async () => {
+  await withServer(async (baseUrl) => {
+    const response = await postMiniProgramBindingConfirm(baseUrl, {
+      bindingCode: "BADCODE",
+      confirmMerge: true
+    }, {
+      headers: { Authorization: "Bearer wechat-session-token" }
+    });
+    const payload = await response.json();
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("cache-control"), "no-store");
+    assert.deepEqual(payload.error, {
+      code: "ACCOUNT_BINDING_INVALID",
+      message: "绑定码无效或已过期，请重新生成。"
+    });
+    assert.doesNotMatch(JSON.stringify(payload), /BADCODE|wechat-session-token|auth-user|wechat-account|stack|service_role/i);
+  }, {
+    accountBindingService: {
+      createWebToken: async () => ({ status: "created", bindingCode: "ABCD2345EF", expiresAt: "2026-07-28T12:10:00.000Z" }),
+      getWebStatus: async () => ({ status: "unbound" }),
+      confirmMiniProgramBinding: async () => {
+        const error = new Error("绑定码无效或已过期，请重新生成。");
+        error.code = "ACCOUNT_BINDING_INVALID";
+        error.status = 400;
+        throw error;
+      },
+      getMiniProgramStatus: async () => ({ status: "unbound" })
     }
   });
 });

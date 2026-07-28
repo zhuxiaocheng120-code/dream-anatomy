@@ -8,7 +8,10 @@ const messages = {
   UPSTREAM_TIMEOUT: "AI 暂时没有及时回应，请稍后再试。",
   UPSTREAM_UNAVAILABLE: "梦境文字整理服务暂时不可用，请稍后再试。",
   GENERATION_INCOMPLETE: "AI 结果暂时不够完整，请稍后再试。",
-  NETWORK_ERROR: "网络暂时没有连接上，请稍后再试。"
+  NETWORK_ERROR: "网络暂时没有连接上，请稍后再试。",
+  ACCOUNT_BINDING_UNAVAILABLE: "账户绑定服务暂时不可用，请稍后再试。",
+  ACCOUNT_BINDING_INVALID: "绑定码无效或已过期，请重新生成。",
+  ACCOUNT_ALREADY_BOUND: "这个微信身份已经绑定到其他账户。"
 };
 
 function mapApiError(code, fallbackMessage) {

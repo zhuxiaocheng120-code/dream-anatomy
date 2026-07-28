@@ -2,7 +2,7 @@
 
 ## 当前范围
 
-小程序位于 `miniprogram/`，使用微信原生 JavaScript、WXML 和 WXSS，不使用 Taro、uni-app、React、Vue 或新的路由框架。当前产品展示名为 Dream Anatomy 梦境手札，定位为梦境记录、睡眠感受记录与 AI 辅助文字整理工具。当前已经在游客核心闭环上新增微信身份桥接，并在用户主动确认后支持本地优先的云端梦境同步。
+小程序位于 `miniprogram/`，使用微信原生 JavaScript、WXML 和 WXSS，不使用 Taro、uni-app、React、Vue 或新的路由框架。当前产品展示名为 Dream Anatomy 梦境手札，定位为梦境记录、睡眠感受记录与 AI 辅助文字整理工具。当前已经在游客核心闭环上新增微信身份桥接，并在用户主动确认后支持本地优先的云端梦境同步，也支持通过 Web 生成的一次性绑定码把微信身份归并到邮箱账户。
 
 本机优先核心闭环：
 
@@ -13,6 +13,7 @@
 5. 用户先保存到本机存储。
 6. 用户在本机梦境日记查看列表、详情、删除、导出或清除本机数据。
 7. 用户建立微信身份并主动选择同步后，小程序把本机记录同步到统一的 `dream_records` 云端模型。
+8. 如果用户在 Web 端生成绑定码，并在小程序“我的”页面确认绑定，小程序身份会与邮箱账户共享同一批云端梦境。
 
 ## 数据流
 
@@ -56,7 +57,19 @@ wx.login()
 - `PUT /api/miniprogram/dreams/:id`
 - `DELETE /api/miniprogram/dreams/:id`
 
-所有接口都验证微信 Session Token。服务端根据 `wechat_sessions → wechat_accounts → app_users` 解析内部 `user_id`，不信任客户端传入的 `user_id`。云端仍使用统一的 `public.dream_records` 表，而不是小程序专属梦境表；`public.app_users` 是当前兼容层，允许 Web 邮箱账户和微信身份未来绑定到同一个内部用户模型。当前版本不实现 Web 邮箱账户与微信身份绑定。
+所有接口都验证微信 Session Token。服务端根据 `wechat_sessions → wechat_accounts → app_users` 解析内部 `user_id`，不信任客户端传入的 `user_id`。云端仍使用统一的 `public.dream_records` 表，而不是小程序专属梦境表；`public.app_users` 是当前兼容层，允许 Web 邮箱账户和微信身份绑定到同一个内部用户模型。
+
+## Web / 微信账户绑定
+
+绑定采用“Web 生成绑定码，小程序确认”的流程：
+
+1. Web 邮箱登录用户在“隐私与数据 / 微信账户”生成 10 分钟有效的一次性绑定码。
+2. 小程序用户必须先建立微信身份。
+3. 用户在“我的 / 绑定邮箱账户”输入绑定码，并确认“绑定后，网页端与小程序端的梦境记录将合并并共享。”
+4. Render 服务端验证 Web Supabase session、微信 Session 和绑定码，不信任客户端传入的 `user_id`。
+5. 绑定成功后，服务端事务把微信侧梦境合并到邮箱账户对应的 `app_users.id`，保留删除 tombstone，并在相同 `local_record_id` 但内容不同的时候生成冲突副本。
+
+当前不实现自动解绑、小程序内邮箱密码登录、多个微信绑定同一邮箱、一个微信绑定多个邮箱或提高 AI 免费额度。
 
 ## 本机存储
 
@@ -113,4 +126,4 @@ dream_anatomy_guest_records_v1
 
 ## 后续扩展预留
 
-后续 Web 邮箱账户与微信身份绑定应复用 `app_users` 兼容层，不需要重建梦境表。绑定 PR 需要定义当一个微信身份和一个 Web 邮箱账户合并时，如何迁移 `dream_records.user_id`、去重 `local_record_id` 并保留删除 tombstone。支付、会员、小程序产品分析和深度记录恢复都应作为独立 PR 处理。
+当前绑定已复用 `app_users` 兼容层，不需要重建梦境表。后续如增加解绑、账户注销中的微信身份级联删除、Web/微信缓存迁移、小程序产品分析、支付、会员或深度记录恢复，都应作为独立 PR 处理。

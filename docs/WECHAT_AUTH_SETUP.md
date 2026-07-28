@@ -6,7 +6,7 @@
 supabase/migrations/20260720000000_create_wechat_auth.sql
 ```
 
-微信身份桥接用于建立 Dream Anatomy 小程序登录态。当前小程序已经可以在用户主动确认后使用该身份同步梦境到统一的 `dream_records` 云端模型；仍没有 Web 邮箱账户绑定、微信支付，也不会把微信身份伪造成 Supabase Session。
+微信身份桥接用于建立 Dream Anatomy 小程序登录态。当前小程序已经可以在用户主动确认后使用该身份同步梦境到统一的 `dream_records` 云端模型；也可以通过 Web 端生成的一次性绑定码与邮箱账户合并。它仍没有微信支付，也不会把微信身份伪造成 Supabase Session。
 
 ## Supabase SQL Editor
 
@@ -52,7 +52,7 @@ WECHAT_LOGIN_REQUESTS_PER_MINUTE=5
 ## 当前边界
 
 - 当前小程序云同步通过 Render 服务端接口完成，部署步骤见 `docs/MINIPROGRAM_CLOUD_SYNC_SETUP.md`。
-- 当前没有 Web 邮箱账户绑定。
+- 当前 Web/微信账户绑定通过 Render 服务端接口完成，部署步骤见 `docs/ACCOUNT_BINDING_SETUP.md`。
 - 当前不请求微信昵称、头像、手机号、地理位置或好友信息。
 - 当前不提高 AI 免费额度。
 - 快速解析仍调用现有 `POST /api/v1/dream-analysis`，不把微信 Session Token 当作 Supabase token。
