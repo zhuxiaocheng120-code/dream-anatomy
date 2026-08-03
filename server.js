@@ -223,6 +223,37 @@ function isDeepGuidanceEnabled() {
   return process.env.DEEP_GUIDANCE_ENABLED === "true";
 }
 
+function sanitizeRequestCorrelationId(value) {
+  if (typeof value !== "string") return "";
+  const trimmed = value.trim();
+  if (!trimmed || trimmed.length > 32) return "";
+  return /^mp-[0-9a-z]{6,12}-[0-9a-z]{8}$/i.test(trimmed) ? trimmed : "";
+}
+
+function attachSafeNetworkDebug(request, response, fallbackRequestId) {
+  const rawCorrelationId = request.get("X-Request-Correlation-Id");
+  const incomingCorrelationId = sanitizeRequestCorrelationId(rawCorrelationId);
+  const requestCorrelationId = incomingCorrelationId || fallbackRequestId;
+  response.set("X-Request-Correlation-Id", requestCorrelationId);
+
+  if (!rawCorrelationId && !app.locals.safeNetworkDebugLogger) {
+    return requestCorrelationId;
+  }
+
+  response.once("finish", () => {
+    const entry = {
+      requestPath: request.path,
+      httpStatus: response.statusCode,
+      safeErrorCode: response.locals.safeErrorCode || null,
+      requestCorrelationId
+    };
+    const logger = app.locals.safeNetworkDebugLogger || ((payload) => console.info("[dream-anatomy:api-request]", payload));
+    logger(entry);
+  });
+
+  return requestCorrelationId;
+}
+
 function sendApiError(response, error, usage) {
   const status = error.status || error.statusCode || 500;
   const payload = formatApiError(error, usage);
@@ -235,6 +266,7 @@ function sendApiError(response, error, usage) {
   }
 
   response.set("Cache-Control", "no-store");
+  response.locals.safeErrorCode = payload && payload.error && payload.error.code ? payload.error.code : error.code || null;
   if (error.retryAfter) {
     response.set("Retry-After", String(error.retryAfter));
   }
@@ -1824,6 +1856,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
 async function handleDreamAnalysisRequest(request, response) {
   response.set("Cache-Control", "no-store");
   const requestId = crypto.randomUUID();
+  attachSafeNetworkDebug(request, response, requestId);
   const occurredAt = new Date();
   const startedAt = Date.now();
 

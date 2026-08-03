@@ -340,6 +340,9 @@ async function withServer(run, options = {}) {
   if (options.awaitAnalyticsWrites !== undefined) {
     app.locals.awaitAnalyticsWrites = options.awaitAnalyticsWrites;
   }
+  if (options.safeNetworkDebugLogger) {
+    app.locals.safeNetworkDebugLogger = options.safeNetworkDebugLogger;
+  }
   if (options.accountDeletionService) {
     app.locals.accountDeletionService = options.accountDeletionService;
   }
@@ -374,6 +377,7 @@ async function withServer(run, options = {}) {
     delete app.locals.adminEnv;
     delete app.locals.analyticsLogger;
     delete app.locals.awaitAnalyticsWrites;
+    delete app.locals.safeNetworkDebugLogger;
     delete app.locals.accountDeletionService;
     delete app.locals.accountBindingService;
     delete app.locals.wechatAuthService;
@@ -1312,6 +1316,58 @@ test("v1 dream-analysis route uses the same protected handler as the legacy alia
   } finally {
     global.fetch = nativeFetch;
   }
+});
+
+test("dream-analysis route emits safe network diagnostics with correlation id", { concurrency: false }, async () => {
+  const diagnostics = [];
+  await withServer(async (baseUrl) => {
+    const response = await postDreamAnalysis(
+      baseUrl,
+      { dreamText: "", analysisType: "quick" },
+      {
+        path: "/api/v1/dream-analysis",
+        headers: { "X-Request-Correlation-Id": "mp-lz123456-1a2b3c4d" }
+      }
+    );
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("x-request-correlation-id"), "mp-lz123456-1a2b3c4d");
+
+    await wait(10);
+
+    assert.deepEqual(diagnostics, [
+      {
+        requestPath: "/api/v1/dream-analysis",
+        httpStatus: 400,
+        safeErrorCode: "INVALID_REQUEST",
+        requestCorrelationId: "mp-lz123456-1a2b3c4d"
+      }
+    ]);
+    assert.doesNotMatch(JSON.stringify(diagnostics), /梦见|token|Authorization|test-key/i);
+  }, { safeNetworkDebugLogger: (entry) => diagnostics.push(entry) });
+});
+
+test("dream-analysis route does not echo or log unsafe correlation headers", { concurrency: false }, async () => {
+  const diagnostics = [];
+  await withServer(async (baseUrl) => {
+    const response = await postDreamAnalysis(
+      baseUrl,
+      { dreamText: "", analysisType: "quick" },
+      {
+        path: "/api/v1/dream-analysis",
+        headers: { "X-Request-Correlation-Id": "Bearer.secret-token" }
+      }
+    );
+    assert.equal(response.status, 400);
+    assert.notEqual(response.headers.get("x-request-correlation-id"), "Bearer.secret-token");
+
+    await wait(10);
+
+    assert.equal(diagnostics.length, 1);
+    assert.notEqual(diagnostics[0].requestCorrelationId, "Bearer.secret-token");
+    assert.equal(diagnostics[0].requestPath, "/api/v1/dream-analysis");
+    assert.equal(diagnostics[0].safeErrorCode, "INVALID_REQUEST");
+    assert.doesNotMatch(JSON.stringify(diagnostics), /Bearer\.secret-token|token|Authorization|梦见|test-key/i);
+  }, { safeNetworkDebugLogger: (entry) => diagnostics.push(entry) });
 });
 
 test("retries quick analysis once when the first response is too short", { concurrency: false }, async () => {

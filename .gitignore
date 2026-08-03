@@ -22,6 +22,7 @@ supabase/.temp/
 
 # WeChat Mini Program local/private config
 miniprogram/project.config.json
+miniprogram/project.private.config.json
 miniprogram/config/config.js
 
 # Logs

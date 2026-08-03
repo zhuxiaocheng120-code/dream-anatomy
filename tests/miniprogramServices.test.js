@@ -249,6 +249,61 @@ test("quick analysis request uses Render backend structure and no Authorization 
   assert.equal(result.dreamResultCardStatus, "ai_generated");
 });
 
+test("quick analysis emits safe request diagnostics without dream content", async () => {
+  const { requestQuickAnalysis } = require("../miniprogram/services/apiClient");
+  const diagnostics = [];
+  const { wx, requests } = createWxHarness({
+    respond: () => ({ fail: { errMsg: "request:fail url not in domain list https://dream-anatomy.onrender.com/api/v1/dream-analysis" } })
+  });
+
+  await assert.rejects(
+    () => requestQuickAnalysis("梦见一扇不能外传的门", {
+      wx,
+      createCorrelationId: () => "mp-lz123456-1a2b3c4d",
+      networkDebugLogger: (entry) => diagnostics.push(entry)
+    }),
+    (error) => error.code === "NETWORK_ERROR"
+  );
+
+  assert.equal(requests[0].header["X-Request-Correlation-Id"], "mp-lz123456-1a2b3c4d");
+  assert.deepEqual(diagnostics, [
+    {
+      requestPath: "/api/v1/dream-analysis",
+      httpStatus: null,
+      safeErrorCode: null,
+      requestCorrelationId: "mp-lz123456-1a2b3c4d"
+    },
+    {
+      requestPath: "/api/v1/dream-analysis",
+      httpStatus: null,
+      safeErrorCode: "WX_REQUEST_DOMAIN_NOT_CONFIGURED",
+      requestCorrelationId: "mp-lz123456-1a2b3c4d"
+    }
+  ]);
+  assert.doesNotMatch(JSON.stringify(diagnostics), /不能外传|dream-anatomy\.onrender\.com|token|Authorization/i);
+});
+
+test("quick analysis classifies common wx.request networking failures", () => {
+  const { classifyWxRequestFailure } = require("../miniprogram/services/apiClient");
+
+  assert.equal(
+    classifyWxRequestFailure({ errMsg: "request:fail ERR_CONNECTION_TIMED_OUT" }),
+    "WX_REQUEST_TIMEOUT"
+  );
+  assert.equal(
+    classifyWxRequestFailure({ errMsg: "request:fail ERR_NAME_NOT_RESOLVED" }),
+    "WX_REQUEST_DNS_ERROR"
+  );
+  assert.equal(
+    classifyWxRequestFailure({ errMsg: "request:fail ERR_CERT_COMMON_NAME_INVALID" }),
+    "WX_REQUEST_TLS_ERROR"
+  );
+  assert.equal(
+    classifyWxRequestFailure({ errMsg: "request:fail something else" }),
+    "WX_REQUEST_FAILED"
+  );
+});
+
 test("quick analysis maps stable errors and never falls back to local mock", async () => {
   const { requestQuickAnalysis } = require("../miniprogram/services/apiClient");
   const { mapApiError } = require("../miniprogram/services/errorMessages");
