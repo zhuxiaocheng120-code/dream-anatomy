@@ -200,6 +200,7 @@ test("mini program docs and private config boundaries are explicit", () => {
 
   const gitignore = read(".gitignore");
   assert.match(gitignore, /miniprogram\/project\.config\.json/);
+  assert.match(gitignore, /miniprogram\/project\.private\.config\.json/);
   assert.match(gitignore, /miniprogram\/config\/config\.js/);
 
   const setup = read("docs/MINIPROGRAM_SETUP.md");

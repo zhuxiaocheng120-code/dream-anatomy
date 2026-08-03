@@ -32,6 +32,18 @@ API_BASE_URL = "https://dream-anatomy.onrender.com"
 
 开发版可以配合微信开发者工具的调试设置进行联调；体验版和正式版必须完成平台侧域名配置。
 
+## 真机网络排查
+
+AI 整理请求会带上 `X-Request-Correlation-Id`，小程序和 Render 服务端只记录安全诊断字段：请求路径、HTTP 状态、安全错误码和 correlation id，不记录梦境正文、微信身份 token、邮箱或密钥。
+
+如果真机点击“保存并整理”后仍显示网络连接提示，请先查看微信开发者工具或真机调试日志：
+
+- `WX_REQUEST_DOMAIN_NOT_CONFIGURED`：当前 AppID 没有把 `https://dream-anatomy.onrender.com` 配到 request 合法域名，Render 不会收到该请求。
+- `WX_REQUEST_TIMEOUT`：请求超时，需要结合 Render 日志中的同一个 correlation id 排查。
+- `WX_REQUEST_DNS_ERROR`：设备或网络没有解析到服务域名，Render 通常不会收到请求。
+- `WX_REQUEST_TLS_ERROR`：HTTPS 证书或 TLS 握手失败，Render 通常不会收到完整请求。
+- HTTP `4xx` 或 `5xx`：请求已经到达 Render，请用同一个 correlation id 查看服务端安全日志。
+
 ## 环境区别
 
 - 开发版：用于本机和开发者工具调试。
