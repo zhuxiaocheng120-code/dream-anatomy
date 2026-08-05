@@ -38,6 +38,32 @@ test("principal hash uses HMAC secret and type prefixes", () => {
   );
 });
 
+test("Render guest analytics distinguish trusted Cloudflare clients behind one proxy", () => {
+  const env = { RENDER_EXTERNAL_HOSTNAME: "dream-anatomy.onrender.com" };
+  const sharedProxyRequest = (clientIp, ray) => ({
+    ip: "10.0.0.7",
+    headers: {
+      "cf-connecting-ip": clientIp,
+      "cf-ray": ray
+    }
+  });
+
+  const firstHash = createPrincipalHash(
+    { type: "guest" },
+    sharedProxyRequest("203.0.113.24", "a263f4da7fe9d754-NRT"),
+    "analytics-secret",
+    env
+  );
+  const secondHash = createPrincipalHash(
+    { type: "guest" },
+    sharedProxyRequest("198.51.100.42", "a263f4da7fe9d755-NRT"),
+    "analytics-secret",
+    env
+  );
+
+  assert.notEqual(firstHash, secondHash);
+});
+
 test("missing analytics secret returns null hash", () => {
   assert.equal(createPrincipalHash({ type: "guest" }, { ip: "203.0.113.24" }, ""), null);
 });

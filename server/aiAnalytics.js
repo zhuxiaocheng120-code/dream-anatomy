@@ -1,15 +1,12 @@
 const crypto = require("node:crypto");
+const { getTrustedClientIp } = require("./clientIp");
 
-function getRequestIp(request) {
-  return (request && (request.ip || (request.socket && request.socket.remoteAddress))) || "unknown";
-}
-
-function createPrincipalHash(identity, request, secret) {
+function createPrincipalHash(identity, request, secret, env = process.env) {
   if (!secret) return null;
 
   const source = identity && identity.type === "authenticated"
     ? `user:${identity.userId || ""}`
-    : `guest:${getRequestIp(request)}`;
+    : `guest:${getTrustedClientIp(request, env)}`;
 
   return crypto.createHmac("sha256", secret).update(source).digest("hex");
 }

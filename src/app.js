@@ -518,12 +518,20 @@ async function getDreamAnalysisAuthHeader() {
   return token ? { Authorization: `Bearer ${token}` } : {};
 }
 
+function createWebRequestCorrelationId() {
+  const timestamp = Date.now().toString(36).slice(-12);
+  const random = Math.random().toString(36).slice(2, 10).padEnd(8, "0").slice(0, 8);
+  return `web-${timestamp}-${random}`;
+}
+
 async function requestDreamAnalysis(payload) {
   const authHeader = await getDreamAnalysisAuthHeader();
+  const requestCorrelationId = createWebRequestCorrelationId();
   const response = await fetch("/api/v1/dream-analysis", {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
+      "X-Request-Correlation-Id": requestCorrelationId,
       ...authHeader
     },
     body: JSON.stringify(payload)

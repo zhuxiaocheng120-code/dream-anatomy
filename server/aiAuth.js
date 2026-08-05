@@ -1,13 +1,10 @@
 const { createClient: defaultCreateClient } = require("@supabase/supabase-js");
 const { createApiError } = require("./aiErrors");
+const { getTrustedClientIp } = require("./clientIp");
 
 function getHeader(request, name) {
   const headers = request && request.headers ? request.headers : {};
   return headers[name] || headers[name.toLowerCase()] || headers[name.toUpperCase()] || "";
-}
-
-function getRequestIp(request) {
-  return (request && (request.ip || (request.socket && request.socket.remoteAddress))) || "unknown";
 }
 
 function createAiAuthResolver({ createClient = defaultCreateClient, env = process.env } = {}) {
@@ -34,7 +31,7 @@ function createAiAuthResolver({ createClient = defaultCreateClient, env = proces
     const authorization = String(getHeader(request, "authorization") || "").trim();
 
     if (!authorization) {
-      const ip = getRequestIp(request);
+      const ip = getTrustedClientIp(request, env);
       return {
         type: "guest",
         userId: "",

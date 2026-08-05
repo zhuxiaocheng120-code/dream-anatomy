@@ -1346,6 +1346,31 @@ test("dream-analysis route emits safe network diagnostics with correlation id", 
   }, { safeNetworkDebugLogger: (entry) => diagnostics.push(entry) });
 });
 
+test("dream-analysis route accepts safe Web correlation ids for production tracing", { concurrency: false }, async () => {
+  const diagnostics = [];
+  await withServer(async (baseUrl) => {
+    const response = await postDreamAnalysis(
+      baseUrl,
+      { dreamText: "", analysisType: "quick" },
+      {
+        path: "/api/v1/dream-analysis",
+        headers: { "X-Request-Correlation-Id": "web-lz123456-1a2b3c4d" }
+      }
+    );
+    assert.equal(response.status, 400);
+    assert.equal(response.headers.get("x-request-correlation-id"), "web-lz123456-1a2b3c4d");
+
+    await wait(10);
+
+    assert.deepEqual(diagnostics, [{
+      requestPath: "/api/v1/dream-analysis",
+      httpStatus: 400,
+      safeErrorCode: "INVALID_REQUEST",
+      requestCorrelationId: "web-lz123456-1a2b3c4d"
+    }]);
+  }, { safeNetworkDebugLogger: (entry) => diagnostics.push(entry) });
+});
+
 test("dream-analysis route does not echo or log unsafe correlation headers", { concurrency: false }, async () => {
   const diagnostics = [];
   await withServer(async (baseUrl) => {
