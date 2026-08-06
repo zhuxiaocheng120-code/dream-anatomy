@@ -1174,6 +1174,7 @@ test("quick decode sends Bearer token for logged-in users", async () => {
   assert.equal(fetchCalls.length, 1);
   assert.equal(fetchCalls[0][0], "/api/v1/dream-analysis");
   assert.equal(fetchCalls[0][1].headers.Authorization, "Bearer session-token");
+  assert.match(fetchCalls[0][1].headers["X-Request-Correlation-Id"], /^web-[0-9a-z]{6,12}-[0-9a-z]{8}$/i);
 });
 
 test("quick decode shows stable API auth and quota errors without saving fallback records", async () => {

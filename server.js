@@ -227,7 +227,7 @@ function sanitizeRequestCorrelationId(value) {
   if (typeof value !== "string") return "";
   const trimmed = value.trim();
   if (!trimmed || trimmed.length > 32) return "";
-  return /^mp-[0-9a-z]{6,12}-[0-9a-z]{8}$/i.test(trimmed) ? trimmed : "";
+  return /^(?:mp|web)-[0-9a-z]{6,12}-[0-9a-z]{8}$/i.test(trimmed) ? trimmed : "";
 }
 
 function attachSafeNetworkDebug(request, response, fallbackRequestId) {
@@ -1487,7 +1487,12 @@ async function runDeepSeekStage(stage, timeoutMs, totalDeadlineAt, task, analyti
 
 async function recordAiUsageEvent(context) {
   const analyticsEnv = getAnalyticsEnv();
-  const principalHash = createPrincipalHash(context.identity, context.request, analyticsEnv.ANALYTICS_HASH_SECRET);
+  const principalHash = createPrincipalHash(
+    context.identity,
+    context.request,
+    analyticsEnv.ANALYTICS_HASH_SECRET,
+    analyticsEnv
+  );
 
   if (!principalHash) {
     return { ok: false, skipped: true };

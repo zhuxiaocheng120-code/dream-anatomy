@@ -52,6 +52,57 @@ test("missing Authorization header resolves to guest identity by request ip", as
   assert.equal(factory.calls.length, 0);
 });
 
+test("Render guests use Cloudflare client IP instead of sharing the reverse proxy quota key", async () => {
+  const factory = createSupabaseFactory();
+  const resolver = createAiAuthResolver({
+    createClient: factory.createClient,
+    env: {
+      SUPABASE_URL: "https://example.supabase.co",
+      SUPABASE_ANON_KEY: "anon-key",
+      RENDER_EXTERNAL_HOSTNAME: "dream-anatomy.onrender.com"
+    }
+  });
+
+  const first = await resolver.resolveIdentity(createRequest({
+    "cf-connecting-ip": "203.0.113.24",
+    "cf-ray": "a263f4da7fe9d754-NRT"
+  }, { ip: "10.0.0.7" }));
+  const second = await resolver.resolveIdentity(createRequest({
+    "cf-connecting-ip": "198.51.100.42",
+    "cf-ray": "a263f4da7fe9d755-NRT"
+  }, { ip: "10.0.0.7" }));
+
+  assert.equal(first.rateLimitKey, "guest:203.0.113.24");
+  assert.equal(second.rateLimitKey, "guest:198.51.100.42");
+  assert.notEqual(first.rateLimitKey, second.rateLimitKey);
+});
+
+test("guest identity ignores untrusted or malformed forwarded client headers", async () => {
+  const factory = createSupabaseFactory();
+  const baseEnv = {
+    SUPABASE_URL: "https://example.supabase.co",
+    SUPABASE_ANON_KEY: "anon-key"
+  };
+  const untrustedResolver = createAiAuthResolver({ createClient: factory.createClient, env: baseEnv });
+  const malformedResolver = createAiAuthResolver({
+    createClient: factory.createClient,
+    env: { ...baseEnv, RENDER_EXTERNAL_HOSTNAME: "dream-anatomy.onrender.com" }
+  });
+
+  const untrusted = await untrustedResolver.resolveIdentity(createRequest({
+    "cf-connecting-ip": "203.0.113.24",
+    "cf-ray": "a263f4da7fe9d754-NRT",
+    "x-forwarded-for": "203.0.113.24"
+  }, { ip: "10.0.0.7" }));
+  const malformed = await malformedResolver.resolveIdentity(createRequest({
+    "cf-connecting-ip": "not-an-ip",
+    "cf-ray": "not-a-ray"
+  }, { ip: "10.0.0.7" }));
+
+  assert.equal(untrusted.rateLimitKey, "guest:10.0.0.7");
+  assert.equal(malformed.rateLimitKey, "guest:10.0.0.7");
+});
+
 test("valid Bearer token resolves authenticated user with server Supabase client options", async () => {
   const factory = createSupabaseFactory({
     onGetUser(token) {
