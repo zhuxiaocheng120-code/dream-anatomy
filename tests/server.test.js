@@ -21,7 +21,8 @@ const {
   buildResultCardRetryUserPrompt,
   buildResultCardUserPrompt,
   buildUserPrompt,
-  getDreamEvidenceProfile
+  getDreamEvidenceProfile,
+  requestDeepSeekAnalysis
 } = require("../server");
 const { createAiAccessControl } = require("../server/aiAccessControl");
 
@@ -223,6 +224,9 @@ test("quick prompt uses limited-evidence requirements for short simple dreams", 
   assert.equal(profile.limitedEvidence, true);
   assert.match(prompt, /有限线索模式/);
   assert.match(prompt, /不要强行提供两个不存在的梦境细节/);
+  assert.match(prompt, /梦境摘要 20-50 个中文字符/);
+  assert.match(prompt, /核心解析 80-120 个中文字符/);
+  assert.match(prompt, /四个维度的每条 rationale 都必须明确引用当前唯一或少量真实线索/);
   assert.match(prompt, /"limitedEvidence": true/);
   assert.match(prompt, /"evidenceConfidence": "low"/);
 });
@@ -244,6 +248,59 @@ test("quick prompt keeps standard requirements for richer dreams", () => {
     assert.match(prompt, /"limitedEvidence": false/);
     assert.match(prompt, /"evidenceConfidence": "high"/);
   });
+});
+
+test("quick prompt keeps the full contract while bounding verbose standard-mode prose", () => {
+  const prompt = buildUserPrompt("我在学校走廊里反复寻找教室，外面下着雨，最后停在一扇发光的门前。");
+
+  assert.match(prompt, /梦境摘要约 60-100 个中文字符/);
+  assert.match(prompt, /核心解析约 160-260 个中文字符/);
+  assertPromptContainsCompleteDimensionSchema(prompt);
+  assert.match(prompt, /证据与解释至少 2 条/);
+  assert.match(prompt, /反思问题必须有 3 个/);
+});
+
+test("DeepSeek quick requests use JSON output with a bounded completion budget", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamBody;
+
+  global.fetch = async (url, options) => {
+    upstreamBody = JSON.parse(options.body);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          finish_reason: "stop",
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload(),
+              generationMeta: {
+                source: "ai_generated",
+                promptVersion: "quick-analysis-v2",
+                qualityStatus: "passed"
+              }
+            })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    const result = await requestDeepSeekAnalysis(
+      "我在学校走廊里反复寻找教室，外面下着雨，最后停在一扇发光的门前。",
+      "quick"
+    );
+
+    assert.ok(result.analysis);
+    assert.ok(result.dreamResultCard);
+    assert.deepEqual(upstreamBody.response_format, { type: "json_object" });
+    assert.equal(upstreamBody.max_tokens, 3600);
+    assert.ok(upstreamBody.temperature <= 0.3);
+  } finally {
+    global.fetch = nativeFetch;
+  }
 });
 
 test("limited-evidence detection does not inflate overlapping anchors", () => {
@@ -1371,6 +1428,61 @@ test("dream-analysis route accepts safe Web correlation ids for production traci
   }, { safeNetworkDebugLogger: (entry) => diagnostics.push(entry) });
 });
 
+test("initial timeout emits safe stage diagnostics without private content", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const diagnostics = [];
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    return new Promise((resolve, reject) => {
+      options.signal.addEventListener("abort", () => {
+        const error = new Error("upstream timed out");
+        error.name = "AbortError";
+        reject(error);
+      });
+    });
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(
+        baseUrl,
+        {
+          dreamText: "我在学校走廊里寻找教室，外面下着雨。",
+          analysisType: "quick"
+        },
+        {
+          path: "/api/v1/dream-analysis",
+          headers: { "X-Request-Correlation-Id": "web-lz123456-2b3c4d5e" }
+        }
+      );
+      const payload = await response.json();
+
+      assert.equal(response.status, 504);
+      assert.equal(payload.error.code, "UPSTREAM_TIMEOUT");
+      await wait(10);
+
+      assert.equal(diagnostics.length, 1);
+      assert.equal(diagnostics[0].generationStage, "initial");
+      assert.equal(diagnostics[0].qualityRetryCount, 0);
+      assert.equal(diagnostics[0].finalErrorCode, "INITIAL_TIMEOUT");
+      assert.equal(typeof diagnostics[0].stageDurations.initial, "number");
+      assert.equal(diagnostics[0].upstreamResponseReceived, false);
+      assert.doesNotMatch(JSON.stringify(diagnostics), /学校|教室|下雨|token|Authorization|test-key/i);
+    }, {
+      safeNetworkDebugLogger: (entry) => diagnostics.push(entry),
+      aiTimeoutConfig: {
+        initialAttemptMs: 5,
+        repairAttemptMs: 5,
+        limitedAttemptMs: 5,
+        totalRequestMs: 20
+      }
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
 test("dream-analysis route does not echo or log unsafe correlation headers", { concurrency: false }, async () => {
   const diagnostics = [];
   await withServer(async (baseUrl) => {
@@ -1440,6 +1552,8 @@ test("retries quick analysis once when the first response is too short", { concu
 
       assert.equal(response.status, 200);
       assert.equal(upstreamBodies.length, 2);
+      assert.equal(upstreamBodies[0].max_tokens, 3600);
+      assert.equal(upstreamBodies[1].max_tokens, 4000);
       assert.match(upstreamBodies[1].messages[1].content, /上一次输出没有通过质量检查/);
       assert.equal(payload.analysis.evidence.length, 2);
       assert.equal(payload.generationMeta.qualityStatus, "passed");
@@ -1637,6 +1751,7 @@ test("repairs an invalid quick result card before returning success", { concurre
   const nativeFetch = global.fetch;
   let upstreamCalls = 0;
   const upstreamBodies = [];
+  const diagnostics = [];
   global.fetch = async (url, options) => {
     if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
     upstreamBodies.push(JSON.parse(options.body));
@@ -1660,6 +1775,7 @@ test("repairs an invalid quick result card before returning success", { concurre
       ok: true,
       json: async () => ({
         choices: [{
+          finish_reason: upstreamCalls === 1 ? "length" : "stop",
           message: {
             content: JSON.stringify(content)
           }
@@ -1684,9 +1800,13 @@ test("repairs an invalid quick result card before returning success", { concurre
       assert.equal(payload.generationMeta.evidenceConfidence, "high");
       assert.equal(payload.generationMeta.qualityStatus, "passed");
       assert.equal(upstreamCalls, 2);
+      assert.equal(upstreamBodies[0].max_tokens, 3600);
+      assert.equal(upstreamBodies[1].max_tokens, 2400);
       assertPromptContainsCompleteDimensionSchema(upstreamBodies[1].messages[1].content);
       assert.match(upstreamBodies[1].messages[1].content, /只返回完整梦境画像 JSON 对象本身/);
-    });
+      await wait(10);
+      assert.deepEqual(diagnostics[0].finishReasons, { initial: "length", repair: "stop" });
+    }, { safeNetworkDebugLogger: (entry) => diagnostics.push(entry) });
   } finally {
     global.fetch = nativeFetch;
   }
@@ -2168,6 +2288,7 @@ test("overall quick analysis timeout aborts the active stage and skips later sta
 test("quick full retry timeout records retry count and internal repair timeout code", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   const inserted = [];
+  const diagnostics = [];
   let upstreamCalls = 0;
   let repairWasAborted = false;
 
@@ -2238,7 +2359,12 @@ test("quick full retry timeout records retry count and internal repair timeout c
       assert.equal(inserted[0].error_code, "REPAIR_TIMEOUT");
       assert.equal(inserted[0].quality_retry_count, 1);
       assert.equal(inserted[0].total_tokens, 20);
+      await wait(10);
+      assert.equal(diagnostics.length, 1);
+      assert.equal(diagnostics[0].upstreamResponseReceived, true);
+      assert.deepEqual(diagnostics[0].upstreamResponses, { initial: true, repair: false });
       assert.doesNotMatch(JSON.stringify(inserted[0]), /学校走廊|发着光|Bearer|test-key/);
+      assert.doesNotMatch(JSON.stringify(diagnostics), /学校走廊|发着光|Bearer|test-key/);
     }, {
       accessControl,
       analyticsClient: {
@@ -2251,6 +2377,7 @@ test("quick full retry timeout records retry count and internal repair timeout c
       },
       analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
       awaitAnalyticsWrites: true,
+      safeNetworkDebugLogger: (entry) => diagnostics.push(entry),
       aiTimeoutConfig: {
         initialAttemptMs: 50,
         repairAttemptMs: 10,
