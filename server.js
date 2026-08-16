@@ -30,6 +30,9 @@ const app = express();
 const port = process.env.PORT || 3000;
 const deepSeekBaseUrl = process.env.DEEPSEEK_BASE_URL || "https://api.deepseek.com";
 const deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-chat";
+const deepSeekInitialMaxTokens = 3600;
+const deepSeekRetryMaxTokens = 4000;
+const deepSeekCardMaxTokens = 2400;
 const maxDreamTextLength = 5000;
 const quickPromptVersion = "quick-analysis-v2";
 const defaultRequestTimeoutMs = parsePositiveInteger(process.env.AI_REQUEST_TIMEOUT_MS, 45000);
@@ -245,7 +248,8 @@ function attachSafeNetworkDebug(request, response, fallbackRequestId) {
       requestPath: request.path,
       httpStatus: response.statusCode,
       safeErrorCode: response.locals.safeErrorCode || null,
-      requestCorrelationId
+      requestCorrelationId,
+      ...(response.locals.aiDiagnostics || {})
     };
     const logger = app.locals.safeNetworkDebugLogger || ((payload) => console.info("[dream-anatomy:api-request]", payload));
     logger(entry);
@@ -271,6 +275,50 @@ function sendApiError(response, error, usage) {
     response.set("Retry-After", String(error.retryAfter));
   }
   response.status(status).json(payload);
+}
+
+function setSafeAiDiagnostics(response, analyticsMeta) {
+  if (!analyticsMeta || typeof analyticsMeta !== "object") return;
+
+  const stageDurations = Object.entries(analyticsMeta.stageDurations || {}).reduce((safe, [stage, duration]) => {
+    if (["initial", "repair", "limited"].includes(stage) && Number.isFinite(Number(duration))) {
+      safe[stage] = Math.max(0, Math.floor(Number(duration)));
+    }
+    return safe;
+  }, {});
+  const generationStage = ["initial", "repair", "limited"].includes(analyticsMeta.generationStage)
+    ? analyticsMeta.generationStage
+    : null;
+  const finalErrorCode = typeof analyticsMeta.finalErrorCode === "string" && /^[A-Z0-9_]{1,64}$/.test(analyticsMeta.finalErrorCode)
+    ? analyticsMeta.finalErrorCode
+    : null;
+  const upstreamResponses = Object.entries(analyticsMeta.upstreamResponses || {}).reduce((safe, [stage, received]) => {
+    if (["initial", "repair", "limited"].includes(stage) && typeof received === "boolean") {
+      safe[stage] = received;
+    }
+    return safe;
+  }, {});
+  const finishReasons = Object.entries(analyticsMeta.finishReasons || {}).reduce((safe, [stage, reason]) => {
+    if (
+      ["initial", "repair", "limited"].includes(stage)
+      && ["stop", "length", "content_filter", "tool_calls", "insufficient_system_resource"].includes(reason)
+    ) {
+      safe[stage] = reason;
+    }
+    return safe;
+  }, {});
+
+  response.locals.aiDiagnostics = {
+    generationStage,
+    stageDurations,
+    qualityRetryCount: Number.isInteger(analyticsMeta.qualityRetryCount) && analyticsMeta.qualityRetryCount >= 0
+      ? analyticsMeta.qualityRetryCount
+      : 0,
+    finalErrorCode,
+    upstreamResponseReceived: analyticsMeta.upstreamResponseReceived === true,
+    upstreamResponses,
+    finishReasons
+  };
 }
 
 const resultCardDimensionSchemaLines = [
@@ -430,13 +478,14 @@ function buildUserPrompt(dreamText) {
     ? [
         "服务端已判定当前梦境为有限线索模式：梦境内容较短或可识别梦境线索少于 2 个。",
         "不要强行提供两个不存在的梦境细节；不得编造梦里没有出现的人物、地点、情绪或事件。",
-        "快速解析应基于当前唯一或少量真实线索展开：梦境摘要 15-60 个中文字符，核心主题至少 8 个中文字符，核心解析 60-120 个中文字符。",
+        "快速解析应基于当前唯一或少量真实线索展开：梦境摘要 20-50 个中文字符，核心主题至少 8 个中文字符，核心解析 80-120 个中文字符。",
+        "四个维度的每条 rationale 都必须明确引用当前唯一或少量真实线索；即使说明情绪或变化不明显，也要点名该真实意象或事件。",
         "证据与解释至少 1 条，必须引用当前梦境真实出现的线索；反思问题仍返回 3 个，可以围绕同一个真实意象从不同角度提问。",
         "Dream Result Card 仍必须完整：有效 archetype、四个维度、每项 0-100 数字分数、rationale、主要意象、情绪画像、反思问题和安全提醒。"
       ]
     : [
         "当前梦境为标准线索模式：快速解析不能只返回几句通用话，必须至少引用两个梦中的具体场景、人物、动作或物件。",
-        "梦境摘要约 80-160 个中文字符；核心解析约 250-450 个中文字符，并引用至少两个梦境细节。",
+        "梦境摘要约 60-100 个中文字符；核心解析约 160-260 个中文字符，并引用至少两个梦境细节。",
         "证据与解释至少 2 条，至少 2 条证据必须引用当前梦境细节并解释其依据。"
       ];
 
@@ -460,12 +509,12 @@ function buildUserPrompt(dreamText) {
     "{",
     '  "analysis": {',
     evidenceProfile.limitedEvidence
-      ? '    "dreamSummary": "15-60 个中文字符，只使用梦中真实出现的线索，不添加梦里没有发生的内容",'
-      : '    "dreamSummary": "80-160 个中文字符，使用梦中的具体人物、场景和事件，不重复原文，不添加梦里没有发生的内容",',
+      ? '    "dreamSummary": "20-50 个中文字符，只使用梦中真实出现的线索，不添加梦里没有发生的内容",'
+      : '    "dreamSummary": "60-100 个中文字符，使用梦中的具体人物、场景和事件，不重复原文，不添加梦里没有发生的内容",',
     '    "coreTheme": "一句话说明这次梦最值得关注的心理主题",',
     evidenceProfile.limitedEvidence
-      ? '    "coreInterpretation": "60-120 个中文字符，引用当前真实梦境线索，使用可能/也许/可以理解为，不编造第二个细节",'
-      : '    "coreInterpretation": "250-450 个中文字符，引用至少两个梦境细节，使用可能/也许/可以理解为",',
+      ? '    "coreInterpretation": "80-120 个中文字符，引用当前真实梦境线索，使用可能/也许/可以理解为，不编造第二个细节",'
+      : '    "coreInterpretation": "160-260 个中文字符，引用至少两个梦境细节，使用可能/也许/可以理解为",',
     '    "evidence": [{ "dreamFragment": "梦境片段", "interpretation": "为什么这个片段支持当前分析" }],',
     '    "emotionalReading": { "primaryEmotion": "主要情绪", "secondaryEmotions": ["次要情绪"], "intensity": 0, "evidence": "情绪来自哪个具体梦境片段，并说明不代表现实固定心理状态" },',
     '    "symbolReading": [{ "symbol": "意象", "context": "本次梦里的具体语境", "possibleMeaning": "可能与什么有关", "evidence": "支持判断的梦境片段", "reflectionQuestion": "与用户自身有关的开放问题" }],',
@@ -1471,9 +1520,20 @@ async function runDeepSeekStage(stage, timeoutMs, totalDeadlineAt, task, analyti
     stageTimeout.unref();
   }
 
+  analyticsMeta.upstreamResponses[stage] = false;
   try {
-    return await task(abortController.signal);
+    const result = await task(abortController.signal);
+    analyticsMeta.upstreamResponses[stage] = true;
+    analyticsMeta.upstreamResponseReceived = true;
+    if (result && typeof result.finishReason === "string") {
+      analyticsMeta.finishReasons[stage] = result.finishReason;
+    }
+    return result;
   } catch (error) {
+    if (typeof error.upstreamResponseReceived === "boolean") {
+      analyticsMeta.upstreamResponses[stage] = error.upstreamResponseReceived;
+      analyticsMeta.upstreamResponseReceived = analyticsMeta.upstreamResponseReceived || error.upstreamResponseReceived;
+    }
     if (error && error.code === "UPSTREAM_TIMEOUT") {
       error.generationStage = stage;
       error.internalErrorCode = getTimeoutStageCode(stage);
@@ -1557,6 +1617,18 @@ function getRetryUserPrompt(dreamText, analysisType, issues) {
   return buildQuickRetryUserPrompt(dreamText, issues);
 }
 
+function getDeepSeekMaxTokens(analysisType, options = {}) {
+  if (analysisType === "quick" && Array.isArray(options.retryIssues) && options.retryIssues.length) {
+    return deepSeekRetryMaxTokens;
+  }
+
+  if (analysisType === "result_card" || (analysisType === "quick" && options.userPrompt)) {
+    return deepSeekCardMaxTokens;
+  }
+
+  return deepSeekInitialMaxTokens;
+}
+
 async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) {
   const apiKey = process.env.DEEPSEEK_API_KEY;
 
@@ -1577,7 +1649,9 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
       },
       body: JSON.stringify({
         model: deepSeekModel,
-        temperature: 0.55,
+        temperature: 0.3,
+        max_tokens: getDeepSeekMaxTokens(analysisType, options),
+        response_format: { type: "json_object" },
         messages: [
           { role: "system", content: buildSystemPrompt() },
           {
@@ -1593,15 +1667,20 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
     });
   } catch (error) {
     if (error && error.name === "AbortError") {
-      throw createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504);
+      const timeoutError = createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504);
+      timeoutError.upstreamResponseReceived = false;
+      throw timeoutError;
     }
 
-    throw createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+    const upstreamError = createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+    upstreamError.upstreamResponseReceived = false;
+    throw upstreamError;
   }
 
   if (!response.ok) {
     const upstreamError = createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
     upstreamError.statusCode = 502;
+    upstreamError.upstreamResponseReceived = true;
     throw upstreamError;
   }
 
@@ -1610,10 +1689,14 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
     data = await response.json();
   } catch (error) {
     if (error && error.name === "AbortError") {
-      throw createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504);
+      const timeoutError = createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504);
+      timeoutError.upstreamResponseReceived = true;
+      throw timeoutError;
     }
 
-    throw createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+    const upstreamError = createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+    upstreamError.upstreamResponseReceived = true;
+    throw upstreamError;
   }
   const content = data && data.choices && data.choices[0] && data.choices[0].message
     ? data.choices[0].message.content
@@ -1621,7 +1704,8 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
 
   return {
     parsed: typeof content === "string" ? parseJsonObject(content) : null,
-    usage: data && data.usage ? data.usage : null
+    usage: data && data.usage ? data.usage : null,
+    finishReason: data && data.choices && data.choices[0] ? data.choices[0].finish_reason || null : null
   };
 }
 
@@ -1633,7 +1717,10 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
     model: deepSeekModel,
     generationStage: "initial",
     stageDurations: {},
-    finalErrorCode: null
+    finalErrorCode: null,
+    upstreamResponseReceived: false,
+    upstreamResponses: {},
+    finishReasons: {}
   };
   const timeoutConfig = options.timeoutConfig || {
     initialAttemptMs: defaultInitialAttemptTimeoutMs,
@@ -1919,6 +2006,7 @@ async function handleDreamAnalysisRequest(request, response) {
     if (analysis && typeof analysis === "object") {
       delete analysis.__analyticsMeta;
     }
+    setSafeAiDiagnostics(response, analyticsMeta);
     accessControl.finish(reservation, { refundDaily: false });
     reservation = null;
 
@@ -1949,6 +2037,7 @@ async function handleDreamAnalysisRequest(request, response) {
       apiError.generationMeta = error.generationMeta;
     }
     analyticsMeta = error.analyticsMeta || analyticsMeta;
+    setSafeAiDiagnostics(response, analyticsMeta);
 
     if (reservation) {
       accessControl.finish(reservation, {
