@@ -1605,7 +1605,16 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
     throw upstreamError;
   }
 
-  const data = await response.json();
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504);
+    }
+
+    throw createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+  }
   const content = data && data.choices && data.choices[0] && data.choices[0].message
     ? data.choices[0].message.content
     : "";
@@ -1930,8 +1939,9 @@ async function handleDreamAnalysisRequest(request, response) {
       usage
     });
   } catch (error) {
-    const code = error.code || (error.statusCode === 422 ? "GENERATION_INCOMPLETE" : "UPSTREAM_UNAVAILABLE");
-    const apiError = error.code
+    const hasStableCode = typeof error.code === "string" && error.code;
+    const code = hasStableCode ? error.code : (error.statusCode === 422 ? "GENERATION_INCOMPLETE" : "UPSTREAM_UNAVAILABLE");
+    const apiError = hasStableCode
       ? error
       : createApiError(code, code === "GENERATION_INCOMPLETE" ? "AI 结果暂时不够完整，请稍后再试。" : "梦境解析服务暂时不可用，请稍后再试。", error.statusCode || 502);
 
