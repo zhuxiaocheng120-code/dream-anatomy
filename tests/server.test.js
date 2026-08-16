@@ -3109,6 +3109,69 @@ test("DeepSeek timeout aborts request, releases lock, and refunds daily quota", 
   }
 });
 
+test("DeepSeek response body timeout returns a stable error and refunds daily quota", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let upstreamCalls = 0;
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamCalls += 1;
+
+    if (upstreamCalls === 1) {
+      return {
+        ok: true,
+        json: () => new Promise((resolve, reject) => {
+          options.signal.addEventListener("abort", () => {
+            reject(new DOMException("The operation was aborted.", "AbortError"));
+          });
+        })
+      };
+    }
+
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({
+              analysis: createQuickAnalysisPayload(),
+              dreamResultCard: createResultCardPayload()
+            })
+          }
+        }]
+      })
+    };
+  };
+  const accessControl = createAiAccessControl({
+    guestDailyLimit: 1,
+    guestRequestsPerMinute: 5,
+    maxConcurrentPerPrincipal: 1
+  });
+
+  try {
+    await withServer(async (baseUrl) => {
+      const first = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+      const firstPayload = await first.json();
+
+      assert.equal(first.status, 504);
+      assert.equal(firstPayload.error.code, "UPSTREAM_TIMEOUT");
+      assert.equal(firstPayload.usage.remaining, 1);
+
+      const second = await postDreamAnalysis(baseUrl, {
+        dreamText: "我在学校走廊里一直找不到教室，门发着光。",
+        analysisType: "quick"
+      });
+
+      assert.equal(second.status, 200);
+      assert.equal((await second.json()).usage.remaining, 0);
+    }, { accessControl, requestTimeoutMs: 5 });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
 function createAnalyticsQueryClient(rows = []) {
   return {
     from(tableName) {
