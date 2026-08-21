@@ -25,6 +25,15 @@ const {
 } = require("./server/productAnalytics");
 const { createMiniProgramDreamSyncService } = require("./server/miniprogramDreamSync");
 const { createWechatAuthService } = require("./server/wechatAuth");
+const {
+  buildDreamExtractionPrompt,
+  classifyDreamInput,
+  createDeterministicExtraction,
+  formatStructuredDreamContext,
+  mergeDreamExtractions,
+  normalizeDreamExtraction,
+  splitDreamIntoChunks
+} = require("./server/dreamPreprocessing");
 
 const app = express();
 const port = process.env.PORT || 3000;
@@ -33,6 +42,9 @@ const deepSeekModel = process.env.DEEPSEEK_MODEL || "deepseek-chat";
 const deepSeekInitialMaxTokens = 3600;
 const deepSeekRetryMaxTokens = 4000;
 const deepSeekCardMaxTokens = 2400;
+const deepSeekExtractionMaxTokens = 900;
+const maxExtractionConcurrency = 3;
+const maxExtractionAttemptMs = 15000;
 const maxDreamTextLength = 5000;
 const quickPromptVersion = "quick-analysis-v2";
 const defaultRequestTimeoutMs = parsePositiveInteger(process.env.AI_REQUEST_TIMEOUT_MS, 45000);
@@ -307,6 +319,13 @@ function setSafeAiDiagnostics(response, analyticsMeta) {
     }
     return safe;
   }, {});
+  const preprocessingMetrics = analyticsMeta.preprocessingMetrics || {};
+  const inputMode = ["direct", "long", "very_long"].includes(preprocessingMetrics.inputMode)
+    ? preprocessingMetrics.inputMode
+    : null;
+  const safePreprocessingMetric = (key) => Number.isFinite(Number(preprocessingMetrics[key]))
+    ? Math.max(0, Math.floor(Number(preprocessingMetrics[key])))
+    : null;
 
   response.locals.aiDiagnostics = {
     generationStage,
@@ -317,7 +336,19 @@ function setSafeAiDiagnostics(response, analyticsMeta) {
     finalErrorCode,
     upstreamResponseReceived: analyticsMeta.upstreamResponseReceived === true,
     upstreamResponses,
-    finishReasons
+    finishReasons,
+    inputCharacterCount: safePreprocessingMetric("inputCharacterCount"),
+    estimatedInputTokens: safePreprocessingMetric("estimatedInputTokens"),
+    inputMode,
+    preprocessingDurationMs: safePreprocessingMetric("preprocessingDurationMs"),
+    preprocessingChunkCount: safePreprocessingMetric("preprocessingChunkCount"),
+    preprocessingFallbackCount: safePreprocessingMetric("preprocessingFallbackCount"),
+    finalGenerationDurationMs: Number.isFinite(Number(analyticsMeta.finalGenerationDurationMs))
+      ? Math.max(0, Math.floor(Number(analyticsMeta.finalGenerationDurationMs)))
+      : null,
+    totalGenerationDurationMs: Number.isFinite(Number(analyticsMeta.totalGenerationDurationMs))
+      ? Math.max(0, Math.floor(Number(analyticsMeta.totalGenerationDurationMs)))
+      : null
   };
 }
 
@@ -472,7 +503,20 @@ function buildSystemPrompt() {
   ].join("\n");
 }
 
-function buildUserPrompt(dreamText) {
+function getQuickDreamContextLines(dreamText, options = {}) {
+  if (typeof options.structuredContext === "string" && options.structuredContext.trim()) {
+    return [
+      "以下是从用户原始记录中提取并规范化的结构化提取上下文，不是心理解释。",
+      "只可依据其中的原文证据和事件进行分析，不得把结构化字段当作事实之外的推断。",
+      "结构化提取上下文：",
+      options.structuredContext.trim()
+    ];
+  }
+
+  return ["梦境内容：", dreamText];
+}
+
+function buildUserPrompt(dreamText, options = {}) {
   const evidenceProfile = getDreamEvidenceProfile(dreamText);
   const analysisModeLines = evidenceProfile.limitedEvidence
     ? [
@@ -524,14 +568,13 @@ function buildUserPrompt(dreamText) {
     "  },",
     ...getResultCardEnvelopeSchemaLines("  ", { limitedEvidence: evidenceProfile.limitedEvidence }),
     "}",
-    "梦境内容：",
-    dreamText
+    ...getQuickDreamContextLines(dreamText, options)
   ].join("\n");
 }
 
-function buildQuickRetryUserPrompt(dreamText, issues) {
+function buildQuickRetryUserPrompt(dreamText, issues, options = {}) {
   return [
-    buildUserPrompt(dreamText),
+    buildUserPrompt(dreamText, options),
     "",
     "上一次输出没有通过质量检查，请修复以下缺失项后重新返回完整 JSON：",
     issues.map((issue) => `- ${issue}`).join("\n")
@@ -562,7 +605,7 @@ function formatValidatedQuickAnalysisForPrompt(analysis) {
   });
 }
 
-function buildQuickResultCardRepairUserPrompt(dreamText, analysis, issues) {
+function buildQuickResultCardRepairUserPrompt(dreamText, analysis, issues, options = {}) {
   return [
     "请只返回完整梦境画像 JSON 对象本身；不要重新生成或改写 analysis。",
     "你必须使用下面已通过校验的快速解析作为同一上下文依据，保持画像与文字分析一致。",
@@ -579,12 +622,11 @@ function buildQuickResultCardRepairUserPrompt(dreamText, analysis, issues) {
     issues.map((issue) => `- ${issue}`).join("\n"),
     "已验证 analysis：",
     formatValidatedQuickAnalysisForPrompt(analysis),
-    "梦境内容：",
-    dreamText
+    ...getQuickDreamContextLines(dreamText, options)
   ].join("\n");
 }
 
-function buildLimitedEvidenceResultCardUserPrompt(dreamText, analysis, issues) {
+function buildLimitedEvidenceResultCardUserPrompt(dreamText, analysis, issues, options = {}) {
   return [
     "请生成一个基于有限线索的最小完整 Dream Result Card。",
     "请只返回完整梦境画像 JSON 对象本身。",
@@ -603,8 +645,7 @@ function buildLimitedEvidenceResultCardUserPrompt(dreamText, analysis, issues) {
     issues.map((issue) => `- ${issue}`).join("\n"),
     "已验证 analysis：",
     analysis ? formatValidatedQuickAnalysisForPrompt(analysis) : "无已验证快速解析，请仅依据梦境内容生成画像。",
-    "梦境内容：",
-    dreamText
+    ...getQuickDreamContextLines(dreamText, options)
   ].join("\n");
 }
 
@@ -1576,6 +1617,9 @@ async function recordAiUsageEvent(context) {
     stageDurations: context.analyticsMeta && context.analyticsMeta.stageDurations,
     validationIssueCodes: context.analyticsMeta && context.analyticsMeta.validationIssueCodes,
     finalErrorCode: context.analyticsMeta && context.analyticsMeta.finalErrorCode,
+    preprocessingMetrics: context.analyticsMeta && context.analyticsMeta.preprocessingMetrics,
+    finalGenerationDurationMs: context.analyticsMeta && context.analyticsMeta.finalGenerationDurationMs,
+    totalGenerationDurationMs: context.analyticsMeta && context.analyticsMeta.totalGenerationDurationMs,
     env: analyticsEnv
   });
 
@@ -1606,15 +1650,15 @@ function getUserPrompt(dreamText, analysisType, options = {}) {
     return buildGuidedFinalUserPrompt(dreamText, options.guidedAnswers);
   }
 
-  return buildUserPrompt(dreamText);
+  return buildUserPrompt(dreamText, options);
 }
 
-function getRetryUserPrompt(dreamText, analysisType, issues) {
+function getRetryUserPrompt(dreamText, analysisType, issues, options = {}) {
   if (analysisType === "result_card") {
     return buildResultCardRetryUserPrompt(dreamText, issues);
   }
 
-  return buildQuickRetryUserPrompt(dreamText, issues);
+  return buildQuickRetryUserPrompt(dreamText, issues, options);
 }
 
 function getDeepSeekMaxTokens(analysisType, options = {}) {
@@ -1659,7 +1703,7 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
             content: options.userPrompt
               ? options.userPrompt
               : options.retryIssues && options.retryIssues.length
-              ? getRetryUserPrompt(dreamText, analysisType, options.retryIssues)
+              ? getRetryUserPrompt(dreamText, analysisType, options.retryIssues, options)
               : getUserPrompt(dreamText, analysisType, options)
           }
         ]
@@ -1709,7 +1753,166 @@ async function requestDeepSeekCompletion(dreamText, analysisType, options = {}) 
   };
 }
 
+async function requestDreamExtractionCompletion(chunk, metadata, signal) {
+  const apiKey = process.env.DEEPSEEK_API_KEY;
+
+  if (!apiKey) {
+    throw createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+  }
+
+  let response;
+  try {
+    response = await fetch(`${deepSeekBaseUrl}/chat/completions`, {
+      method: "POST",
+      signal,
+      headers: {
+        Authorization: `Bearer ${apiKey}`,
+        "Content-Type": "application/json"
+      },
+      body: JSON.stringify({
+        model: deepSeekModel,
+        temperature: 0.1,
+        max_tokens: deepSeekExtractionMaxTokens,
+        response_format: { type: "json_object" },
+        messages: [
+          { role: "system", content: "你是梦境记录的事实提取器，只能提取输入中明确出现的信息。" },
+          { role: "user", content: buildDreamExtractionPrompt(chunk, metadata) }
+        ]
+      })
+    });
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504);
+    }
+    throw createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+  }
+
+  if (!response.ok) {
+    throw createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+  }
+
+  let data;
+  try {
+    data = await response.json();
+  } catch (error) {
+    if (error && error.name === "AbortError") {
+      throw createApiError("UPSTREAM_TIMEOUT", "AI 暂时没有及时回应，请稍后再试。", 504);
+    }
+    throw createApiError("UPSTREAM_UNAVAILABLE", "梦境解析服务暂时不可用，请稍后再试。", 502);
+  }
+
+  const content = data && data.choices && data.choices[0] && data.choices[0].message
+    ? data.choices[0].message.content
+    : "";
+  return {
+    parsed: typeof content === "string" ? parseJsonObject(content) : null,
+    usage: data && data.usage ? data.usage : null
+  };
+}
+
+function hasExtractionEvidence(extraction) {
+  return Boolean(
+    extraction
+    && typeof extraction === "object"
+    && Object.values(extraction).some((value) => Array.isArray(value) && value.length)
+  );
+}
+
+async function extractDreamChunk(chunk, chunkCount, totalDeadlineAt) {
+  const remainingTotalMs = totalDeadlineAt - Date.now();
+  if (remainingTotalMs <= 0) {
+    return {
+      extraction: createDeterministicExtraction(chunk.text, chunk.index),
+      usage: null,
+      usedFallback: true
+    };
+  }
+
+  const abortController = new AbortController();
+  const timeout = setTimeout(
+    () => abortController.abort(),
+    Math.max(1, Math.min(maxExtractionAttemptMs, remainingTotalMs))
+  );
+  if (typeof timeout.unref === "function") {
+    timeout.unref();
+  }
+
+  try {
+    const completion = await requestDreamExtractionCompletion(
+      chunk.text,
+      { chunkIndex: chunk.index, chunkCount },
+      abortController.signal
+    );
+    const extraction = normalizeDreamExtraction(completion.parsed, chunk.text, chunk.index);
+    if (hasExtractionEvidence(extraction)) {
+      return { extraction, usage: completion.usage, usedFallback: false };
+    }
+    return {
+      extraction: createDeterministicExtraction(chunk.text, chunk.index),
+      usage: completion.usage,
+      usedFallback: true
+    };
+  } catch (error) {
+    return {
+      extraction: createDeterministicExtraction(chunk.text, chunk.index),
+      usage: null,
+      usedFallback: true
+    };
+  } finally {
+    clearTimeout(timeout);
+  }
+}
+
+async function preprocessDreamForAnalysis(dreamText, options = {}) {
+  const classification = classifyDreamInput(dreamText);
+  const startedAt = Date.now();
+  const metrics = {
+    inputCharacterCount: classification.characterCount,
+    estimatedInputTokens: classification.estimatedTokenCount,
+    inputMode: classification.mode,
+    preprocessingDurationMs: 0,
+    preprocessingChunkCount: 0,
+    preprocessingFallbackCount: 0
+  };
+
+  if (classification.mode === "direct") {
+    return { context: null, metrics, usage: null };
+  }
+
+  const chunks = classification.mode === "very_long"
+    ? splitDreamIntoChunks(dreamText)
+    : [{ index: 0, text: dreamText }];
+  const totalDeadlineAt = options.totalDeadlineAt || Date.now() + defaultTotalRequestTimeoutMs;
+  const results = new Array(chunks.length);
+  let nextChunkIndex = 0;
+  const workerCount = Math.min(maxExtractionConcurrency, chunks.length);
+
+  await Promise.all(Array.from({ length: workerCount }, async () => {
+    while (nextChunkIndex < chunks.length) {
+      const chunk = chunks[nextChunkIndex];
+      nextChunkIndex += 1;
+      results[chunk.index] = await extractDreamChunk(chunk, chunks.length, totalDeadlineAt);
+    }
+  }));
+
+  const extractions = results.map((result) => result.extraction);
+  const usage = results.reduce(
+    (combined, result) => combineUpstreamUsage(combined, result.usage),
+    null
+  );
+  metrics.preprocessingDurationMs = Date.now() - startedAt;
+  metrics.preprocessingChunkCount = chunks.length;
+  metrics.preprocessingFallbackCount = results.filter((result) => result.usedFallback).length;
+
+  return {
+    context: formatStructuredDreamContext(mergeDreamExtractions(extractions, dreamText), dreamText),
+    metrics,
+    usage
+  };
+}
+
 async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
+  const totalGenerationStartedAt = Date.now();
   const analyticsMeta = {
     upstreamUsage: null,
     qualityRetryCount: 0,
@@ -1722,6 +1925,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
     upstreamResponses: {},
     finishReasons: {}
   };
+  let finalGenerationStartedAt = totalGenerationStartedAt;
   const timeoutConfig = options.timeoutConfig || {
     initialAttemptMs: defaultInitialAttemptTimeoutMs,
     repairAttemptMs: defaultRepairAttemptTimeoutMs,
@@ -1732,8 +1936,24 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
   const requestOptions = { ...options };
   delete requestOptions.signal;
   delete requestOptions.timeoutConfig;
-  let completion;
   try {
+    if (analysisType === "quick") {
+      const finalReserveMs = Math.min(
+        timeoutConfig.initialAttemptMs,
+        Math.max(1, timeoutConfig.totalRequestMs - 1)
+      );
+      const preprocessing = await preprocessDreamForAnalysis(dreamText, {
+        totalDeadlineAt: totalDeadlineAt - finalReserveMs
+      });
+      analyticsMeta.preprocessingMetrics = preprocessing.metrics;
+      analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, preprocessing.usage);
+      if (preprocessing.context) {
+        requestOptions.structuredContext = preprocessing.context;
+      }
+    }
+    finalGenerationStartedAt = Date.now();
+    let completion;
+    try {
     completion = await runDeepSeekStage(
       "initial",
       timeoutConfig.initialAttemptMs,
@@ -1741,11 +1961,11 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
       (signal) => requestDeepSeekCompletion(dreamText, analysisType, { ...requestOptions, signal }),
       analyticsMeta
     );
-  } catch (error) {
-    analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
-    error.analyticsMeta = analyticsMeta;
-    throw error;
-  }
+    } catch (error) {
+      analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
+      error.analyticsMeta = analyticsMeta;
+      throw error;
+    }
   const parsed = completion.parsed;
   analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, completion.usage);
   let normalized = null;
@@ -1836,7 +2056,12 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
           totalDeadlineAt,
           (signal) => requestDeepSeekCompletion(dreamText, analysisType, {
             ...requestOptions,
-            userPrompt: buildQuickResultCardRepairUserPrompt(dreamText, result.analysis, result.issues),
+            userPrompt: buildQuickResultCardRepairUserPrompt(
+              dreamText,
+              result.analysis,
+              result.issues,
+              requestOptions
+            ),
             signal
           }),
           analyticsMeta
@@ -1859,7 +2084,12 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
             totalDeadlineAt,
             (signal) => requestDeepSeekCompletion(dreamText, analysisType, {
               ...requestOptions,
-              userPrompt: buildLimitedEvidenceResultCardUserPrompt(dreamText, result.analysis, repairedCard.issues),
+              userPrompt: buildLimitedEvidenceResultCardUserPrompt(
+                dreamText,
+                result.analysis,
+                repairedCard.issues,
+                requestOptions
+              ),
               signal
             }),
             analyticsMeta
@@ -1951,7 +2181,12 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
     normalized.__analyticsMeta = analyticsMeta;
   }
 
-  return normalized;
+    return normalized;
+  } finally {
+    const completedAt = Date.now();
+    analyticsMeta.finalGenerationDurationMs = completedAt - finalGenerationStartedAt;
+    analyticsMeta.totalGenerationDurationMs = completedAt - totalGenerationStartedAt;
+  }
 }
 
 async function handleDreamAnalysisRequest(request, response) {
@@ -2452,6 +2687,7 @@ module.exports = {
   normalizeQuickCombinedOutput,
   normalizeDeepSeekOutput,
   normalizeDeepSeekResultCardOutput,
+  preprocessDreamForAnalysis,
   validateQuickAnalysisQuality,
   validateResultCardQuality,
   requestDeepSeekAnalysis,

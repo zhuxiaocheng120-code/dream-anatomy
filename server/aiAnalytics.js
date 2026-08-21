@@ -30,7 +30,7 @@ function toNonNegativeNumber(value) {
 }
 
 function sanitizeGenerationStage(value) {
-  return ["initial", "repair", "limited"].includes(value) ? value : null;
+  return ["preprocessing", "initial", "repair", "limited"].includes(value) ? value : null;
 }
 
 function sanitizeErrorCode(value) {
@@ -45,7 +45,7 @@ function sanitizeStageDurations(value) {
   }
 
   const durations = {};
-  ["initial", "repair", "limited"].forEach((stage) => {
+  ["preprocessing", "initial", "repair", "limited"].forEach((stage) => {
     const duration = toNonNegativeInteger(value[stage]);
     if (duration !== null) {
       durations[stage] = duration;
@@ -53,6 +53,22 @@ function sanitizeStageDurations(value) {
   });
 
   return Object.keys(durations).length ? durations : null;
+}
+
+function sanitizePreprocessingMetrics(value) {
+  const metrics = value && typeof value === "object" && !Array.isArray(value) ? value : {};
+  const inputMode = ["direct", "long", "very_long"].includes(metrics.inputMode)
+    ? metrics.inputMode
+    : null;
+
+  return {
+    inputCharacterCount: toNonNegativeInteger(metrics.inputCharacterCount),
+    estimatedInputTokens: toNonNegativeInteger(metrics.estimatedInputTokens),
+    inputMode,
+    preprocessingDurationMs: toNonNegativeInteger(metrics.preprocessingDurationMs),
+    preprocessingChunkCount: toNonNegativeInteger(metrics.preprocessingChunkCount),
+    preprocessingFallbackCount: toNonNegativeInteger(metrics.preprocessingFallbackCount)
+  };
 }
 
 function sanitizeValidationIssueCodes(value) {
@@ -103,7 +119,10 @@ function buildUsageEvent(context = {}) {
     generation_stage: sanitizeGenerationStage(context.generationStage),
     stage_durations: sanitizeStageDurations(context.stageDurations),
     validation_issue_codes: sanitizeValidationIssueCodes(context.validationIssueCodes),
-    final_error_code: sanitizeErrorCode(context.finalErrorCode)
+    final_error_code: sanitizeErrorCode(context.finalErrorCode),
+    preprocessing_metrics: sanitizePreprocessingMetrics(context.preprocessingMetrics),
+    final_generation_duration_ms: toNonNegativeInteger(context.finalGenerationDurationMs),
+    total_generation_duration_ms: toNonNegativeInteger(context.totalGenerationDurationMs)
   };
 }
 
