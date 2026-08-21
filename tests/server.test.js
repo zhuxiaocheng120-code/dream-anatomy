@@ -1339,6 +1339,206 @@ test("returns quick analysis and result card from one final request", { concurre
   }
 });
 
+function createExtractionPayload(sourceText) {
+  const evidence = sourceText.slice(0, 120);
+  return {
+    people: [],
+    locations: [],
+    events: [{ order: 1, description: evidence, evidence }],
+    transitions: [],
+    emotions: [],
+    notableObjects: [],
+    recurringElements: [],
+    ambiguities: [],
+    evidenceFragments: [evidence]
+  };
+}
+
+function isDreamExtractionRequest(body) {
+  return body.messages[1].content.includes("梦境记录的事实提取器");
+}
+
+test("keeps 200-character direct quick dreams on one final request", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const upstreamBodies = [];
+  const dreamText = "我梦见自己在学校走廊里反复寻找教室，却始终没有到达，外面下着雨，最后停在一扇发光的门前。".repeat(5).slice(0, 200);
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    upstreamBodies.push(JSON.parse(options.body));
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify({ analysis: createQuickAnalysisPayload(), dreamResultCard: createResultCardPayload() })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, { dreamText, analysisType: "quick" });
+
+      assert.equal(response.status, 200);
+      assert.equal(upstreamBodies.length, 1);
+      assert.equal(isDreamExtractionRequest(upstreamBodies[0]), false);
+      assert.match(upstreamBodies[0].messages[1].content, new RegExp(dreamText));
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("preprocesses long dreams into compact structured context before quick analysis", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const upstreamBodies = [];
+  const inserted = [];
+  const dreamText = "我梦见自己在学校走廊里反复寻找教室，却始终没有到达，外面下着雨，最后停在一扇发光的门前。".repeat(20);
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    const body = JSON.parse(options.body);
+    upstreamBodies.push(body);
+    const extraction = isDreamExtractionRequest(body);
+    return {
+      ok: true,
+      json: async () => ({
+        usage: extraction
+          ? { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 }
+          : { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 },
+        choices: [{
+          message: {
+            content: JSON.stringify(extraction
+              ? createExtractionPayload(body.messages[1].content.split("输入文本：\n")[1])
+              : { analysis: createQuickAnalysisPayload(), dreamResultCard: createResultCardPayload() })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, { dreamText, analysisType: "quick" });
+
+      assert.equal(response.status, 200);
+      assert.equal(upstreamBodies.length, 2);
+      const [extractionRequest, finalRequest] = upstreamBodies;
+      assert.equal(isDreamExtractionRequest(extractionRequest), true);
+      assert.equal(extractionRequest.temperature, 0.1);
+      assert.equal(extractionRequest.max_tokens, 900);
+      assert.deepEqual(extractionRequest.response_format, { type: "json_object" });
+      assert.match(finalRequest.messages[1].content, /结构化提取上下文/);
+      assert.doesNotMatch(finalRequest.messages[1].content, new RegExp(dreamText));
+      assert.equal(inserted.length, 1);
+      assert.equal(inserted[0].prompt_tokens, 105);
+      assert.equal(inserted[0].completion_tokens, 207);
+      assert.equal(inserted[0].total_tokens, 312);
+    }, {
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("long dream quick card repairs retain compact structured context", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const upstreamBodies = [];
+  const dreamText = "我梦见自己在学校走廊里反复寻找教室，却始终没有到达，外面下着雨，最后停在一扇发光的门前。".repeat(20);
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    const body = JSON.parse(options.body);
+    upstreamBodies.push(body);
+    const extraction = isDreamExtractionRequest(body);
+    const finalOrRepairIndex = upstreamBodies.filter((item) => !isDreamExtractionRequest(item)).length;
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify(extraction
+              ? createExtractionPayload(body.messages[1].content.split("输入文本：\n")[1])
+              : finalOrRepairIndex === 1
+              ? { analysis: createQuickAnalysisPayload(), dreamResultCard: {} }
+              : { dreamResultCard: createResultCardPayload() })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, { dreamText, analysisType: "quick" });
+
+      assert.equal(response.status, 200);
+      const finalAndRepairRequests = upstreamBodies.filter((body) => !isDreamExtractionRequest(body));
+      assert.equal(finalAndRepairRequests.length, 2);
+      finalAndRepairRequests.forEach((request) => {
+        assert.match(request.messages[1].content, /结构化提取上下文/);
+        assert.doesNotMatch(request.messages[1].content, new RegExp(dreamText));
+      });
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("preprocesses very long dreams in chunks before one quick final request", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const upstreamBodies = [];
+  const dreamText = "我梦见自己在学校走廊里反复寻找教室，却始终没有到达，外面下着雨，最后停在一扇发光的门前。".repeat(75);
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    const body = JSON.parse(options.body);
+    upstreamBodies.push(body);
+    const extraction = isDreamExtractionRequest(body);
+    return {
+      ok: true,
+      json: async () => ({
+        choices: [{
+          message: {
+            content: JSON.stringify(extraction
+              ? createExtractionPayload(body.messages[1].content.split("输入文本：\n")[1])
+              : { analysis: createQuickAnalysisPayload(), dreamResultCard: createResultCardPayload() })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, { dreamText, analysisType: "quick" });
+
+      assert.equal(response.status, 200);
+      const extractionRequests = upstreamBodies.filter(isDreamExtractionRequest);
+      const finalRequests = upstreamBodies.filter((body) => !isDreamExtractionRequest(body));
+      assert.ok(extractionRequests.length > 1);
+      assert.equal(finalRequests.length, 1);
+      assert.match(finalRequests[0].messages[1].content, /结构化提取上下文/);
+      assert.doesNotMatch(finalRequests[0].messages[1].content, new RegExp(dreamText));
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
 test("v1 dream-analysis route uses the same protected handler as the legacy alias", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   global.fetch = async (url, options) => {
@@ -1468,7 +1668,7 @@ test("initial timeout emits safe stage diagnostics without private content", { c
       assert.equal(diagnostics[0].finalErrorCode, "INITIAL_TIMEOUT");
       assert.equal(typeof diagnostics[0].stageDurations.initial, "number");
       assert.equal(diagnostics[0].upstreamResponseReceived, false);
-      assert.doesNotMatch(JSON.stringify(diagnostics), /学校|教室|下雨|token|Authorization|test-key/i);
+      assert.doesNotMatch(JSON.stringify(diagnostics), /学校|教室|下雨|Bearer|Authorization|test-key/i);
     }, {
       safeNetworkDebugLogger: (entry) => diagnostics.push(entry),
       aiTimeoutConfig: {
