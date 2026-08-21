@@ -99,6 +99,52 @@ test("normalizeDreamExtraction removes invented labels even when their evidence 
   assert.deepEqual(extraction.events, []);
 });
 
+test("normalizeDreamExtraction keeps oversized local order values before later chunks", () => {
+  const firstChunk = normalizeDreamExtraction(
+    {
+      events: [{ order: 1002, description: "看见月亮", evidence: "看见月亮" }]
+    },
+    "看见月亮。",
+    0
+  );
+  const secondChunk = normalizeDreamExtraction(
+    {
+      events: [{ order: 1, description: "走进学校", evidence: "走进学校" }]
+    },
+    "走进学校。",
+    1
+  );
+  const merged = mergeDreamExtractions([firstChunk, secondChunk], "看见月亮。走进学校。");
+
+  assert.deepEqual(merged.events.map((event) => event.description), ["看见月亮", "走进学校"]);
+});
+
+test("normalization and merge bound raw arrays before traversing them", () => {
+  const oversizedPeople = Array.from({ length: MAX_COLLECTION_ITEMS + 1 }, (_, index) => ({
+    name: `人物${index + 1}`,
+    evidence: `人物${index + 1}`
+  }));
+  Object.defineProperty(oversizedPeople, MAX_COLLECTION_ITEMS, {
+    get() {
+      throw new Error("raw collection exceeded bound");
+    }
+  });
+  const source = Array.from({ length: MAX_COLLECTION_ITEMS }, (_, index) => `人物${index + 1}`).join("、");
+
+  assert.doesNotThrow(() => normalizeDreamExtraction({ people: oversizedPeople }, source, 0));
+
+  const extractions = Array.from({ length: MAX_COLLECTION_ITEMS + 1 }, () => ({
+    people: [{ name: "人物1", evidence: "人物1" }]
+  }));
+  Object.defineProperty(extractions, MAX_COLLECTION_ITEMS, {
+    get() {
+      throw new Error("extraction list exceeded bound");
+    }
+  });
+
+  assert.doesNotThrow(() => mergeDreamExtractions(extractions, source));
+});
+
 test("createDeterministicExtraction fallback contains only source sentences and fragments", () => {
   const source = "我走进学校。\n看见红色的门！";
   const extraction = createDeterministicExtraction(source, 2);

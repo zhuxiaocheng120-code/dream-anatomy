@@ -8,6 +8,8 @@ const MAX_COLLECTION_ITEMS = 12;
 const MAX_EVIDENCE_FRAGMENTS = 24;
 const MAX_TEXT_LENGTH = 300;
 const MAX_EVIDENCE_LENGTH = 500;
+const MAX_EXTRACTION_ITEMS = 12;
+const CHUNK_ORDER_STRIDE = MAX_COLLECTION_ITEMS + 1;
 
 const ENTITY_FIELDS = ["people", "locations", "emotions", "notableObjects", "recurringElements"];
 const ORDERED_FIELDS = ["events", "transitions"];
@@ -67,13 +69,19 @@ function stableUnique(items, keyForItem, limit) {
   return result;
 }
 
+function limitedArray(value, limit) {
+  return Array.isArray(value) ? value.slice(0, limit) : [];
+}
+
 function globalOrder(order, chunkIndex) {
-  const localOrder = Number.isFinite(Number(order)) ? Math.max(0, Math.floor(Number(order))) : 0;
+  const localOrder = Number.isFinite(Number(order))
+    ? Math.min(Math.max(0, Math.floor(Number(order))), CHUNK_ORDER_STRIDE - 1)
+    : 0;
   const normalizedChunkIndex = Number.isFinite(Number(chunkIndex))
     ? Math.max(0, Math.floor(Number(chunkIndex)))
     : 0;
 
-  return normalizedChunkIndex * 1000 + localOrder;
+  return normalizedChunkIndex * CHUNK_ORDER_STRIDE + localOrder;
 }
 
 function normalizeEntity(item, sourceNormalized) {
@@ -267,7 +275,7 @@ function normalizeDreamExtraction(raw, sourceText, chunkIndex) {
   const normalized = emptyExtraction();
 
   for (const field of ENTITY_FIELDS) {
-    const items = Array.isArray(raw[field]) ? raw[field] : [];
+    const items = limitedArray(raw[field], MAX_COLLECTION_ITEMS);
     normalized[field] = stableUnique(
       items.map((item) => normalizeEntity(item, sourceNormalized)).filter(Boolean),
       (item) => normalizedKey(item.name),
@@ -276,7 +284,7 @@ function normalizeDreamExtraction(raw, sourceText, chunkIndex) {
   }
 
   for (const field of ORDERED_FIELDS) {
-    const items = Array.isArray(raw[field]) ? raw[field] : [];
+    const items = limitedArray(raw[field], MAX_COLLECTION_ITEMS);
     normalized[field] = stableUnique(
       items.map((item) => normalizeOrderedItem(item, sourceNormalized, chunkIndex, false)).filter(Boolean),
       (item) => `${normalizedKey(item.description)}\u0000${normalizedKey(item.evidence)}`,
@@ -284,7 +292,7 @@ function normalizeDreamExtraction(raw, sourceText, chunkIndex) {
     ).sort((left, right) => left.order - right.order);
   }
 
-  const ambiguities = Array.isArray(raw.ambiguities) ? raw.ambiguities : [];
+  const ambiguities = limitedArray(raw.ambiguities, MAX_COLLECTION_ITEMS);
   normalized.ambiguities = stableUnique(
     ambiguities
       .map((item) => boundedString(item))
@@ -293,7 +301,7 @@ function normalizeDreamExtraction(raw, sourceText, chunkIndex) {
     MAX_COLLECTION_ITEMS
   );
 
-  const evidenceFragments = Array.isArray(raw.evidenceFragments) ? raw.evidenceFragments : [];
+  const evidenceFragments = limitedArray(raw.evidenceFragments, MAX_EVIDENCE_FRAGMENTS);
   normalized.evidenceFragments = stableUnique(
     evidenceFragments
       .map((item) => boundedString(item, MAX_EVIDENCE_LENGTH))
@@ -335,11 +343,12 @@ function createDeterministicExtraction(sourceText, chunkIndex) {
 function mergeDreamExtractions(extractions, sourceText) {
   const sourceNormalized = normalizeWhitespace(sourceText);
   const merged = emptyExtraction();
-  const validExtractions = Array.isArray(extractions) ? extractions.filter((item) => item && typeof item === "object") : [];
+  const validExtractions = limitedArray(extractions, MAX_EXTRACTION_ITEMS)
+    .filter((item) => item && typeof item === "object");
 
   for (const field of ENTITY_FIELDS) {
     merged[field] = stableUnique(
-      validExtractions.flatMap((extraction) => Array.isArray(extraction[field]) ? extraction[field] : [])
+      validExtractions.flatMap((extraction) => limitedArray(extraction[field], MAX_COLLECTION_ITEMS))
         .map((item) => normalizeEntity(item, sourceNormalized))
         .filter(Boolean),
       (item) => normalizedKey(item.name),
@@ -349,7 +358,7 @@ function mergeDreamExtractions(extractions, sourceText) {
 
   for (const field of ORDERED_FIELDS) {
     merged[field] = stableUnique(
-      validExtractions.flatMap((extraction) => Array.isArray(extraction[field]) ? extraction[field] : [])
+      validExtractions.flatMap((extraction) => limitedArray(extraction[field], MAX_COLLECTION_ITEMS))
         .map((item) => normalizeOrderedItem(item, sourceNormalized, 0, true))
         .filter(Boolean)
         .sort((left, right) => left.order - right.order),
@@ -359,14 +368,14 @@ function mergeDreamExtractions(extractions, sourceText) {
   }
 
   merged.ambiguities = stableUnique(
-    validExtractions.flatMap((extraction) => Array.isArray(extraction.ambiguities) ? extraction.ambiguities : [])
+    validExtractions.flatMap((extraction) => limitedArray(extraction.ambiguities, MAX_COLLECTION_ITEMS))
       .map((item) => boundedString(item))
       .filter((item) => sourceContains(sourceNormalized, item)),
     normalizedKey,
     MAX_COLLECTION_ITEMS
   );
   merged.evidenceFragments = stableUnique(
-    validExtractions.flatMap((extraction) => Array.isArray(extraction.evidenceFragments) ? extraction.evidenceFragments : [])
+    validExtractions.flatMap((extraction) => limitedArray(extraction.evidenceFragments, MAX_EVIDENCE_FRAGMENTS))
       .map((item) => boundedString(item, MAX_EVIDENCE_LENGTH))
       .filter((item) => sourceContains(sourceNormalized, item)),
     normalizedKey,
