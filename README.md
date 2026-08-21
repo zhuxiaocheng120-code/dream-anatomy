@@ -169,6 +169,10 @@ Default Beta limits:
 
 Quick analysis may perform up to three upstream stages: the initial combined analysis/result-card request, a directed result-card repair, and a limited-evidence final card generation. Each stage gets its own timeout, while `AI_TOTAL_REQUEST_TIMEOUT_MS` remains the hard upper bound for the full request. `AI_REQUEST_TIMEOUT_MS` is kept as a legacy fallback for older local setups, but new deployments should prefer the staged settings above.
 
+Quick analysis keeps inputs under the existing inclusive 5,000-character ceiling. Inputs below both 800 characters and 650 estimated tokens use the direct path; inputs at or above either threshold use one extraction pass, and inputs at or above 2,200 characters or 2,000 estimated tokens use sentence-aware chunks. A failed or incomplete extraction falls back to deterministic source-only extraction and still leaves the final analysis to DeepSeek. The existing 90-second total timeout remains unchanged. Operational targets are usually under 20 seconds for normal inputs, under 30 seconds for long inputs, and preferably under 40 seconds for very long inputs.
+
+For operational troubleshooting, the server keeps private, safe diagnostics only in memory and optional safe request logs: character/token counts, mode, preprocessing duration/chunk/fallback counts, final-generation duration, total-generation duration, and stable error codes. These diagnostics never enter the API response or `ai_usage_events`; dream text, extracted content, model output, identity values, tokens, and secrets are never logged.
+
 These limits use an in-memory counter suitable for the current single-instance Beta. Render restarts reset the counters, and multiple instances would not share them. Before a larger public release, this should move to Redis or another shared persistent limiter.
 
 Deep guidance is still visible as “正在开发中”. When `DEEP_GUIDANCE_ENABLED=false`, `guided_questions` and `guided_final` are rejected by the server before quota usage or DeepSeek calls.

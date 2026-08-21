@@ -342,7 +342,13 @@ function setSafeAiDiagnostics(response, analyticsMeta) {
     inputMode,
     preprocessingDurationMs: safePreprocessingMetric("preprocessingDurationMs"),
     preprocessingChunkCount: safePreprocessingMetric("preprocessingChunkCount"),
-    preprocessingFallbackCount: safePreprocessingMetric("preprocessingFallbackCount")
+    preprocessingFallbackCount: safePreprocessingMetric("preprocessingFallbackCount"),
+    finalGenerationDurationMs: Number.isFinite(Number(analyticsMeta.finalGenerationDurationMs))
+      ? Math.max(0, Math.floor(Number(analyticsMeta.finalGenerationDurationMs)))
+      : null,
+    totalGenerationDurationMs: Number.isFinite(Number(analyticsMeta.totalGenerationDurationMs))
+      ? Math.max(0, Math.floor(Number(analyticsMeta.totalGenerationDurationMs)))
+      : null
   };
 }
 
@@ -1611,6 +1617,9 @@ async function recordAiUsageEvent(context) {
     stageDurations: context.analyticsMeta && context.analyticsMeta.stageDurations,
     validationIssueCodes: context.analyticsMeta && context.analyticsMeta.validationIssueCodes,
     finalErrorCode: context.analyticsMeta && context.analyticsMeta.finalErrorCode,
+    preprocessingMetrics: context.analyticsMeta && context.analyticsMeta.preprocessingMetrics,
+    finalGenerationDurationMs: context.analyticsMeta && context.analyticsMeta.finalGenerationDurationMs,
+    totalGenerationDurationMs: context.analyticsMeta && context.analyticsMeta.totalGenerationDurationMs,
     env: analyticsEnv
   });
 
@@ -1903,6 +1912,7 @@ async function preprocessDreamForAnalysis(dreamText, options = {}) {
 }
 
 async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
+  const totalGenerationStartedAt = Date.now();
   const analyticsMeta = {
     upstreamUsage: null,
     qualityRetryCount: 0,
@@ -1915,6 +1925,7 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
     upstreamResponses: {},
     finishReasons: {}
   };
+  let finalGenerationStartedAt = totalGenerationStartedAt;
   const timeoutConfig = options.timeoutConfig || {
     initialAttemptMs: defaultInitialAttemptTimeoutMs,
     repairAttemptMs: defaultRepairAttemptTimeoutMs,
@@ -1925,22 +1936,24 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
   const requestOptions = { ...options };
   delete requestOptions.signal;
   delete requestOptions.timeoutConfig;
-  if (analysisType === "quick") {
-    const finalReserveMs = Math.min(
-      timeoutConfig.initialAttemptMs,
-      Math.max(1, timeoutConfig.totalRequestMs - 1)
-    );
-    const preprocessing = await preprocessDreamForAnalysis(dreamText, {
-      totalDeadlineAt: totalDeadlineAt - finalReserveMs
-    });
-    analyticsMeta.preprocessingMetrics = preprocessing.metrics;
-    analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, preprocessing.usage);
-    if (preprocessing.context) {
-      requestOptions.structuredContext = preprocessing.context;
-    }
-  }
-  let completion;
   try {
+    if (analysisType === "quick") {
+      const finalReserveMs = Math.min(
+        timeoutConfig.initialAttemptMs,
+        Math.max(1, timeoutConfig.totalRequestMs - 1)
+      );
+      const preprocessing = await preprocessDreamForAnalysis(dreamText, {
+        totalDeadlineAt: totalDeadlineAt - finalReserveMs
+      });
+      analyticsMeta.preprocessingMetrics = preprocessing.metrics;
+      analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, preprocessing.usage);
+      if (preprocessing.context) {
+        requestOptions.structuredContext = preprocessing.context;
+      }
+    }
+    finalGenerationStartedAt = Date.now();
+    let completion;
+    try {
     completion = await runDeepSeekStage(
       "initial",
       timeoutConfig.initialAttemptMs,
@@ -1948,11 +1961,11 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
       (signal) => requestDeepSeekCompletion(dreamText, analysisType, { ...requestOptions, signal }),
       analyticsMeta
     );
-  } catch (error) {
-    analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
-    error.analyticsMeta = analyticsMeta;
-    throw error;
-  }
+    } catch (error) {
+      analyticsMeta.finalErrorCode = error.internalErrorCode || error.code || "UPSTREAM_UNAVAILABLE";
+      error.analyticsMeta = analyticsMeta;
+      throw error;
+    }
   const parsed = completion.parsed;
   analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, completion.usage);
   let normalized = null;
@@ -2168,7 +2181,12 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
     normalized.__analyticsMeta = analyticsMeta;
   }
 
-  return normalized;
+    return normalized;
+  } finally {
+    const completedAt = Date.now();
+    analyticsMeta.finalGenerationDurationMs = completedAt - finalGenerationStartedAt;
+    analyticsMeta.totalGenerationDurationMs = completedAt - totalGenerationStartedAt;
+  }
 }
 
 async function handleDreamAnalysisRequest(request, response) {

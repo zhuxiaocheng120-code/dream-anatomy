@@ -1499,6 +1499,114 @@ test("preprocesses long dreams into compact structured context before quick anal
   }
 });
 
+test("long dream diagnostics keep preprocessing telemetry private", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const diagnostics = [];
+  const inserted = [];
+  const sourceMarker = "私密长梦内容-不得记录";
+  const extractedMarker = "私密提取内容-不得记录";
+  const dreamText = `${sourceMarker}。我在学校走廊里反复寻找教室，外面下着雨，最后停在一扇发光的门前。`.repeat(20);
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    const body = JSON.parse(options.body);
+    const extraction = isDreamExtractionRequest(body);
+    return {
+      ok: true,
+      json: async () => ({
+        usage: extraction
+          ? { prompt_tokens: 5, completion_tokens: 7, total_tokens: 12 }
+          : { prompt_tokens: 100, completion_tokens: 200, total_tokens: 300 },
+        choices: [{
+          message: {
+            content: JSON.stringify(extraction
+              ? {
+                people: [],
+                locations: [],
+                events: [{ order: 1, description: "", evidence: extractedMarker }],
+                transitions: [],
+                emotions: [],
+                notableObjects: [],
+                recurringElements: [],
+                ambiguities: [],
+                evidenceFragments: []
+              }
+              : { analysis: createQuickAnalysisPayload(), dreamResultCard: createResultCardPayload() })
+          }
+        }]
+      })
+    };
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(
+        baseUrl,
+        { dreamText, analysisType: "quick" },
+        { path: "/api/v1/dream-analysis", headers: { "X-Request-Correlation-Id": "web-lz123456-1a2b3c4d" } }
+      );
+      const payload = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(payload.inputCharacterCount, undefined);
+      assert.equal(payload.preprocessingDurationMs, undefined);
+      assert.equal(payload.totalGenerationDurationMs, undefined);
+      await wait(10);
+
+      assert.equal(diagnostics.length, 1);
+      assert.deepEqual(
+        Object.keys(diagnostics[0]).sort(),
+        [
+          "estimatedInputTokens",
+          "finalErrorCode",
+          "finalGenerationDurationMs",
+          "finishReasons",
+          "generationStage",
+          "httpStatus",
+          "inputCharacterCount",
+          "inputMode",
+          "preprocessingChunkCount",
+          "preprocessingDurationMs",
+          "preprocessingFallbackCount",
+          "qualityRetryCount",
+          "requestCorrelationId",
+          "requestPath",
+          "safeErrorCode",
+          "stageDurations",
+          "totalGenerationDurationMs",
+          "upstreamResponseReceived",
+          "upstreamResponses"
+        ].sort()
+      );
+      assert.equal(diagnostics[0].inputMode, "long");
+      [
+        "inputCharacterCount",
+        "estimatedInputTokens",
+        "preprocessingDurationMs",
+        "preprocessingChunkCount",
+        "preprocessingFallbackCount",
+        "finalGenerationDurationMs",
+        "totalGenerationDurationMs"
+      ].forEach((key) => assert.equal(typeof diagnostics[0][key], "number", key));
+      assert.doesNotMatch(JSON.stringify({ diagnostics, inserted, payload }), new RegExp(`${sourceMarker}|${extractedMarker}`));
+    }, {
+      analyticsClient: {
+        from: () => ({
+          insert: async (event) => {
+            inserted.push(event);
+            return { error: null };
+          }
+        })
+      },
+      analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
+      awaitAnalyticsWrites: true,
+      safeNetworkDebugLogger: (entry) => diagnostics.push(entry)
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
 test("long dream extraction failures use compact deterministic context and continue", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   const dreamText = Array.from(

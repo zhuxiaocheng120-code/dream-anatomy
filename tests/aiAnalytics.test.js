@@ -175,6 +175,58 @@ test("buildUsageEvent keeps safe generation diagnostics separate from persisted 
   assert.equal(persisted.final_error_code, undefined);
 });
 
+test("preprocessing telemetry sanitizes safe diagnostics without persisting source content", () => {
+  const sourceMarker = "私密梦境片段-不得记录";
+  const extractedMarker = "提取内容-不得记录";
+  const event = buildUsageEvent({
+    requestId: "00000000-0000-4000-8000-000000000004",
+    occurredAt: new Date("2026-08-19T00:00:00.000Z"),
+    identity: { type: "guest" },
+    principalHash: "d".repeat(64),
+    analysisType: "quick",
+    outcome: "success",
+    durationMs: 1234,
+    generationStage: "preprocessing",
+    stageDurations: {
+      preprocessing: "24.9",
+      initial: 18,
+      dreamText: sourceMarker
+    },
+    preprocessingMetrics: {
+      inputCharacterCount: "900.8",
+      estimatedInputTokens: 700.2,
+      inputMode: "long",
+      preprocessingDurationMs: 24.9,
+      preprocessingChunkCount: 1.7,
+      preprocessingFallbackCount: -1,
+      extractedContent: extractedMarker
+    },
+    finalGenerationDurationMs: "31.6",
+    totalGenerationDurationMs: 56.7,
+    upstreamUsage: { total_tokens: 55 },
+    env: {}
+  });
+
+  assert.equal(event.generation_stage, "preprocessing");
+  assert.deepEqual(event.stage_durations, { preprocessing: 24, initial: 18 });
+  assert.deepEqual(event.preprocessing_metrics, {
+    inputCharacterCount: 900,
+    estimatedInputTokens: 700,
+    inputMode: "long",
+    preprocessingDurationMs: 24,
+    preprocessingChunkCount: 1,
+    preprocessingFallbackCount: null
+  });
+  assert.equal(event.final_generation_duration_ms, 31);
+  assert.equal(event.total_generation_duration_ms, 56);
+  assert.doesNotMatch(JSON.stringify(event), new RegExp(`${sourceMarker}|${extractedMarker}`));
+
+  const persisted = getPersistableUsageEvent(event);
+  assert.equal(persisted.preprocessing_metrics, undefined);
+  assert.equal(persisted.final_generation_duration_ms, undefined);
+  assert.equal(persisted.total_generation_duration_ms, undefined);
+});
+
 test("buildUsageEvent clamps invalid numeric fields to safe values", () => {
   const event = buildUsageEvent({
     requestId: "00000000-0000-4000-8000-000000000002",
