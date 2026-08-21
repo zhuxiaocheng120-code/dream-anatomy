@@ -290,6 +290,24 @@ test("structured context globally budgets deterministic fallback size and source
   assert.doesNotMatch(context, new RegExp(source));
 });
 
+test("structured context keeps shortened fallback evidence for unpunctuated long dreams", () => {
+  const source = "甲".repeat(800);
+  const fallback = createDeterministicExtraction(source, 0);
+  const context = formatStructuredDreamContext(
+    mergeDreamExtractions([fallback], source),
+    source
+  );
+  const representation = JSON.parse(context);
+  const event = representation.events[0];
+
+  assert.ok(event, "at least one source-traceable fallback event should remain");
+  assert.ok(source.includes(event.description));
+  assert.ok(source.includes(event.evidence));
+  assert.ok(event.description.length < source.length / 2);
+  assert.ok(getSourceCoverageLength(representation, source) < source.length / 2);
+  assert.doesNotMatch(context, new RegExp(source));
+});
+
 test("structured context globally budgets model extraction size and source coverage", () => {
   const sourceSegments = Array.from(
     { length: 9 },

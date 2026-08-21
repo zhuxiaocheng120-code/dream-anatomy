@@ -406,6 +406,112 @@ function shouldBudgetStructuredContext(sourceText) {
   return classifyDreamInput(sourceText).mode !== "direct";
 }
 
+function fitsStructuredBudget(candidate, maxSerializedLength, maxSourceCoverage, sourceNormalized) {
+  return (
+    JSON.stringify(candidate).length <= maxSerializedLength
+    && getSourceCoverageLength(candidate, sourceNormalized) <= maxSourceCoverage
+  );
+}
+
+function shortenTraceableFragment(value, sourceNormalized, maxLength) {
+  const normalized = normalizeWhitespace(value);
+  const boundedLength = Math.min(Math.max(0, Math.floor(Number(maxLength) || 0)), normalized.length);
+
+  if (!boundedLength || !sourceContains(sourceNormalized, normalized)) {
+    return "";
+  }
+
+  for (let length = boundedLength; length > 0; length -= 1) {
+    const fragment = normalized.slice(0, length).trim();
+    if (sourceContains(sourceNormalized, fragment)) {
+      return fragment;
+    }
+  }
+
+  return "";
+}
+
+function getRemainingFragmentBudget(compacted, maxSerializedLength, maxSourceCoverage, sourceNormalized) {
+  const remainingCoverage = maxSourceCoverage - getSourceCoverageLength(compacted, sourceNormalized);
+  const remainingSerialized = maxSerializedLength - JSON.stringify(compacted).length;
+
+  if (remainingCoverage <= 0 || remainingSerialized <= 0) {
+    return 0;
+  }
+
+  return Math.max(1, Math.floor(Math.min(
+    MAX_EVIDENCE_LENGTH,
+    remainingCoverage,
+    remainingSerialized / 3
+  )));
+}
+
+function shortenStructuredContextItem(field, item, sourceNormalized, maxFragmentLength) {
+  if (maxFragmentLength <= 0) {
+    return null;
+  }
+
+  if (ORDERED_FIELDS.includes(field)) {
+    const fragment = shortenTraceableFragment(item.evidence || item.description, sourceNormalized, maxFragmentLength);
+    return fragment ? { ...item, description: fragment, evidence: fragment } : null;
+  }
+
+  if (field === "evidenceFragments" || field === "ambiguities") {
+    const fragment = shortenTraceableFragment(item, sourceNormalized, maxFragmentLength);
+    return fragment || null;
+  }
+
+  if (ENTITY_FIELDS.includes(field) && item && typeof item === "object") {
+    const name = boundedString(item.name);
+    if (!name || !sourceContains(sourceNormalized, name)) {
+      return null;
+    }
+
+    const evidence = shortenTraceableFragment(item.evidence || name, sourceNormalized, maxFragmentLength);
+    return evidence ? { ...item, name, evidence } : null;
+  }
+
+  return null;
+}
+
+function appendStructuredContextItem(compacted, field, item, maxSerializedLength, maxSourceCoverage, sourceNormalized) {
+  const candidate = {
+    ...compacted,
+    [field]: [...compacted[field], item]
+  };
+
+  if (fitsStructuredBudget(candidate, maxSerializedLength, maxSourceCoverage, sourceNormalized)) {
+    return item;
+  }
+
+  let maxFragmentLength = getRemainingFragmentBudget(
+    compacted,
+    maxSerializedLength,
+    maxSourceCoverage,
+    sourceNormalized
+  );
+
+  while (maxFragmentLength > 0) {
+    const shortened = shortenStructuredContextItem(field, item, sourceNormalized, maxFragmentLength);
+    if (!shortened) {
+      return null;
+    }
+
+    const shortenedCandidate = {
+      ...compacted,
+      [field]: [...compacted[field], shortened]
+    };
+
+    if (fitsStructuredBudget(shortenedCandidate, maxSerializedLength, maxSourceCoverage, sourceNormalized)) {
+      return shortened;
+    }
+
+    maxFragmentLength = Math.floor(maxFragmentLength / 2);
+  }
+
+  return null;
+}
+
 function compactStructuredDreamRepresentation(representation, sourceText) {
   const normalizedRepresentation = representation && typeof representation === "object" && !Array.isArray(representation)
     ? representation
@@ -416,23 +522,26 @@ function compactStructuredDreamRepresentation(representation, sourceText) {
     return normalizedRepresentation;
   }
 
-  const maxSerializedLength = Math.min(MAX_STRUCTURED_CONTEXT_CHARACTERS, sourceNormalized.length);
+  const maxSerializedLength = Math.max(1, Math.min(
+    MAX_STRUCTURED_CONTEXT_CHARACTERS,
+    Math.floor(sourceNormalized.length * 0.75)
+  ));
   const maxSourceCoverage = Math.max(1, Math.floor(sourceNormalized.length * MAX_STRUCTURED_SOURCE_COVERAGE_RATIO));
   const compacted = emptyExtraction();
 
   CONTEXT_FIELD_PRIORITY.forEach((field) => {
     for (const item of limitedArray(normalizedRepresentation[field], collectionLimit(field))) {
-      const candidate = {
-        ...compacted,
-        [field]: [...compacted[field], item]
-      };
-      const serialized = JSON.stringify(candidate);
+      const compactedItem = appendStructuredContextItem(
+        compacted,
+        field,
+        item,
+        maxSerializedLength,
+        maxSourceCoverage,
+        sourceNormalized
+      );
 
-      if (
-        serialized.length <= maxSerializedLength
-        && getSourceCoverageLength(candidate, sourceNormalized) <= maxSourceCoverage
-      ) {
-        compacted[field] = candidate[field];
+      if (compactedItem) {
+        compacted[field] = [...compacted[field], compactedItem];
       }
     }
   });
