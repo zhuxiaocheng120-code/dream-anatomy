@@ -1896,7 +1896,7 @@ async function preprocessDreamForAnalysis(dreamText, options = {}) {
   metrics.preprocessingFallbackCount = results.filter((result) => result.usedFallback).length;
 
   return {
-    context: formatStructuredDreamContext(mergeDreamExtractions(extractions, dreamText)),
+    context: formatStructuredDreamContext(mergeDreamExtractions(extractions, dreamText), dreamText),
     metrics,
     usage
   };
@@ -1926,7 +1926,13 @@ async function requestDeepSeekAnalysis(dreamText, analysisType, options = {}) {
   delete requestOptions.signal;
   delete requestOptions.timeoutConfig;
   if (analysisType === "quick") {
-    const preprocessing = await preprocessDreamForAnalysis(dreamText, { totalDeadlineAt });
+    const finalReserveMs = Math.min(
+      timeoutConfig.initialAttemptMs,
+      Math.max(1, timeoutConfig.totalRequestMs - 1)
+    );
+    const preprocessing = await preprocessDreamForAnalysis(dreamText, {
+      totalDeadlineAt: totalDeadlineAt - finalReserveMs
+    });
     analyticsMeta.preprocessingMetrics = preprocessing.metrics;
     analyticsMeta.upstreamUsage = combineUpstreamUsage(analyticsMeta.upstreamUsage, preprocessing.usage);
     if (preprocessing.context) {

@@ -1358,6 +1358,48 @@ function isDreamExtractionRequest(body) {
   return body.messages[1].content.includes("梦境记录的事实提取器");
 }
 
+function getStructuredContextFromQuickPrompt(prompt) {
+  const marker = "结构化提取上下文：\n";
+  const start = prompt.indexOf(marker);
+  assert.notEqual(start, -1, "quick prompt should include structured context");
+  return JSON.parse(prompt.slice(start + marker.length));
+}
+
+function getStructuredSourceCoverageLength(representation, source) {
+  const sourceNormalized = source.replace(/\s+/g, " ").trim();
+  const fragments = [];
+  const visit = (value) => {
+    if (typeof value === "string") {
+      const normalized = value.replace(/\s+/g, " ").trim();
+      if (normalized && sourceNormalized.includes(normalized)) fragments.push(normalized);
+      return;
+    }
+    if (Array.isArray(value)) {
+      value.forEach(visit);
+    } else if (value && typeof value === "object") {
+      Object.values(value).forEach(visit);
+    }
+  };
+  visit(representation);
+
+  const ranges = fragments
+    .map((fragment) => {
+      const start = sourceNormalized.indexOf(fragment);
+      return { start, end: start + fragment.length };
+    })
+    .sort((left, right) => left.start - right.start);
+  let coverage = 0;
+  let currentEnd = 0;
+  ranges.forEach((range) => {
+    const start = Math.max(range.start, currentEnd);
+    if (range.end > start) {
+      coverage += range.end - start;
+      currentEnd = range.end;
+    }
+  });
+  return coverage;
+}
+
 test("keeps 200-character direct quick dreams on one final request", { concurrency: false }, async () => {
   const nativeFetch = global.fetch;
   const upstreamBodies = [];
@@ -1433,6 +1475,9 @@ test("preprocesses long dreams into compact structured context before quick anal
       assert.deepEqual(extractionRequest.response_format, { type: "json_object" });
       assert.match(finalRequest.messages[1].content, /结构化提取上下文/);
       assert.doesNotMatch(finalRequest.messages[1].content, new RegExp(dreamText));
+      const structuredContext = getStructuredContextFromQuickPrompt(finalRequest.messages[1].content);
+      assert.ok(JSON.stringify(structuredContext).length < dreamText.length);
+      assert.ok(getStructuredSourceCoverageLength(structuredContext, dreamText) < dreamText.length / 2);
       assert.equal(inserted.length, 1);
       assert.equal(inserted[0].prompt_tokens, 105);
       assert.equal(inserted[0].completion_tokens, 207);
@@ -1449,6 +1494,75 @@ test("preprocesses long dreams into compact structured context before quick anal
       analyticsEnv: { ANALYTICS_HASH_SECRET: "analytics-secret" },
       awaitAnalyticsWrites: true
     });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("long dream extraction failures use compact deterministic context and continue", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  const dreamText = Array.from(
+    { length: 9 },
+    (_, index) => `第${index + 1}段：我在学校走廊里反复寻找教室，外面下着雨，最后停在一扇发光的门前。${"甲".repeat(60)}。`
+  ).join("\n");
+
+  try {
+    for (const failure of ["invalid_json", "rejected", "timeout"]) {
+      const upstreamBodies = [];
+      global.fetch = async (url, options) => {
+        if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+        const body = JSON.parse(options.body);
+        upstreamBodies.push(body);
+        if (!isDreamExtractionRequest(body)) {
+          return {
+            ok: true,
+            json: async () => ({
+              choices: [{
+                message: {
+                  content: JSON.stringify({ analysis: createQuickAnalysisPayload(), dreamResultCard: createResultCardPayload() })
+                }
+              }]
+            })
+          };
+        }
+
+        if (failure === "invalid_json") {
+          return {
+            ok: true,
+            json: async () => ({ choices: [{ message: { content: "not-json" } }] })
+          };
+        }
+        if (failure === "rejected") {
+          return { ok: false, json: async () => ({}) };
+        }
+        return new Promise((resolve, reject) => {
+          options.signal.addEventListener("abort", () => {
+            const error = new Error("extraction timed out");
+            error.name = "AbortError";
+            reject(error);
+          });
+        });
+      };
+
+      await withServer(async (baseUrl) => {
+        const response = await postDreamAnalysis(baseUrl, { dreamText, analysisType: "quick" });
+        const payload = await response.json();
+
+        assert.equal(response.status, 200, failure);
+        assert.equal(payload.dreamResultCardStatus, "ai_generated");
+        const finalRequest = upstreamBodies.find((body) => !isDreamExtractionRequest(body));
+        const structuredContext = getStructuredContextFromQuickPrompt(finalRequest.messages[1].content);
+        assert.ok(JSON.stringify(structuredContext).length < dreamText.length);
+        assert.ok(getStructuredSourceCoverageLength(structuredContext, dreamText) < dreamText.length / 2);
+      }, {
+        aiTimeoutConfig: {
+          initialAttemptMs: 40,
+          repairAttemptMs: 40,
+          limitedAttemptMs: 40,
+          totalRequestMs: 80
+        }
+      });
+    }
   } finally {
     global.fetch = nativeFetch;
   }
@@ -1533,6 +1647,62 @@ test("preprocesses very long dreams in chunks before one quick final request", {
       assert.equal(finalRequests.length, 1);
       assert.match(finalRequests[0].messages[1].content, /结构化提取上下文/);
       assert.doesNotMatch(finalRequests[0].messages[1].content, new RegExp(dreamText));
+    });
+  } finally {
+    global.fetch = nativeFetch;
+  }
+});
+
+test("very long preprocessing caps concurrent extraction requests at three", { concurrency: false }, async () => {
+  const nativeFetch = global.fetch;
+  let activeExtractions = 0;
+  let maxActiveExtractions = 0;
+  const dreamText = Array.from(
+    { length: 5 },
+    (_, index) => `场景${index + 1}：我在学校走廊里反复寻找教室，外面下着雨，最后停在一扇发光的门前。${"乙".repeat(840)}。`
+  ).join("\n");
+
+  global.fetch = async (url, options) => {
+    if (String(url).startsWith("http://127.0.0.1")) return nativeFetch(url, options);
+    const body = JSON.parse(options.body);
+    if (!isDreamExtractionRequest(body)) {
+      return {
+        ok: true,
+        json: async () => ({
+          choices: [{
+            message: {
+              content: JSON.stringify({ analysis: createQuickAnalysisPayload(), dreamResultCard: createResultCardPayload() })
+            }
+          }]
+        })
+      };
+    }
+
+    activeExtractions += 1;
+    maxActiveExtractions = Math.max(maxActiveExtractions, activeExtractions);
+    return new Promise((resolve) => {
+      setTimeout(() => {
+        activeExtractions -= 1;
+        resolve({
+          ok: true,
+          json: async () => ({
+            choices: [{
+              message: {
+                content: JSON.stringify(createExtractionPayload(body.messages[1].content.split("输入文本：\n")[1]))
+              }
+            }]
+          })
+        });
+      }, 10);
+    });
+  };
+
+  try {
+    await withServer(async (baseUrl) => {
+      const response = await postDreamAnalysis(baseUrl, { dreamText, analysisType: "quick" });
+
+      assert.equal(response.status, 200);
+      assert.equal(maxActiveExtractions, 3);
     });
   } finally {
     global.fetch = nativeFetch;

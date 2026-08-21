@@ -10,9 +10,22 @@ const MAX_TEXT_LENGTH = 300;
 const MAX_EVIDENCE_LENGTH = 500;
 const MAX_EXTRACTION_ITEMS = 12;
 const CHUNK_ORDER_STRIDE = MAX_COLLECTION_ITEMS + 1;
+const MAX_STRUCTURED_CONTEXT_CHARACTERS = 1600;
+const MAX_STRUCTURED_SOURCE_COVERAGE_RATIO = 0.45;
 
 const ENTITY_FIELDS = ["people", "locations", "emotions", "notableObjects", "recurringElements"];
 const ORDERED_FIELDS = ["events", "transitions"];
+const CONTEXT_FIELD_PRIORITY = [
+  "events",
+  "transitions",
+  "emotions",
+  "people",
+  "locations",
+  "notableObjects",
+  "recurringElements",
+  "ambiguities",
+  "evidenceFragments"
+];
 
 function emptyExtraction() {
   return {
@@ -71,6 +84,10 @@ function stableUnique(items, keyForItem, limit) {
 
 function limitedArray(value, limit) {
   return Array.isArray(value) ? value.slice(0, limit) : [];
+}
+
+function collectionLimit(field) {
+  return field === "evidenceFragments" ? MAX_EVIDENCE_FRAGMENTS : MAX_COLLECTION_ITEMS;
 }
 
 function globalOrder(order, chunkIndex) {
@@ -340,6 +357,89 @@ function createDeterministicExtraction(sourceText, chunkIndex) {
   return extraction;
 }
 
+function getExtractionSourceFragments(representation) {
+  const fragments = [];
+  const value = representation && typeof representation === "object" ? representation : emptyExtraction();
+
+  ENTITY_FIELDS.forEach((field) => {
+    limitedArray(value[field], MAX_COLLECTION_ITEMS).forEach((item) => {
+      if (item && typeof item === "object") {
+        fragments.push(item.name, item.evidence);
+      }
+    });
+  });
+  ORDERED_FIELDS.forEach((field) => {
+    limitedArray(value[field], MAX_COLLECTION_ITEMS).forEach((item) => {
+      if (item && typeof item === "object") {
+        fragments.push(item.description, item.evidence);
+      }
+    });
+  });
+  fragments.push(...limitedArray(value.ambiguities, MAX_COLLECTION_ITEMS));
+  fragments.push(...limitedArray(value.evidenceFragments, MAX_EVIDENCE_FRAGMENTS));
+  return fragments.map(normalizeWhitespace).filter(Boolean);
+}
+
+function getSourceCoverageLength(representation, sourceNormalized) {
+  const ranges = getExtractionSourceFragments(representation)
+    .map((fragment) => {
+      const start = sourceNormalized.indexOf(fragment);
+      return start === -1 ? null : { start, end: start + fragment.length };
+    })
+    .filter(Boolean)
+    .sort((left, right) => left.start - right.start);
+  let coverage = 0;
+  let currentEnd = 0;
+
+  ranges.forEach((range) => {
+    const start = Math.max(range.start, currentEnd);
+    if (range.end > start) {
+      coverage += range.end - start;
+      currentEnd = range.end;
+    }
+  });
+
+  return coverage;
+}
+
+function shouldBudgetStructuredContext(sourceText) {
+  return classifyDreamInput(sourceText).mode !== "direct";
+}
+
+function compactStructuredDreamRepresentation(representation, sourceText) {
+  const normalizedRepresentation = representation && typeof representation === "object" && !Array.isArray(representation)
+    ? representation
+    : emptyExtraction();
+  const sourceNormalized = normalizeWhitespace(sourceText);
+
+  if (!sourceNormalized || !shouldBudgetStructuredContext(sourceText)) {
+    return normalizedRepresentation;
+  }
+
+  const maxSerializedLength = Math.min(MAX_STRUCTURED_CONTEXT_CHARACTERS, sourceNormalized.length);
+  const maxSourceCoverage = Math.max(1, Math.floor(sourceNormalized.length * MAX_STRUCTURED_SOURCE_COVERAGE_RATIO));
+  const compacted = emptyExtraction();
+
+  CONTEXT_FIELD_PRIORITY.forEach((field) => {
+    for (const item of limitedArray(normalizedRepresentation[field], collectionLimit(field))) {
+      const candidate = {
+        ...compacted,
+        [field]: [...compacted[field], item]
+      };
+      const serialized = JSON.stringify(candidate);
+
+      if (
+        serialized.length <= maxSerializedLength
+        && getSourceCoverageLength(candidate, sourceNormalized) <= maxSourceCoverage
+      ) {
+        compacted[field] = candidate[field];
+      }
+    }
+  });
+
+  return compacted;
+}
+
 function mergeDreamExtractions(extractions, sourceText) {
   const sourceNormalized = normalizeWhitespace(sourceText);
   const merged = emptyExtraction();
@@ -382,14 +482,12 @@ function mergeDreamExtractions(extractions, sourceText) {
     MAX_EVIDENCE_FRAGMENTS
   );
 
-  return merged;
+  return compactStructuredDreamRepresentation(merged, sourceText);
 }
 
-function formatStructuredDreamContext(representation) {
+function formatStructuredDreamContext(representation, sourceText) {
   return JSON.stringify(
-    representation && typeof representation === "object" && !Array.isArray(representation)
-      ? representation
-      : emptyExtraction()
+    compactStructuredDreamRepresentation(representation, sourceText)
   );
 }
 
@@ -401,6 +499,8 @@ module.exports = {
   VERY_LONG_CHARACTER_THRESHOLD,
   VERY_LONG_TOKEN_THRESHOLD,
   MAX_COLLECTION_ITEMS,
+  MAX_STRUCTURED_CONTEXT_CHARACTERS,
+  MAX_STRUCTURED_SOURCE_COVERAGE_RATIO,
   buildDreamExtractionPrompt,
   classifyDreamInput,
   createDeterministicExtraction,

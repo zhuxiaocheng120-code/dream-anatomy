@@ -19,6 +19,46 @@ function normalizeWhitespace(value) {
   return String(value || "").replace(/\s+/g, " ").trim();
 }
 
+function collectSourceStrings(value, sourceNormalized, result = []) {
+  if (typeof value === "string") {
+    const normalized = normalizeWhitespace(value);
+    if (normalized && sourceNormalized.includes(normalized)) {
+      result.push(normalized);
+    }
+    return result;
+  }
+
+  if (Array.isArray(value)) {
+    value.forEach((item) => collectSourceStrings(item, sourceNormalized, result));
+  } else if (value && typeof value === "object") {
+    Object.values(value).forEach((item) => collectSourceStrings(item, sourceNormalized, result));
+  }
+
+  return result;
+}
+
+function getSourceCoverageLength(value, source) {
+  const sourceNormalized = normalizeWhitespace(source);
+  const ranges = collectSourceStrings(value, sourceNormalized)
+    .map((fragment) => {
+      const start = sourceNormalized.indexOf(fragment);
+      return { start, end: start + fragment.length };
+    })
+    .sort((left, right) => left.start - right.start);
+  let coverage = 0;
+  let currentEnd = 0;
+
+  ranges.forEach((range) => {
+    const start = Math.max(range.start, currentEnd);
+    if (range.end > start) {
+      coverage += range.end - start;
+      currentEnd = range.end;
+    }
+  });
+
+  return coverage;
+}
+
 test("classifyDreamInput applies character boundaries for direct, long, and very long dreams", () => {
   const cases = [
     ["梦".repeat(200), "direct"],
@@ -231,4 +271,50 @@ test("formatStructuredDreamContext preserves the canonical extraction content", 
 
   assert.match(context, /走进学校/iu);
   assert.doesNotMatch(context, /undefined/iu);
+});
+
+test("structured context globally budgets deterministic fallback size and source coverage", () => {
+  const source = Array.from(
+    { length: 9 },
+    (_, index) => `片段${index + 1}${"甲".repeat(90)}。`
+  ).join("\n");
+  const fallback = createDeterministicExtraction(source, 0);
+  const context = formatStructuredDreamContext(
+    mergeDreamExtractions([fallback], source),
+    source
+  );
+  const representation = JSON.parse(context);
+
+  assert.ok(context.length < source.length);
+  assert.ok(getSourceCoverageLength(representation, source) < source.length / 2);
+  assert.doesNotMatch(context, new RegExp(source));
+});
+
+test("structured context globally budgets model extraction size and source coverage", () => {
+  const sourceSegments = Array.from(
+    { length: 9 },
+    (_, index) => `场景${index + 1}${"乙".repeat(90)}。`
+  );
+  const source = sourceSegments.join("\n");
+  const modelExtraction = normalizeDreamExtraction(
+    {
+      events: sourceSegments.map((segment, index) => ({
+        order: index + 1,
+        description: segment,
+        evidence: segment
+      })),
+      evidenceFragments: sourceSegments
+    },
+    source,
+    0
+  );
+  const context = formatStructuredDreamContext(
+    mergeDreamExtractions([modelExtraction], source),
+    source
+  );
+  const representation = JSON.parse(context);
+
+  assert.ok(context.length < source.length);
+  assert.ok(getSourceCoverageLength(representation, source) < source.length / 2);
+  assert.doesNotMatch(context, new RegExp(source));
 });
